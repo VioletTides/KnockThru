@@ -29,7 +29,9 @@ namespace knockthru {
 // - For surface knocks, the controller was nearly still before the swing.
 //   Together and headset knocks have a second device to confirm them, and
 //   headset taps start with the arm rising.
-// These rules leave 1 knock in the 90 s of play and noise.
+// A burst of this kind whose spike falls under floor() is TooLight and does not
+// count, so every recorded knock can count at some sensitivity. These rules
+// count no knocks in the 90 s of play and noise.
 class Calibrator {
 public:
     static constexpr int kWanted = 10;
@@ -39,7 +41,9 @@ public:
     static constexpr double kMinApproach = 0.25; // m/s
     static constexpr double kStillSpeed = 0.6;  // m/s, mean speed before a surface swing
 
-    enum class Heard { Counted, OtherKind, Ignored };
+    // TooLight is a deliberate knock of this kind whose spike falls under floor(),
+    // so it could never count at any sensitivity.
+    enum class Heard { Counted, OtherKind, TooLight, Ignored };
     struct Result {
         Heard heard;
         Knock knock; // the burst's knock with the fastest approach
@@ -71,6 +75,8 @@ public:
     // The approach threshold for recorded approach speeds at a sensitivity from 0
     // (least) to 1 (most), in m/s.
     static double approach_threshold(const std::vector<double>& speeds, double sensitivity);
+    // The second slowest approach speed, which approach_threshold scales.
+    static double slow_speed(const std::vector<double>& speeds);
 
     // This calibration at a sensitivity. Call after done().
     KindCalibration result(double sensitivity) const;

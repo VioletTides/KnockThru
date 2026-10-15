@@ -38,7 +38,8 @@ void Calibrator::finish_burst() {
     last_heard_ = burst_.back().t;
     burst_.clear();
     Heard heard = Heard::Ignored;
-    if (deliberate && !done()) heard = best.kind == kind_ ? Heard::Counted : Heard::OtherKind;
+    if (deliberate && !done())
+        heard = best.kind != kind_ ? Heard::OtherKind : best.peak < floor(kind_) ? Heard::TooLight : Heard::Counted;
     if (heard == Heard::Counted) {
         peaks_.push_back(best.peak);
         speeds_.push_back(best.approach_speed);
@@ -60,13 +61,16 @@ double Calibrator::peak_threshold(KnockKind kind, const std::vector<double>& pea
     return std::clamp(0.6 * *std::min_element(peaks.begin(), peaks.end()), floor(kind), 150.0);
 }
 
-double Calibrator::approach_threshold(const std::vector<double>& speeds, double sensitivity) {
+double Calibrator::slow_speed(const std::vector<double>& speeds) {
     if (speeds.empty()) throw std::logic_error("No knocks recorded");
     auto sorted = speeds;
     std::sort(sorted.begin(), sorted.end());
     // The second slowest, so one odd knock does not set the threshold alone.
-    const double slow = sorted[std::min<std::size_t>(1, sorted.size() - 1)];
-    return slow * (0.8 - 0.5 * std::clamp(sensitivity, 0.0, 1.0));
+    return sorted[std::min<std::size_t>(1, sorted.size() - 1)];
+}
+
+double Calibrator::approach_threshold(const std::vector<double>& speeds, double sensitivity) {
+    return slow_speed(speeds) * (0.8 - 0.5 * std::clamp(sensitivity, 0.0, 1.0));
 }
 
 KindCalibration Calibrator::result(double sensitivity) const {

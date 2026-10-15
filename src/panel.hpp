@@ -22,6 +22,7 @@ struct CalibrationView {
     double counted_t = -1;              // when the latest knock counted
     std::optional<KnockKind> ignored;   // the latest knock of another kind
     double ignored_t = -1;
+    double too_light_t = -1;            // when the latest knock of this kind was too light to count
     double sensitivity = 0.5;           // 0 is the least sensitive, 1 the most
     std::optional<bool> trial_passed;   // unset until the try step hears a knock sequence
     std::string trial_heard;            // what the try step heard, for a miss

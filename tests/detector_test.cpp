@@ -316,7 +316,7 @@ void calibration_tests() {
     int noise = 0;
     for (const auto* name : {"play", "noise"})
         for (int k = 0; k < 3; ++k) noise += calibration_count(name, static_cast<KnockKind>(k));
-    check(noise <= 1, "play and noise: at most 1 knock counted in 90 s");
+    check(noise == 0, "play and noise: no knocks counted in 90 s");
     check(calibration_count("together", KnockKind::Together) >= 10, "together: 10 knocks counted");
     check(calibration_count("surface", KnockKind::Surface) >= 10, "surface: 10 knocks counted");
     check(calibration_count("headset", KnockKind::Headset) >= 10, "headset: 10 knocks counted");

@@ -89,7 +89,7 @@ Knocks less than 0.25 s apart form a burst, and the burst stands for its knock w
 - Its knock approached at 0.25 m/s or faster.
 - For surface knocks, the controller averaged under 0.6 m/s from 0.6 to 0.15 s before the first knock in the burst. Real surface knocks averaged 0.02 to 0.51 m/s there, and false ones in `play` and `noise` mostly 0.64 to 2.8 m/s. Together and headset knocks skip this rule. Their false knocks never got past the first two rules, and headset taps start with the arm rising at up to 1.3 m/s.
 
-With these rules, calibration counts 1 knock in the 90 s of `play` and `noise`, and 10 of 10 in `together`, `surface`, and `headset`. In the logged Frame session, the hard knocks count instead of the swing starts, and the slow hand movement does not count.
+With these rules, calibration counts 1 knock in the 90 s of `play` and `noise`, and 10 of 10 in `together`, `surface`, and `headset`. That one knock spiked under the surface floor of 50 m/s². Calibration now turns such knocks away as too light, since they could never count, which leaves 0 in `play` and `noise`. In the logged Frame session, the hard knocks count instead of the swing starts, and the slow hand movement does not count.
 
 Approach speed also shows how hard a knock was more steadily than the spike. The spike divides a velocity change by the gap between pose updates, which varies from 2 to 7 ms. In the knock recordings, the top tenth of spikes ran 2.8 to 8.3 times the bottom tenth, and approach speeds ran 1.7 to 2.5 times.
 

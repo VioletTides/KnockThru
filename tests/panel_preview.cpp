@@ -55,8 +55,8 @@ void calibration(const std::filesystem::path& out, const PanelState& idle) {
     shot(panel, state, 51.8, out / "calibrate-3-record-hint.png");
 
     view.phase = CalibrationView::Phase::Review;
-    // Robin's surface calibration on the Frame, 2026-10-15.
-    view.peaks = {80, 401, 115, 342, 446, 91, 57, 234, 36, 147};
+    // Robin's surface calibration on the Frame, 2026-10-15, with its one too-light knock raised to 64.
+    view.peaks = {80, 401, 115, 342, 446, 91, 57, 234, 64, 147};
     view.speeds = {1.21, 0.85, 0.71, 0.81, 0.62, 0.77, 0.63, 0.53, 0.72, 1.71};
     state.calibration = view;
     shot(panel, state, 60.6, out / "calibrate-4-review.png");
