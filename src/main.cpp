@@ -376,7 +376,7 @@ public:
             throw std::runtime_error(std::string("Cannot add the dashboard panel: ") +
                 overlay->GetOverlayErrorNameFromEnum(error));
         knockthru::Canvas icon(256, 256);
-        knockthru::Panel::draw_icon(icon);
+        knockthru::Panel::draw_icon(icon, false);
         overlay->SetOverlayRaw(thumbnail_, const_cast<std::uint8_t*>(icon.pixels().data()), 256, 256, 4);
         overlay->SetOverlayWidthInMeters(main_, 1.6f);
         overlay->SetOverlayInputMethod(main_, vr::VROverlayInputMethod_Mouse);

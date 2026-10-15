@@ -230,18 +230,20 @@ std::optional<PanelClick> Panel::click(float x, float y) {
     return std::nullopt;
 }
 
-void Panel::draw_icon(Canvas& canvas) {
+void Panel::draw_icon(Canvas& canvas, bool tile) {
     const float s = static_cast<float>(canvas.width());
     canvas.clear({0, 0, 0, 0});
-    canvas.rounded_rect({0, 0, s, s}, s * 0.22f, {kBackground.r, kBackground.g, kBackground.b});
-    // Two Steam Frame controllers knocking heads, from logo_shapes.hpp on a 64 by 64 grid.
-    const float k = s / 64;
+    if (tile) canvas.rounded_rect({0, 0, s, s}, s * 0.22f, {kBackground.r, kBackground.g, kBackground.b});
+    // Two Steam Frame controllers knocking heads, from logo_shapes.hpp on a 64 by 64 grid. The
+    // mark spans x 7.3 to 56.7 and y 8.1 to 56.2. Without the tile, it fills the canvas.
+    const float k = tile ? s / 64 : s / 50;
+    const float shift = tile ? 0 : 7;
     const float* point = logo::kPoints;
     for (const auto& shape : logo::kShapes) {
         std::vector<std::vector<Point>> rings;
         for (int r = shape.first_ring; r < shape.first_ring + shape.ring_count; ++r) {
             auto& ring = rings.emplace_back();
-            for (int i = 0; i < logo::kRingSizes[r]; ++i, point += 2) ring.push_back({point[0] * k, point[1] * k});
+            for (int i = 0; i < logo::kRingSizes[r]; ++i, point += 2) ring.push_back({(point[0] - shift) * k, (point[1] - shift) * k});
         }
         canvas.polygon(rings, shape.fill == logo::Fill::Text ? kText : kAccent);
     }
