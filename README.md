@@ -142,6 +142,12 @@ README images (needs Pillow and ffmpeg, after the host build):
 python3 scripts/readme_media.py
 ```
 
+The controller and headset sprites in `images/cad/` come from Valve's CAD files. To render them again, download the STEP files from [Valve's Steam Frame repository](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) into one folder, then run this (needs cadquery and opencv-python, and takes several minutes):
+
+```sh
+python3 scripts/cad_sprites.py <CAD folder>
+```
+
 `docs/knock-signal.md` explains how knock detection works and how it was tuned.
 
 </details>
@@ -150,5 +156,7 @@ python3 scripts/readme_media.py
 
 - [KominoVR/frame-passthrough-shortcuts](https://github.com/KominoVR/frame-passthrough-shortcuts) (MIT): app scaffolding, style switch, and packaging.
 - [toorux/steam-frame-passthrough-toggle](https://github.com/toorux/steam-frame-passthrough-toggle) (MIT): the Room View button click through the debug port.
+
+- The controller and headset drawings are rendered from [Valve's Steam Frame CAD files](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) (CC BY-NC-SA 4.0). Those images keep that license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). KnockThru is not associated with or endorsed by Valve.
 
 [MIT licensed](LICENSE). Developed with help from coding agents.

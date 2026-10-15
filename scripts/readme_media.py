@@ -52,30 +52,42 @@ def seconds(s):
     return round(s * FPS)
 
 
-def ease(t):
-    return 0.5 - 0.5 * math.cos(math.pi * max(0.0, min(1.0, t)))
+# Controller and headset sprites, rendered from Valve's CAD by scripts/cad_sprites.py.
+
+CAD = IMAGES / "cad"
+HEAD = (0.5, 0.29)  # controller head center, as a fraction of the sprite size
+_sprites = {}
 
 
-# Controller and headset shapes, shared by the hero and the knock kinds loop.
+def sprite(name, height, angle=0.0):
+    """Returns a sprite scaled to a height and rotated about its anchor, plus that anchor.
 
-def controller(draw, x, y, angle=0.0, scale=1.0):
-    """Draws a controller as a ring on a handle. (x, y) is the ring center."""
-    r = 22 * scale
-    dx, dy = math.sin(angle), math.cos(angle)
-    handle_end = (x + dx * 62 * scale, y + dy * 62 * scale)
-    draw.line([(x, y), handle_end], fill=DIM, width=round(16 * scale))
-    draw.ellipse([handle_end[0] - 8 * scale, handle_end[1] - 8 * scale,
-                  handle_end[0] + 8 * scale, handle_end[1] + 8 * scale], fill=DIM)
-    draw.ellipse([x - r, y - r, x + r, y + r], outline=TEXT, width=round(7 * scale))
+    The anchor is the head center on a controller and the middle on the headset.
+    angle is in degrees, counterclockwise.
+    """
+    key = (name, height, round(angle, 1))
+    if key not in _sprites:
+        image = Image.open(CAD / f"{name}.png").convert("RGBA")
+        scale = height / image.height
+        image = image.resize((round(image.width * scale), height), Image.LANCZOS)
+        fx, fy = HEAD if name.startswith("controller") else (0.5, 0.5)
+        ax, ay = fx * image.width, fy * image.height
+        # Pad to a square centered on the anchor so rotation keeps every corner.
+        side = 2 * math.ceil(max(math.hypot(x - ax, y - ay) for x in (0, image.width) for y in (0, image.height)))
+        square = Image.new("RGBA", (side, side))
+        square.paste(image, (round(side / 2 - ax), round(side / 2 - ay)))
+        _sprites[key] = square.rotate(angle, resample=Image.BICUBIC)
+    return _sprites[key]
 
 
-def headset(draw, x, y, scale=1.0):
-    w, h = 120 * scale, 64 * scale
-    draw.rounded_rectangle([x - w / 2, y - h / 2, x + w / 2, y + h / 2], radius=22 * scale, fill=RAISED,
-                           outline=DIM, width=round(4 * scale))
-    for side in (-1, 1):
-        cx = x + side * 28 * scale
-        draw.ellipse([cx - 16 * scale, y - 12 * scale, cx + 16 * scale, y + 12 * scale], fill=SURFACE)
+def place(image, name, x, y, height, angle=0.0):
+    """Pastes a sprite with its anchor at (x, y)."""
+    s = sprite(name, height, angle)
+    image.paste(s, (round(x - s.width / 2), round(y - s.height / 2)), s)
+
+
+def head_radius(height):
+    return 0.5 * 571 / 984 * height  # the controller sprite is 571 by 984
 
 
 def burst(draw, x, y, strength, scale=1.0):
@@ -127,12 +139,12 @@ def hero(panel_dir):
         draw.text((40, 34), caption, font=big, fill=TEXT)
         draw.text((40, 86), detail, font=small, fill=DIM)
         # Two controllers knocking together on the right.
-        cx, cy = width - 130, 70
+        cx, cy, h = width - 150, 50, 120
         gap, strength = tap_offset(t_knock, taps) if t_knock is not None else (1.0, 0.0)
-        offset = 18 + 30 * gap
-        controller(draw, cx - offset, cy - 10, angle=0.5, scale=0.8)
-        controller(draw, cx + offset, cy - 10, angle=-0.5, scale=0.8)
-        burst(draw, cx, cy - 10, strength, scale=0.8)
+        offset = head_radius(h) * 0.9 + 26 * gap
+        place(image, "controller-left", cx - offset, cy, h, angle=-30)
+        place(image, "controller-right", cx + offset, cy, h, angle=30)
+        burst(draw, cx, cy, strength, scale=0.8)
         return image
 
     frames = []
@@ -158,7 +170,7 @@ def hero(panel_dir):
 # Knock kinds: three small loops side by side.
 
 def knock_kinds():
-    cell, height = 300, 280
+    cell, height = 340, 300
     label = font(22, bold=True)
     frames = []
     duration = 1.6
@@ -171,29 +183,28 @@ def knock_kinds():
         gap, strength = tap_offset(t, 2)
 
         # Controllers together.
-        cx, cy = cell // 2, 110
-        offset = 24 + 34 * gap
-        controller(draw, cx - offset, cy, angle=0.5)
-        controller(draw, cx + offset, cy, angle=-0.5)
+        cx, cy, h = cell // 2, 95, 150
+        offset = head_radius(h) * 0.95 + 30 * gap
+        place(image, "controller-left", cx - offset, cy, h, angle=-30)
+        place(image, "controller-right", cx + offset, cy, h, angle=30)
         burst(draw, cx, cy, strength)
 
         # One controller on a surface.
-        cx = cell + cell // 2
-        table_y = 170
-        draw.rectangle([cx - 110, table_y, cx + 110, table_y + 16], fill=TABLE)
-        controller(draw, cx, table_y - 22 - 50 * gap, angle=math.pi)
+        cx, table_y, h = cell + cell // 2, 210, 150
+        place(image, "controller-right", cx, table_y - head_radius(h) * 0.95 - 45 * gap, h, angle=165)
+        draw.rectangle([cx - 130, table_y, cx + 130, table_y + 16], fill=TABLE)
         burst(draw, cx, table_y, strength)
 
-        # A tap on the headset.
-        cx = 2 * cell + cell // 2
-        headset(draw, cx - 30, 110)
-        hx = cx + 30
-        controller(draw, hx + 22 + 50 * gap, 110, angle=-1.2)
-        burst(draw, hx, 110, strength)
+        # A tap on the side of the headset.
+        cx, cy, hw, h = 2 * cell + cell // 2, 150, 170, 150
+        place(image, "headset-front", cx - 60, cy, round(hw * 532 / 984))
+        hx = cx - 60 + hw / 2
+        place(image, "controller-right", hx + head_radius(h) * 0.95 + 40 * gap, cy, h, angle=150)
+        burst(draw, hx, cy, strength)
 
         for c, text in enumerate(("Controllers together", "Controller on a surface", "Tap on the headset")):
             w = draw.textlength(text, font=label)
-            draw.text((c * cell + (cell - w) / 2, 220), text, font=label, fill=TEXT)
+            draw.text((c * cell + (cell - w) / 2, 248), text, font=label, fill=TEXT)
         frames.append(image)
     write_gif(frames, IMAGES / "knock-kinds.gif")
 
