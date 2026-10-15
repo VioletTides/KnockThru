@@ -21,11 +21,11 @@ To pause knocks, turn off **Knocks** in the [dashboard tab](#the-dashboard-tab).
 
 Any of these three knocks works. Use the same kind for every knock in a set.
 
-![Three ways to knock: tap the controllers together, tap one controller on a table, or tap the headset](images/knock-kinds.gif)
+![Three ways to knock: tap the controllers together, tap one controller on a table, or tap the headset. Each one knocks twice, then three times](images/knock-kinds.gif)
 
-Pause for a moment, then knock at a steady pace. After two knocks, KnockThru waits a moment in case a third one follows.
+Pause for a moment, then knock at a steady pace. After your last knock, KnockThru waits a moment in case another one follows.
 
-![Timeline: knock, knock, a wait of about 0.4 seconds, then Room View turns on and both controllers buzz](images/timing.gif)
+![Timeline: two knocks, a wait of about 0.4 seconds, then Room View turns on and both controllers buzz. Then three knocks, the same wait, and the style switches with two buzzes](images/timing.gif)
 
 | You knock | What happens | You feel |
 | --- | --- | --- |

@@ -23,7 +23,9 @@ FPS = 25  # GIF frame delays are whole centiseconds, so 25 fps keeps exact timin
 FIRST_KNOCK = 0.5  # the first contact in a loop
 KNOCK_GAP = 0.3  # between contacts
 WAIT = 0.4  # from the last knock to the action, as in the README
-LOOP = 2.4  # length of the knock kinds and timing loops
+# The knock kinds and timing loops play a double, then a triple: (knocks, pass length).
+PASSES = ((2, 2.4), (3, 2.8))
+LOOP = sum(length for _, length in PASSES)
 
 # Colors from src/panel.cpp.
 BACKGROUND = (18, 20, 24)
@@ -159,6 +161,24 @@ def impact(t, taps, start=FIRST_KNOCK):
     return (t - past[-1]) / 0.3 if past else None
 
 
+def pass_at(t):
+    """Returns (knocks, time within the pass, pass length) for a time in the loop."""
+    for taps, length in PASSES:
+        if t < length:
+            return taps, t, length
+        t -= length
+    return PASSES[-1][0], PASSES[-1][1], PASSES[-1][1]
+
+
+def action_time(taps):
+    return knock_times(taps)[-1] + WAIT
+
+
+def pass_fade(lt, length, edge=0.25):
+    """1 inside a pass, easing to 0 at its start and end."""
+    return ease_in_out(min(lt / edge, (length - lt) / edge, 1.0))
+
+
 def buzz(t, action, count):
     """A small side-to-side shake after the action, one burst per buzz, in pixels."""
     for i in range(count):
@@ -259,25 +279,31 @@ def hero(panel_dir):
 # Knock kinds: three small loops side by side, on the shared timeline.
 
 def knock_kinds():
-    cell, height = 340, 300
-    label = font(22, bold=True)
-    action = knock_times(2)[-1] + WAIT
+    cell, height, header = 340, 300, 56
+    label, title = font(22, bold=True), font(24, bold=True)
+    titles = {2: "Knock twice: Room View turns on or off", 3: "Knock three times: the style switches"}
     frames = []
     for i in range(seconds(LOOP)):
-        t = i / FPS
-        image = Image.new("RGB", (cell * 3, height), BACKGROUND)
+        taps, t, length = pass_at(i / FPS)
+        image = Image.new("RGB", (cell * 3, height + header), BACKGROUND)
         draw = ImageDraw.Draw(image)
+        shown = pass_fade(t, length)
+        w = draw.textlength(titles[taps], font=title)
+        draw.text(((cell * 3 - w) / 2, 14 + 6 * (1 - shown)), titles[taps], font=title, fill=mix(TEXT, shown))
+
+        cards = Image.new("RGB", (cell * 3, height), BACKGROUND)
+        draw = ImageDraw.Draw(cards)
         for c in range(3):
             draw.rounded_rectangle([c * cell + 10, 10, c * cell + cell - 10, height - 10], radius=18, fill=SURFACE)
-        gap, played, shake = knock_motion(t, 2), impact(t, 2), buzz(t, action, 1)
+        gap, played, shake = knock_motion(t, taps), impact(t, taps), buzz(t, action_time(taps), taps - 1)
 
         # Controllers together.
-        knock_pair(image, draw, cell // 2, 95, 150, gap, played, 30, shake=shake, base=SURFACE)
+        knock_pair(cards, draw, cell // 2, 95, 150, gap, played, 30, shake=shake, base=SURFACE)
 
         # One controller on a surface, swinging down from the wrist.
         cx, table_y, h = cell + cell // 2, 210, 150
         burst(draw, cx, table_y, played, base=SURFACE)
-        place(image, "controller-right", cx + shake, table_y - head_radius(h) * 0.95 - 45 * gap, h,
+        place(cards, "controller-right", cx + shake, table_y - head_radius(h) * 0.95 - 45 * gap, h,
               angle=round(165 - 12 * gap))
         draw.rectangle([cx - 130, table_y, cx + 130, table_y + 16], fill=TABLE)
 
@@ -286,13 +312,14 @@ def knock_kinds():
         hx = cx + 70  # headset center
         edge = hx - hw / 2
         burst(draw, edge, cy, played, base=SURFACE)
-        place(image, "headset-front", hx, cy, round(hw * 600 / 1110))
-        place(image, "controller-left", edge - head_radius(h) * 0.95 - 30 * gap + shake, cy, h,
+        place(cards, "headset-front", hx, cy, round(hw * 600 / 1110))
+        place(cards, "controller-left", edge - head_radius(h) * 0.95 - 30 * gap + shake, cy, h,
               angle=round(-30 - 8 * gap))
 
         for c, text in enumerate(("Controllers together", "Controller on a surface", "Tap on the headset")):
             w = draw.textlength(text, font=label)
             draw.text((c * cell + (cell - w) / 2, 248), text, font=label, fill=TEXT)
+        image.paste(cards, (0, header))
         frames.append(image)
     write_gif(frames, IMAGES / "knock-kinds.gif")
 
@@ -300,17 +327,20 @@ def knock_kinds():
 # Timing strip: knock, knock, short wait, action, on the shared timeline.
 
 def timing():
-    width, height = 900, 240
+    width, height = 1000, 240
     left, right, axis_y = 60, width - 60, 130
-    span = 1.6  # seconds shown on the strip; the playhead moves in real time
-    knocks = knock_times(2)
-    action = knocks[-1] + WAIT
+    span = 2.0  # seconds shown on the strip; the playhead moves in real time
     bold, small = font(22, bold=True), font(18)
+    words = {2: ("third", "Room View on", "both controllers buzz"),
+             3: ("fourth", "Style switches", "both controllers buzz twice")}
 
     def x_at(t):
         return left + (right - left) * t / span
 
-    def strip(now):
+    def strip(now, taps):
+        knocks = knock_times(taps)
+        action = action_time(taps)
+        next_knock, done, buzzed = words[taps]
         image = Image.new("RGB", (width, height), BACKGROUND)
         draw = ImageDraw.Draw(image)
         for k in range(round(span * 10) + 1):  # a tick every 0.1 s
@@ -330,7 +360,7 @@ def timing():
             shown = ease_out((now - knocks[-1]) / 0.3)
             mid = (a + x_at(action)) / 2
             draw.text((mid, y + 26 + 6 * (1 - shown)), "about 0.4 s", font=small, fill=mix(DIM, shown), anchor="mm")
-            draw.text((mid, y + 50 + 6 * (1 - shown)), "waiting for a third knock", font=small,
+            draw.text((mid, y + 50 + 6 * (1 - shown)), f"waiting for a {next_knock} knock", font=small,
                       fill=mix(DIM, shown), anchor="mm")
 
         # Knocks: the dot pops in, the label rises into place.
@@ -350,8 +380,8 @@ def timing():
             draw.rounded_rectangle([x - 8, axis_y - 26 * grow, x + 8, axis_y + 26 * grow], radius=6, fill=ACCENT)
             shown = ease_out((now - action) / 0.3)
             slide = 12 * (1 - shown)
-            draw.text((x + 26 - slide, axis_y - 44), "Room View on", font=bold, fill=mix(ACCENT, shown), anchor="lm")
-            draw.text((x + 26 - slide + buzz(now, action, 1) * 1.5, axis_y - 14), "both controllers buzz",
+            draw.text((x + 26 - slide, axis_y - 44), done, font=bold, fill=mix(ACCENT, shown), anchor="lm")
+            draw.text((x + 26 - slide + buzz(now, action, taps - 1) * 1.5, axis_y - 14), buzzed,
                       font=small, fill=mix(DIM, shown), anchor="lm")
 
         # Playhead: a light line with a small marker on top, until the action.
@@ -362,13 +392,12 @@ def timing():
         return image
 
     frames = []
-    fade_out = 0.3  # the strip fades to empty before the loop restarts
-    empty = strip(0.0)
+    empty = strip(0.0, 2)
     for i in range(seconds(LOOP)):
-        now = i / FPS
-        image = strip(now)
-        if now > LOOP - fade_out:
-            image = Image.blend(image, empty, ease_in_out((now - (LOOP - fade_out)) / fade_out))
+        taps, now, length = pass_at(i / FPS)
+        image = strip(now, taps)
+        if now > length - 0.3:  # each pass fades to an empty strip before the next
+            image = Image.blend(image, empty, ease_in_out((now - (length - 0.3)) / 0.3))
         frames.append(image)
     write_gif(frames, IMAGES / "timing.gif")
 
