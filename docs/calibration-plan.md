@@ -64,6 +64,17 @@ Cancel and Back stay on every step. Leaving the panel mid-recording keeps the cu
 - Every step renders in `panel_preview`, including at least one mid-animation frame per step.
 - On the Frame, a full calibration of each kind works from the panel alone.
 
+### Checkpoint, 2026-10-15
+
+Phase 1 runs on the Frame, and Robin checked it in the headset. Testing it turned up problems beyond the UI, fixed on this branch:
+
+- Pose sampling runs on its own thread, so panel drawing cannot stretch the gaps between samples.
+- Calibration counts only deliberate knocks, as `docs/knock-signal.md` describes under "Calibration knocks".
+- The record bars show approach speed, because the top tenth of spikes ran 2.8 to 8.3 times the bottom tenth in the knock recordings.
+- Panel frames take about 1.5 ms on the host, and screen fades about 3.7 ms.
+
+The review chart, the threshold, and the slider still use the spike size. The app logs every knock heard while calibrating, for tuning phase 2.
+
 ## Phase 2: logic
 
 1. Replace "60 percent of the weakest knock" with a sensitivity value from 0 to 1. It scales a low percentile of the recorded peaks, not the single minimum. A rebound lands 83 to 99 ms after a knock (`docs/knock-signal.md`), past the 80 ms `merge_s`, so it can count as a weak extra knock and drag the minimum down. The test data sets the fractions at 0, 0.5, and 1.
