@@ -37,7 +37,7 @@ public:
     static constexpr double kSeconds = 90;
     // s after the start when knocks do not count yet. On the Frame, the hand
     // coming down from pressing Start counted as a knock 1 s in.
-    static constexpr double kGetReady = 1.5;
+    static constexpr double kGetReady = 3;
     static constexpr double kBurstGap = 0.25;   // s, knocks closer than this are one burst
     static constexpr double kQuietBefore = 0.6; // s without another knock before a burst
     static constexpr double kMinApproach = 0.25; // m/s

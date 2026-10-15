@@ -275,13 +275,12 @@ void Panel::pick_screen(const PanelState& state) {
     button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Main);
     canvas_.text(bold_, "Calibrate", kMargin + 172, 68, 38, kText);
     steps(1);
-    canvas_.text(regular_, "Which knock gets missed? Pick one to tune.", kMargin, 160, 28, kDim);
     const float t = static_cast<float>(std::fmod(now_, 2.6));
     // The cards fill the panel, and make room when the Saved banner shows.
     const bool banner = state.calibration_saved && !saved_dismissed_;
-    const float card_h = banner ? 340 : 490;
+    const float card_h = banner ? 420 : 560;
     for (int k = 0; k < 3; ++k) {
-        const Rect card{kMargin + k * 384.0f, 200, 352, card_h};
+        const Rect card{kMargin + k * 384.0f, 128, 352, card_h};
         canvas_.rounded_rect(card, kRadius, hovered(card) ? kSurfaceHover : kSurface);
         knock_scene(static_cast<KnockKind>(k), {card.x + 16, card.y + 16, card.w - 32, card_h - 100}, t, 2);
         canvas_.text(bold_, kKindTitles[k], card.x + card.w / 2, card.y + card_h - 44, 28, kText, Align::Center);
