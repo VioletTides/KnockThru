@@ -3,6 +3,7 @@
 #include "calibrator.hpp"
 #include "knock_detector.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -233,21 +234,45 @@ int calibration_count(const std::string& name, KnockKind kind) {
     for (const auto& row : rows) {
         detector.push(row.device, row.t, row.position, row.velocity);
         detector.poll(row.t);
-        for (const auto& knock : detector.take_knocks())
-            if (!calibrator.done() && calibrator.add(knock) == Calibrator::Heard::Counted) ++counted;
+        for (const auto& knock : detector.take_knocks()) calibrator.hear(knock);
+        while (const auto result = calibrator.next(row.t))
+            if (result->heard == Calibrator::Heard::Counted) ++counted;
     }
     std::cout << "  calibrating " << to_string(kind) << " on " << name << ": " << counted << " counted\n";
     return counted;
 }
 
+// Knocks heard in a surface calibration on the Frame, from application.log: t,
+// peak, approach speed, and speed before. At 42.44 s and 48.28 s the controller
+// spiked as it started a hard swing, 0.09 to 0.14 s before the knock.
+void logged_calibration_test() {
+    const double heard[][4] = {{38.180, 52, .65, .12}, {38.320, 39, .80, .28}, {38.982, 31, .20, .59},
+        {39.261, 40, 1.64, .35}, {39.520, 33, .32, .67}, {39.621, 34, .41, .66}, {39.981, 268, .99, .21},
+        {41.084, 381, 1.09, .07}, {42.441, 37, .08, .02}, {42.584, 146, .96, .02}, {44.021, 67, .71, .02},
+        {45.442, 90, .52, .03}, {46.985, 331, 1.82, .19}, {48.279, 37, .29, .03}, {48.364, 461, 1.26, .07},
+        {49.758, 173, 1.65, .14}, {51.098, 76, .66, .05}};
+    Calibrator calibrator(KnockKind::Surface, DetectorConfig{}, 38);
+    for (const auto& h : heard) {
+        Knock knock{h[0], KnockKind::Surface, 2, {0, 0, 0}, h[1], h[3], h[2]};
+        while (calibrator.next(knock.t)) {}
+        calibrator.hear(knock);
+    }
+    while (calibrator.next(60)) {}
+    const auto& peaks = calibrator.peaks();
+    const auto has = [&](double peak) { return std::find(peaks.begin(), peaks.end(), peak) != peaks.end(); };
+    check(has(146) && has(461) && !has(37), "logged: hard knocks count, not the swing starts before them");
+    check(!has(31), "logged: a slow hand movement does not count");
+}
+
 // Calibration lowers the thresholds, so waving the controllers must not count.
-// The knock recordings are doubles, so the first knock of each pair counts.
+// The knock recordings are doubles, so one knock of each pair counts.
 void calibration_tests() {
     std::cout << "calibration\n";
+    logged_calibration_test();
     int noise = 0;
     for (const auto* name : {"play", "noise"})
         for (int k = 0; k < 3; ++k) noise += calibration_count(name, static_cast<KnockKind>(k));
-    check(noise <= 2, "play and noise: at most 2 knocks counted in 90 s");
+    check(noise <= 1, "play and noise: at most 1 knock counted in 90 s");
     check(calibration_count("together", KnockKind::Together) >= 10, "together: 10 knocks counted");
     check(calibration_count("surface", KnockKind::Surface) >= 10, "surface: 10 knocks counted");
     check(calibration_count("headset", KnockKind::Headset) >= 10, "headset: 10 knocks counted");

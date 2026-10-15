@@ -15,14 +15,34 @@ Calibrator::Calibrator(KnockKind kind, const DetectorConfig& base, double start)
     config_.enabled = {true, true, true};
 }
 
-Calibrator::Heard Calibrator::add(const Knock& knock) {
-    const bool deliberate = knock.t - last_heard_ >= kQuietBefore && knock.speed_before < kStillSpeed;
-    last_heard_ = knock.t;
-    if (!deliberate || done()) return Heard::Ignored;
-    if (knock.kind != kind_) return Heard::OtherKind;
-    peaks_.push_back(knock.peak);
-    speeds_.push_back(knock.approach_speed);
-    return Heard::Counted;
+void Calibrator::hear(const Knock& knock) {
+    if (!burst_.empty() && knock.t - burst_.back().t > kBurstGap) finish_burst();
+    if (burst_.empty()) burst_quiet_ = knock.t - last_heard_ >= kQuietBefore;
+    burst_.push_back(knock);
+}
+
+std::optional<Calibrator::Result> Calibrator::next(double now) {
+    if (!burst_.empty() && now - burst_.back().t > kBurstGap) finish_burst();
+    if (results_.empty()) return std::nullopt;
+    const auto result = results_.front();
+    results_.erase(results_.begin());
+    return result;
+}
+
+void Calibrator::finish_burst() {
+    const auto best = *std::max_element(burst_.begin(), burst_.end(),
+        [](const Knock& a, const Knock& b) { return a.approach_speed < b.approach_speed; });
+    const bool still = best.kind != KnockKind::Surface || burst_.front().speed_before < kStillSpeed;
+    const bool deliberate = burst_quiet_ && still && best.approach_speed >= kMinApproach;
+    last_heard_ = burst_.back().t;
+    burst_.clear();
+    Heard heard = Heard::Ignored;
+    if (deliberate && !done()) heard = best.kind == kind_ ? Heard::Counted : Heard::OtherKind;
+    if (heard == Heard::Counted) {
+        peaks_.push_back(best.peak);
+        speeds_.push_back(best.approach_speed);
+    }
+    results_.push_back({heard, best});
 }
 
 double Calibrator::seconds_left(double now) const { return std::max(0.0, kSeconds - (now - start_)); }

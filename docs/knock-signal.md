@@ -81,11 +81,16 @@ Result: 22 of 24 right, 0 wrong. The 2 misses are surface doubles where hard hit
 
 Calibration lowers the thresholds (controller 30 m/s², confirmed 12, partner 8) to catch soft knocks. At those thresholds, `play` and `noise` give a knock candidate about once a second: 84 and 82 in 45 s each. As surface or together knocks, most of them would count.
 
-A calibration knock counts only when it is deliberate:
+Two more things showed up in a surface calibration on the Frame. Starting a hard swing from rest spiked 0.09 to 0.14 s before the knock (37 m/s², approach 0.08 to 0.29 m/s), and that spike took the count from the real knock (146 and 461 m/s²). A slow hand movement counted too (approach 0.20 m/s).
 
-- No other knock candidate in the 0.6 s before it. Waving makes clusters of spikes, and the wearer waits between calibration knocks.
-- The knocking controller averages under 0.6 m/s from 0.6 to 0.15 s before the spike. Real knocks averaged 0.03 to 0.56 m/s there, and false surface knocks in `play` and `noise` mostly 0.64 to 2.8 m/s.
+Knocks less than 0.25 s apart form a burst, and the burst stands for its knock with the fastest approach. Approach speed is the controller's fastest speed in the 100 ms before the spike. A burst counts when:
 
-With both rules, calibration counts 2 knocks in the 90 s of `play` and `noise`. It still counts 10 of 10 in `together`, `surface`, and `headset`, where the first knock of each double passes. The recordings hold doubles only, so the rule is untested on single knocks recorded for calibration.
+- No knock came in the 0.6 s before it. Waving makes clusters of spikes, and the wearer waits between calibration knocks.
+- Its knock approached at 0.25 m/s or faster.
+- For surface knocks, the controller averaged under 0.6 m/s from 0.6 to 0.15 s before the first knock in the burst. Real surface knocks averaged 0.02 to 0.51 m/s there, and false ones in `play` and `noise` mostly 0.64 to 2.8 m/s. Together and headset knocks skip this rule. Their false knocks never got past the first two rules, and headset taps start with the arm rising at up to 1.3 m/s.
+
+With these rules, calibration counts 1 knock in the 90 s of `play` and `noise`, and 10 of 10 in `together`, `surface`, and `headset`. In the logged Frame session, the hard knocks count instead of the swing starts, and the slow hand movement does not count.
+
+Approach speed also shows how hard a knock was more steadily than the spike. The spike divides a velocity change by the gap between pose updates, which varies from 2 to 7 ms. In the knock recordings, the top tenth of spikes ran 2.8 to 8.3 times the bottom tenth, and approach speeds ran 1.7 to 2.5 times.
 
 Background on tap detection: [ST design tip DT0101](https://www.st.com/resource/en/design_tip/dt0101-setting-up-singletap-and-doubletap-recognition-with-sts-mems-accelerometers-stmicroelectronics.pdf) and [NXP AN3919](https://www.nxp.com/docs/en/application-note/AN3919.pdf) describe threshold, pulse width, quiet time, and latency windows for double taps.

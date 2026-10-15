@@ -328,11 +328,12 @@ int calibrate(const std::string& kind_name) {
             PoseSampler::feed(detector, t, device, pose);
         });
         detector.poll(t);
-        for (const auto& knock : detector.take_knocks()) {
-            const auto heard = calibrator.add(knock);
-            if (heard == knockthru::Calibrator::Heard::OtherKind)
+        for (const auto& knock : detector.take_knocks()) calibrator.hear(knock);
+        while (const auto result = calibrator.next(t)) {
+            const auto& knock = result->knock;
+            if (result->heard == knockthru::Calibrator::Heard::OtherKind)
                 std::cout << "  heard a " << knockthru::to_string(knock.kind) << " knock, ignored" << std::endl;
-            if (heard != knockthru::Calibrator::Heard::Counted) continue;
+            if (result->heard != knockthru::Calibrator::Heard::Counted) continue;
             std::cout << "  knock " << calibrator.count() << " of " << knockthru::Calibrator::kWanted << ": "
                       << static_cast<int>(knock.peak) << " m/s^2" << std::endl;
             haptics.buzz(1, t);
@@ -488,11 +489,16 @@ public:
     void draw(const knockthru::PanelState& state, double now) {
         const double interval = panel_.animating() ? 1.0 / 30 : dirty_ ? 0.05 : 0.5;
         if (!visible_ || now - last_draw_ < interval) return;
+        const double gap = last_draw_ < 0 ? 0 : (now - last_draw_) * 1000;
         last_draw_ = now;
         dirty_ = false;
+        using ms = std::chrono::duration<double, std::milli>;
         const auto start = std::chrono::steady_clock::now();
-        upload(panel_.render(state, hover_, now));
-        time_frame(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+        const auto& canvas = panel_.render(state, hover_, now);
+        const auto rendered = std::chrono::steady_clock::now();
+        upload(canvas);
+        if (panel_.animating())
+            time_frame(gap, ms(rendered - start).count(), ms(std::chrono::steady_clock::now() - rendered).count());
     }
 
 private:
@@ -512,22 +518,30 @@ private:
             static_cast<uint32_t>(canvas.width()), static_cast<uint32_t>(canvas.height()), 4);
     }
 
-    // Logs the render and upload time every 600 frames, about 20 s of animation.
-    void time_frame(double ms) {
-        frame_ms_total_ += ms;
-        frame_ms_max_ = std::max(frame_ms_max_, ms);
-        if (++frames_ < 600) return;
-        char line[128];
-        std::snprintf(line, sizeof line, "Panel frames: %.1f ms average, %.1f ms longest, over %d frames",
-            frame_ms_total_ / frames_, frame_ms_max_, frames_);
+    // Logs, every 300 animated frames (about 10 s), the gap between frames and the
+    // time spent rendering and uploading: average and longest, in ms.
+    void time_frame(double gap, double render, double upload) {
+        for (auto [value, stat] : {std::pair{gap, &gap_}, {render, &render_}, {upload, &upload_}}) {
+            stat->total += value;
+            stat->longest = std::max(stat->longest, value);
+        }
+        if (++frames_ < 300) return;
+        char line[192];
+        std::snprintf(line, sizeof line,
+            "Panel frames: gap %.1f ms average, %.1f longest. Render %.1f, %.1f. Upload %.1f, %.1f",
+            gap_.total / frames_, gap_.longest, render_.total / frames_, render_.longest, upload_.total / frames_,
+            upload_.longest);
         log(line);
         frames_ = 0;
-        frame_ms_total_ = frame_ms_max_ = 0;
+        gap_ = render_ = upload_ = {};
     }
 
-    knockthru::Panel panel_;
+    struct Stat {
+        double total = 0, longest = 0;
+    };
     int frames_ = 0;
-    double frame_ms_total_ = 0, frame_ms_max_ = 0;
+    Stat gap_, render_, upload_;
+    knockthru::Panel panel_;
     vr::VROverlayHandle_t main_ = vr::k_ulOverlayHandleInvalid, thumbnail_ = vr::k_ulOverlayHandleInvalid;
     bool visible_ = false, dirty_ = true;
     double last_draw_ = -1;
@@ -829,7 +843,19 @@ int run() {
 
         if (calibrator && calibration && calibration->phase == Phase::Recording) {
             for (const auto& knock : knocks) {
-                const auto heard = calibrator->add(knock);
+                calibrator->hear(knock);
+                char line[160];
+                std::snprintf(line, sizeof line,
+                    "Calibration heard %s knock at %.3f s: peak %.0f m/s^2, approach %.2f m/s, before %.2f m/s",
+                    knockthru::to_string(knock.kind), knock.t, knock.peak, knock.approach_speed, knock.speed_before);
+                log(line);
+            }
+            while (const auto result = calibrator->next(t)) {
+                const auto heard = result->heard;
+                const auto& knock = result->knock;
+                log(std::string("Calibration burst at ") + std::to_string(knock.t) + " s: " +
+                    (heard == knockthru::Calibrator::Heard::Counted ? "counted"
+                        : heard == knockthru::Calibrator::Heard::OtherKind ? "other kind" : "ignored"));
                 if (heard == knockthru::Calibrator::Heard::Counted) {
                     haptics.buzz(1, t);
                     calibration->peaks = calibrator->peaks();
