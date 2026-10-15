@@ -20,8 +20,10 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <atomic>
 #include <future>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -156,6 +158,54 @@ public:
 private:
     std::chrono::steady_clock::time_point start_ = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point next_ = start_;
+};
+
+// Samples poses every millisecond on its own thread. Knock strength is the
+// velocity change between samples over the time between them, so a main loop
+// busy drawing the panel would stretch those gaps and garble the strength.
+class PoseThread {
+public:
+    struct Sample {
+        Device device;
+        double t;
+        knockthru::Vec3 position, velocity;
+    };
+
+    explicit PoseThread(const Clock& clock) : thread_([this, &clock] { loop(clock); }) {}
+    ~PoseThread() {
+        stop_ = true;
+        thread_.join();
+    }
+    PoseThread(const PoseThread&) = delete;
+
+    // Returns the samples since the last call, oldest first.
+    std::vector<Sample> take() {
+        std::vector<Sample> samples;
+        std::lock_guard<std::mutex> lock(mutex_);
+        samples.swap(samples_);
+        return samples;
+    }
+
+private:
+    void loop(const Clock& clock) {
+        PoseSampler sampler;
+        Clock ticker;
+        while (!stop_) {
+            const double t = clock.now();
+            sampler.sample([&](Device device, const char*, const vr::TrackedDevicePose_t& pose) {
+                const auto& m = pose.mDeviceToAbsoluteTracking.m;
+                const float* v = pose.vVelocity.v;
+                std::lock_guard<std::mutex> lock(mutex_);
+                samples_.push_back({device, t, {m[0][3], m[1][3], m[2][3]}, {v[0], v[1], v[2]}});
+            });
+            ticker.tick();
+        }
+    }
+
+    std::mutex mutex_;
+    std::vector<Sample> samples_;
+    std::atomic<bool> stop_{false};
+    std::thread thread_; // last, so it starts after the members it uses
 };
 
 // Short buzzes on both controllers. Uses SteamVR input actions when the action
@@ -557,8 +607,8 @@ int run() {
     std::optional<knockthru::CalibrationView> calibration; // the walkthrough the panel shows
     using Phase = knockthru::CalibrationView::Phase;
 
-    PoseSampler sampler;
     Clock clock;
+    PoseThread poses(clock);
     knockthru::PanelState state;
     std::future<RoomViewResult> room_view_job;
     bool room_view_job_toggles = false;
@@ -773,9 +823,7 @@ int run() {
             }
         }
 
-        sampler.sample([&](Device device, const char*, const vr::TrackedDevicePose_t& pose) {
-            PoseSampler::feed(detector, t, device, pose);
-        });
+        for (const auto& sample : poses.take()) detector.push(sample.device, sample.t, sample.position, sample.velocity);
         const auto knock_event = detector.poll(t);
         const auto knocks = detector.take_knocks();
 
