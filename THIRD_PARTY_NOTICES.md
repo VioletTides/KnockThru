@@ -111,3 +111,16 @@ ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Logo
+
+The controller outlines in `images/logo.svg`, `images/logo-wordmark.svg`, and
+`images/social-preview.png` are traced from Valve's Steam Frame controller CAD files
+(<https://gitlab.steamos.cloud/SteamHardware/SteamFrame>), which Valve Corporation
+released under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+International license. These logo files use that same license
+(<https://creativecommons.org/licenses/by-nc-sa/4.0/>), not the MIT license.
+KnockThru is not associated with or endorsed by Valve.
+
+The wordmark text is Noto Sans SemiBold (SIL Open Font License 1.1), converted to
+outlines.
