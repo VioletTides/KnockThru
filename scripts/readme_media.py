@@ -288,7 +288,7 @@ def knock_kinds():
         burst(draw, edge, cy, played, base=SURFACE)
         place(image, "headset-front", hx, cy, round(hw * 600 / 1110))
         place(image, "controller-left", edge - head_radius(h) * 0.95 - 30 * gap + shake, cy, h,
-              angle=round(-60 - 12 * gap))
+              angle=round(-30 - 8 * gap))
 
         for c, text in enumerate(("Controllers together", "Controller on a surface", "Tap on the headset")):
             w = draw.textlength(text, font=label)
