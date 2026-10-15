@@ -24,7 +24,7 @@ FIRST_KNOCK = 0.5  # the first contact in a loop
 KNOCK_GAP = 0.3  # between contacts
 WAIT = 0.4  # from the last knock to the action, as in the README
 # The knock kinds and timing loops play a double, then a triple: (knocks, pass length).
-PASSES = ((2, 2.4), (3, 2.8))
+PASSES = ((2, 3.0), (3, 3.6))
 LOOP = sum(length for _, length in PASSES)
 
 # Colors from src/panel.cpp.
@@ -264,7 +264,6 @@ def hero(panel_dir):
     knock_style = ("on", "Knock three times", "Switch the style.")
     opaque = ("opaque", "Only the room", "Opaque style hides the game.")
     knock_off = ("opaque", "Knock twice", "Back to the game.")
-    back = ("off", "Back in the game", "Passthrough is off.")
 
     def knock_scene(before, state, after, taps, buzzes, hold):
         scene(state, knock_times(taps)[-1] + WAIT + hold, after, taps, buzzes, before)
@@ -272,7 +271,8 @@ def hero(panel_dir):
     scene(off, 1.0)
     knock_scene(off, knock_on, on, 2, 1, 1.8)
     knock_scene(on, knock_style, opaque, 3, 2, 1.8)
-    knock_scene(opaque, knock_off, back, 2, 1, 1.2)
+    # The last knock returns to the opening frame, so the loop has no cut.
+    knock_scene(opaque, knock_off, off, 2, 1, 1.0)
     write_gif(frames, IMAGES / "hero.gif")
 
 
