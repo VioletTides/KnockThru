@@ -161,4 +161,6 @@ python3 scripts/cad_sprites.py <CAD folder>
 
 - The controller and headset drawings are rendered from [Valve's Steam Frame CAD files](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) (CC BY-NC-SA 4.0). Those images keep that license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). KnockThru is not associated with or endorsed by Valve.
 
-Made with love for everyone who wants to see their room without taking the headset off. [MIT licensed](LICENSE). Developed with help from coding agents.
+[MIT licensed](LICENSE).
+
+Developed with help from coding agents.
