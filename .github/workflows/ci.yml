@@ -1,0 +1,49 @@
+# On pull requests and pushes to main: build and test on Linux, render the
+# panel previews, then build and package for the Steam Frame. Catches a broken
+# Frame build before a v* tag reaches release.yml.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and test
+        run: |
+          cmake -S . -B build
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
+
+      - name: Render the panel previews
+        run: mkdir -p previews && build/bin/panel_preview previews
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: panel-previews
+          path: previews/*.png
+
+      - name: Install Zig 0.16.0
+        run: |
+          curl -sSfL -o zig.tar.xz https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+          echo "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00  zig.tar.xz" | sha256sum -c
+          mkdir zig && tar -xf zig.tar.xz -C zig --strip-components=1
+          echo "$PWD/zig" >> "$GITHUB_PATH"
+
+      - name: Build for the Steam Frame
+        run: scripts/build-arm64.sh
+
+      - name: Package
+        run: node scripts/package.mjs --build-dir build-arm64 --version 0.0.0-ci
