@@ -19,6 +19,7 @@ A double knock toggles Steam Frame passthrough (Room View). A triple knock switc
 - Host build and tests: `cmake -S . -B build && cmake --build build && ctest --test-dir build`
 - Frame build: `scripts/build-arm64.sh` (Zig 0.16.0), output in `build-arm64/bin/`
 - Release ZIP and FrameDrop manifest: `node scripts/package.mjs --build-dir build-arm64 --version X.Y.Z`
+- README images: `python3 scripts/readme_media.py` (needs Pillow, ffmpeg, and the host build)
 - Tuning sweep: `KNOCKTHRU_TEST_SET="confirmed_peak=30" build/bin/detector_test`. Add `KNOCKTHRU_TEST_VERBOSE=1` to print every knock and event.
 - Replay a recording from a bug report: `build/bin/detector_test knockthru-knocks.csv.gz`. Pass the reporter's calibrated peaks through `KNOCKTHRU_TEST_SET`.
 

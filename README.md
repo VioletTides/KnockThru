@@ -1,58 +1,66 @@
 # <img src="images/logo-wordmark.svg" alt="KnockThru" width="400">
 
-Knock twice to turn Steam Frame passthrough (Room View) on or off. Knock three times to switch Room View between translucent and opaque.
+Knock twice to see your room without taking off your Steam Frame. Knock three times to switch between seeing the room through your game and seeing only the room.
+
+![Knocking twice turns passthrough on in the KnockThru panel, and knocking three times switches it to opaque](images/hero.gif)
 
 [![Install with FrameDrop](images/framedrop-button.svg)](https://framedropvr.com/install?manifest=https%3A%2F%2Fgithub.com%2FVioletTides%2FKnockThru%2Freleases%2Flatest%2Fdownload%2Fknockthru.framedrop.json)
 
-## Setup
+## Install
 
-1. On the Frame, turn on Developer Mode, then turn on CEF Remote Debugging in the Developer settings. KnockThru clicks the Room View button through this debug port.
-2. Install with the FrameDrop button above.
-3. Launch **KnockThru** once from **Library → Non-Steam**. This registers it with SteamVR and turns on autostart.
+1. On the Frame, turn on **Developer Mode**. Then turn on **CEF Remote Debugging** in the Developer settings. KnockThru needs it to press the Room View button for you.
+2. Click the **Install with FrameDrop** button above.
+3. Open **Library → Non-Steam** and launch **KnockThru** once.
 
-From then on, KnockThru starts with SteamVR.
+From now on KnockThru starts with SteamVR and runs in the background.
 
-### Install without a PC
+## How to knock
 
-1. Do step 1 of Setup.
-2. On the Steam bar, open Konsole. Developer Mode adds it there.
-3. Run:
+Any of these three knocks works. Use the same kind for every knock in a set.
 
-```sh
-curl -fsSL https://github.com/VioletTides/KnockThru/releases/latest/download/install.sh | sh
-```
+![Three ways to knock: tap the controllers together, tap one controller on a table, or tap the headset](images/knock-kinds.gif)
 
-The script downloads the latest release and checks its SHA-256. It unpacks the release to `~/KnockThru`, adds KnockThru to your Steam library, and starts it. Run it again to reinstall. If SteamVR does not answer, go back to Gaming mode and launch KnockThru once from **Library → Non-Steam**.
+Pause for a moment, then knock at a steady pace. After two knocks, KnockThru waits a moment in case a third one follows.
 
-### Install with Frameloader
+![Timeline: knock, knock, a wait of about 0.4 seconds, then Room View turns on and both controllers buzz](images/timing.gif)
 
-[Frameloader](https://www.frameloader.com) runs on macOS, Windows, and Linux.
+| You knock | What happens | You feel |
+| --- | --- | --- |
+| Twice | Passthrough (Room View) turns on or off | One buzz |
+| Three times | The room switches between see-through and solid | Two buzzes |
+| Four or more times, or mixed kinds | Nothing, so steady clapping does not set it off | Nothing |
 
-1. Do step 1 of Setup.
-2. Pair Frameloader with the Frame, as its README describes.
-3. Drop the Linux ARM64 ZIP from the releases page onto Frameloader.
-4. Change **Library ID** to `KnockThru`, so a later reinstall replaces this copy. Then select **Install to Frame**.
+Three buzzes mean something went wrong. See [Something not working?](#something-not-working) below.
 
-Frameloader starts KnockThru, which registers with SteamVR and turns on autostart.
+## The dashboard tab
 
-## Knocks
+Open the SteamVR dashboard and pick the **KnockThru** tab to do everything by hand.
 
-| Knock | What counts |
-| --- | --- |
-| Together | The two controllers hit each other |
-| Surface | One controller hits a table, wall, or other solid surface |
-| Headset | A tap on the headset |
+![The KnockThru dashboard tab](images/dashboard.png)
 
-- Two knocks of the same kind: Room View on or off. Both controllers buzz once.
-- Three knocks: translucent or opaque. Both controllers buzz twice.
-- Four or more knocks, or knocks of mixed kinds, do nothing.
-- Three buzzes mean the action failed. The reason is in `~/.config/knockthru/application.log`.
+- **Passthrough**: turns Room View on or off.
+- **Style**: **Translucent** shows the room through your game. **Opaque** shows only the room.
+- **Knocks**: turns knocking off for a while without quitting the app.
+- **Count these knocks**: picks which of the three knock kinds count.
+- **Knocks in** your game: turns knocks off in just the game you're playing, for games where you hit things on purpose.
+- **Calibrate**: teaches KnockThru how hard you knock. Pick a knock kind, then knock 10 times, about 1 s apart.
 
-Knock at a steady pace, with a short pause before you start. A double fires about 0.4 s after the second knock, because KnockThru waits to see if a third knock follows.
+## Something not working?
 
-## Settings
+- **Soft knocks don't register.** Open the dashboard tab and press **Calibrate**.
+- **Three buzzes after a knock.** KnockThru heard you but could not change Room View. The usual cause is that **CEF Remote Debugging** is off. Turn it back on in the Frame's Developer settings. The dashboard tab also shows the reason.
+- **Knocks do nothing in one game.** Check the **Knocks in** switch for that game in the dashboard tab.
 
-Put your settings in `~/.config/knockthru/config.json`. This file survives updates, and KnockThru reloads it within 2 s of a change.
+KnockThru presses the Room View button through Steam's own dashboard. A Steam update can break that until KnockThru gets an update too.
+
+## For tinkerers
+
+These need SSH access to the Frame.
+
+<details>
+<summary>Settings file</summary>
+
+Put your settings in `~/.config/knockthru/config.json`. This file survives updates, and KnockThru reloads it within 2 s of a change. The dashboard tab writes to this file too.
 
 ```json
 {
@@ -66,20 +74,23 @@ Put your settings in `~/.config/knockthru/config.json`. This file survives updat
 - `debug_port`: the CEF Remote Debugging port. The default is 8080.
 - `classic_bar_icon`: `true` shows the dashboard bar icon in the logo colors. The default `false` shows the logo in grey, and white on hover, like Steam's own icons.
 - `sounds`: `false` silences the click. By default, KnockThru plays SteamVR's dashboard click on a triple knock and on panel buttons. Steam already clicks when a double knock changes passthrough.
-- `check_updates`: `false` stops the daily update check. By default, KnockThru asks GitHub for the latest release once a day, a minute after it starts. A new release shows a yellow dot on the Settings button and an Install button in Settings. After the install, a Restart button starts the new version, which shows a card with its version number. If the install fails, a card gives the reason. Check for updates in Settings works either way.
 - `tour_done`: `true` once the first-run tour is finished or skipped. Set it to `false` to see the tour the next time you open the KnockThru tab. Settings also has a Replay button.
 
-## Calibration
+</details>
 
-If soft knocks do not register, calibrate that knock kind over SSH:
+<details>
+<summary>Calibrate over SSH</summary>
 
 ```sh
 <install folder>/knockthru --calibrate together
 ```
 
-Knock 10 times within 90 s. Each knock KnockThru hears gives one buzz. The new threshold goes to `~/.config/knockthru/calibration.json`, and the running app picks it up within 2 s.
+Use `together`, `surface`, or `headset`. Knock 10 times within 90 s. Each knock KnockThru hears gives one buzz. The new threshold goes to `~/.config/knockthru/calibration.json`, and the running app picks it up within 2 s.
 
-## Commands
+</details>
+
+<details>
+<summary>Commands</summary>
 
 Run these on the Frame over SSH.
 
@@ -87,18 +98,16 @@ Run these on the Frame over SSH.
 | --- | --- |
 | `knockthru` or `--install` | Register with SteamVR, turn on autostart, and start |
 | `--uninstall` | Stop and remove from SteamVR. Keeps `~/.config/knockthru` |
-| `--uninstall --purge` | Also delete `~/.config/knockthru`, SteamVR's autostart file for KnockThru, and the report files in your home folder |
 | `--status` | Show registration, the running process, and Room View state |
-| `--update` | Install the latest GitHub release over this one and restart |
-| `--report` | Write `~/knockthru-report.txt` with versions, settings, and logs. Attach it to an issue |
-
-To report a problem from the headset, open Settings and select Report. Hold your phone up to a lens and scan the QR code. Your phone must be on the same Wi-Fi as the Frame. The code opens a page that the Frame serves, with the full report. Tap Copy report and open GitHub, then paste the report into the new issue. The issue already has your KnockThru and SteamVR versions filled in. If the Frame is offline, the code opens the GitHub issue directly, and Save to headset keeps the report as a file to attach.
-
-If knocks get missed or do the wrong thing, select Record knocks on the report card first, then knock the way that goes wrong for 20 s. The phone page then gives you one file, `knockthru-report.zip`, with the report and the recording inside, to attach to the issue. To replay a recording from a report, unzip it and run `build/bin/detector_test knockthru-knocks.csv.gz`.
 | `--toggle`, `--style` | Turn Room View on or off, or switch its style, once |
 | `--detect` | Print knocks live without acting on them |
 
-## Manual installation
+The log is `~/.config/knockthru/application.log`.
+
+</details>
+
+<details>
+<summary>Manual installation</summary>
 
 Copy the Linux ARM64 ZIP from the releases page to the Frame, then run:
 
@@ -107,7 +116,10 @@ unzip -oq knockthru-0.1.0-linux-arm64.zip -d ~/KnockThru
 ~/KnockThru/knockthru --install
 ```
 
-## Build
+</details>
+
+<details>
+<summary>Build</summary>
 
 Host build and detector tests (any Linux with CMake and a C++17 compiler):
 
@@ -124,13 +136,19 @@ scripts/build-arm64.sh
 node scripts/package.mjs --build-dir build-arm64 --version 0.1.0
 ```
 
+README images (needs Pillow and ffmpeg, after the host build):
+
+```sh
+python3 scripts/readme_media.py
+```
+
 `docs/knock-signal.md` explains how knock detection works and how it was tuned.
+
+</details>
 
 ## Credits
 
 - [KominoVR/frame-passthrough-shortcuts](https://github.com/KominoVR/frame-passthrough-shortcuts) (MIT): app scaffolding, style switch, and packaging.
 - [toorux/steam-frame-passthrough-toggle](https://github.com/toorux/steam-frame-passthrough-toggle) (MIT): the Room View button click through the debug port.
-
-Room View control uses Steam's internal dashboard UI. A Steam update can break it. If that happens, the panel's passthrough tile says so, and `--report` records the SteamVR version.
 
 [MIT licensed](LICENSE). Developed with help from coding agents.

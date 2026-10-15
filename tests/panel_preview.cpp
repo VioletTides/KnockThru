@@ -1,12 +1,15 @@
 // Writes the dashboard panel in sample states to PNG files.
 // Usage: panel_preview OUTPUT_DIRECTORY
+//        panel_preview --readme OUTPUT_DIRECTORY
 // The calibration steps also get frame sequences in OUTPUT_DIRECTORY/frames, at 25
-// frames a second, to review the animations.
+// frames a second, to review the animations. The --readme form writes clean states for
+// the README images instead.
 #include "panel.hpp"
 
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <string>
 
 using namespace knockthru;
 
@@ -127,7 +130,26 @@ void tour(const std::filesystem::path& out, const PanelState& idle) {
     shot(panel, state, 100, out / "tour-2-kinds-none.png");
 }
 
+// Writes the passthrough off, on, and opaque states with no hover highlight.
+int readme(const std::filesystem::path& out) {
+    Panel panel(KNOCKTHRU_FONTS);
+    PanelState state;
+    state.room_view = false;
+    state.opaque = false;
+    state.app_key = "steam.app.620980";
+    state.app_name = "Beat Saber";
+    shot(panel, state, 10, out / "readme-off.png");
+    state.room_view = true;
+    shot(panel, state, 20, out / "readme-on.png");
+    state.opaque = true;
+    shot(panel, state, 30, out / "readme-opaque.png");
+    std::cout << "Wrote README panel states to " << out << "\n";
+    return 0;
+}
+
 int main(int argc, char** argv) {
+    if (argc > 2 && std::string(argv[1]) == "--readme") return readme(argv[2]);
+    if (argc > 2 && std::string(argv[1]) == "--readme") return readme(argv[2]);
     const std::filesystem::path out = argc > 1 ? argv[1] : ".";
     Panel panel(KNOCKTHRU_FONTS);
 
