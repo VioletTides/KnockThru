@@ -286,11 +286,33 @@ void Canvas::text(Font& font, const std::string& utf8, float x, float y, float s
 }
 
 void Canvas::draw(const Canvas& image, int x, int y, float alpha) {
-    for (int iy = 0; iy < image.height_; ++iy)
+    const int scale = static_cast<int>(std::lround(clamp01(alpha) * 255));
+    for (int iy = 0; iy < image.height_; ++iy) {
+        const int dy = y + iy;
+        if (dy < 0 || dy >= height_) continue;
         for (int ix = 0; ix < image.width_; ++ix) {
-            const auto* p = &image.pixels_[(static_cast<std::size_t>(iy) * image.width_ + ix) * 4];
-            blend(x + ix, y + iy, {p[0], p[1], p[2], 255}, alpha * p[3] / 255.0f);
+            const int dx = x + ix;
+            if (dx < 0 || dx >= width_) continue;
+            const auto* s = &image.pixels_[(static_cast<std::size_t>(iy) * image.width_ + ix) * 4];
+            auto* d = &pixels_[(static_cast<std::size_t>(dy) * width_ + dx) * 4];
+            // An identical pixel blends to itself, give or take a little opacity.
+            // During a screen change most of the panel is background, so this skips it.
+            if (s[0] == d[0] && s[1] == d[1] && s[2] == d[2] && s[3] == d[3]) continue;
+            const int a = s[3] * scale / 255;
+            if (a == 0) continue;
+            if (a == 255 || d[3] == 0) {
+                d[0] = s[0];
+                d[1] = s[1];
+                d[2] = s[2];
+                d[3] = static_cast<std::uint8_t>(a);
+                continue;
+            }
+            // Source over destination, in 0..255 integers.
+            const int under = d[3] * (255 - a) / 255, out = a + under;
+            for (int c = 0; c < 3; ++c) d[c] = static_cast<std::uint8_t>((s[c] * a + d[c] * under + out / 2) / out);
+            d[3] = static_cast<std::uint8_t>(out);
         }
+    }
 }
 
 bool Canvas::write_png(const std::filesystem::path& path) const {
