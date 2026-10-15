@@ -238,12 +238,16 @@ void Panel::draw_icon(Canvas& canvas, bool tile) {
     // mark spans x 7.3 to 56.7 and y 8.1 to 56.2. Without the tile, it fills the canvas.
     const float k = tile ? s / 64 : s / 50;
     const float shift = tile ? 0 : 7;
-    const float* point = logo::kPoints;
-    for (const auto& shape : logo::kShapes) {
+    // The bar version has wider gaps, so they stay visible at the bar's 38 px.
+    const int* ring_sizes = tile ? logo::kRingSizes : logo::bar::kRingSizes;
+    const float* point = tile ? logo::kPoints : logo::bar::kPoints;
+    static_assert(std::size(logo::kShapes) == std::size(logo::bar::kShapes));
+    for (std::size_t n = 0; n < std::size(logo::kShapes); ++n) {
+        const auto& shape = tile ? logo::kShapes[n] : logo::bar::kShapes[n];
         std::vector<std::vector<Point>> rings;
         for (int r = shape.first_ring; r < shape.first_ring + shape.ring_count; ++r) {
             auto& ring = rings.emplace_back();
-            for (int i = 0; i < logo::kRingSizes[r]; ++i, point += 2) ring.push_back({(point[0] - shift) * k, (point[1] - shift) * k});
+            for (int i = 0; i < ring_sizes[r]; ++i, point += 2) ring.push_back({(point[0] - shift) * k, (point[1] - shift) * k});
         }
         canvas.polygon(rings, shape.fill == logo::Fill::Text ? kText : kAccent);
     }
