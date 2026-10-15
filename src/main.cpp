@@ -20,8 +20,10 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <atomic>
 #include <future>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -158,6 +160,54 @@ private:
     std::chrono::steady_clock::time_point next_ = start_;
 };
 
+// Samples poses every millisecond on its own thread. Knock strength is the
+// velocity change between samples over the time between them, so a main loop
+// busy drawing the panel would stretch those gaps and garble the strength.
+class PoseThread {
+public:
+    struct Sample {
+        Device device;
+        double t;
+        knockthru::Vec3 position, velocity;
+    };
+
+    explicit PoseThread(const Clock& clock) : thread_([this, &clock] { loop(clock); }) {}
+    ~PoseThread() {
+        stop_ = true;
+        thread_.join();
+    }
+    PoseThread(const PoseThread&) = delete;
+
+    // Returns the samples since the last call, oldest first.
+    std::vector<Sample> take() {
+        std::vector<Sample> samples;
+        std::lock_guard<std::mutex> lock(mutex_);
+        samples.swap(samples_);
+        return samples;
+    }
+
+private:
+    void loop(const Clock& clock) {
+        PoseSampler sampler;
+        Clock ticker;
+        while (!stop_) {
+            const double t = clock.now();
+            sampler.sample([&](Device device, const char*, const vr::TrackedDevicePose_t& pose) {
+                const auto& m = pose.mDeviceToAbsoluteTracking.m;
+                const float* v = pose.vVelocity.v;
+                std::lock_guard<std::mutex> lock(mutex_);
+                samples_.push_back({device, t, {m[0][3], m[1][3], m[2][3]}, {v[0], v[1], v[2]}});
+            });
+            ticker.tick();
+        }
+    }
+
+    std::mutex mutex_;
+    std::vector<Sample> samples_;
+    std::atomic<bool> stop_{false};
+    std::thread thread_; // last, so it starts after the members it uses
+};
+
 // Short buzzes on both controllers. Uses SteamVR input actions when the action
 // manifest is loaded, and the older direct pulse call otherwise.
 class Haptics {
@@ -278,11 +328,12 @@ int calibrate(const std::string& kind_name) {
             PoseSampler::feed(detector, t, device, pose);
         });
         detector.poll(t);
-        for (const auto& knock : detector.take_knocks()) {
-            if (!calibrator.add(knock)) {
+        for (const auto& knock : detector.take_knocks()) calibrator.hear(knock);
+        while (const auto result = calibrator.next(t)) {
+            const auto& knock = result->knock;
+            if (result->heard == knockthru::Calibrator::Heard::OtherKind)
                 std::cout << "  heard a " << knockthru::to_string(knock.kind) << " knock, ignored" << std::endl;
-                continue;
-            }
+            if (result->heard != knockthru::Calibrator::Heard::Counted) continue;
             std::cout << "  knock " << calibrator.count() << " of " << knockthru::Calibrator::kWanted << ": "
                       << static_cast<int>(knock.peak) << " m/s^2" << std::endl;
             haptics.buzz(1, t);
@@ -292,9 +343,10 @@ int calibrate(const std::string& kind_name) {
     }
     if (!calibrator.done())
         throw std::runtime_error("Calibration stopped after " + std::to_string(calibrator.count()) + " knocks. Nothing saved.");
-    const double threshold = calibrator.save();
-    std::cout << "Weakest knock " << static_cast<int>(calibrator.weakest()) << " m/s^2. Threshold for " << kind_name
-              << " set to " << static_cast<int>(threshold) << " m/s^2 in "
+    const auto saved = calibrator.save();
+    char thresholds[96];
+    std::snprintf(thresholds, sizeof thresholds, "spike %.0f m/s^2, approach %.2f m/s", saved.peak, saved.approach);
+    std::cout << "Thresholds for " << kind_name << " set to " << thresholds << " in "
               << (knockthru::user_directory() / "calibration.json").string()
               << ". A running KnockThru picks it up within 2 s.\n";
     return 0;
@@ -424,14 +476,19 @@ public:
         vr::VROverlay()->SetOverlayRaw(thumbnail_, const_cast<std::uint8_t*>(icon.pixels().data()), 256, 256, 4);
     }
 
-    // Renders at most 20 times a second after a change, and twice a second
-    // otherwise, for countdowns and changes made outside KnockThru. Uploads
-    // only changed images.
+    // Renders 30 times a second while something moves, at most 20 times a second
+    // after a change, and twice a second otherwise, for countdowns and changes
+    // made outside KnockThru. Uploads only changed images.
     void draw(const knockthru::PanelState& state, double now) {
-        if (!visible_ || now - last_draw_ < (dirty_ ? 0.05 : 0.5)) return;
+        const double interval = panel_.animating() ? 1.0 / 30 : dirty_ ? 0.05 : 0.5;
+        if (!visible_ || now - last_draw_ < interval) return;
         last_draw_ = now;
         dirty_ = false;
-        const auto& canvas = panel_.render(state, hover_);
+        upload(panel_.render(state, hover_, now));
+    }
+
+private:
+    void upload(const knockthru::Canvas& canvas) {
         if (canvas.pixels() == uploaded_) return;
         uploaded_ = canvas.pixels();
         if (texture_) {
@@ -447,7 +504,6 @@ public:
             static_cast<uint32_t>(canvas.width()), static_cast<uint32_t>(canvas.height()), 4);
     }
 
-private:
     knockthru::Panel panel_;
     vr::VROverlayHandle_t main_ = vr::k_ulOverlayHandleInvalid, thumbnail_ = vr::k_ulOverlayHandleInvalid;
     bool visible_ = false, dirty_ = true;
@@ -473,6 +529,22 @@ struct RoomViewResult {
     bool on;
     std::string message; // empty for a plain read
 };
+
+std::string thresholds(const knockthru::KindCalibration& calibration) {
+    char line[128];
+    std::snprintf(line, sizeof line, "spike %.0f m/s^2, approach %.2f m/s", calibration.peak, calibration.approach);
+    return line;
+}
+
+// One line for the log: how each knock heard while recording ended.
+std::string heard_summary(const knockthru::Calibrator& calibrator) {
+    using Heard = knockthru::Calibrator::Heard;
+    char line[192];
+    std::snprintf(line, sizeof line, "Recorded %s knocks: %d counted, %d too soon, %d too light, %d other kind, %d ignored",
+        knockthru::to_string(calibrator.kind()), calibrator.heard(Heard::Counted), calibrator.heard(Heard::TooSoon),
+        calibrator.heard(Heard::TooLight), calibrator.heard(Heard::OtherKind), calibrator.heard(Heard::Ignored));
+    return line;
+}
 
 // The resident app. SteamVR starts it as a dashboard overlay. A double knock
 // turns Room View on or off, a triple knock switches translucent and opaque,
@@ -525,9 +597,11 @@ int run() {
     auto stamp = config_stamp();
     knockthru::KnockDetector detector(config.detector);
     std::optional<knockthru::Calibrator> calibrator;
+    std::optional<knockthru::CalibrationView> calibration; // the walkthrough the panel shows
+    using Phase = knockthru::CalibrationView::Phase;
 
-    PoseSampler sampler;
     Clock clock;
+    PoseThread poses(clock);
     knockthru::PanelState state;
     std::future<RoomViewResult> room_view_job;
     bool room_view_job_toggles = false;
@@ -540,7 +614,7 @@ int run() {
         log(message);
         state.message = message;
         state.message_is_error = error;
-        state.calibration_saved = false;
+        state.calibration_saved.reset();
         if (panel) panel->invalidate();
     };
     const auto reload = [&] {
@@ -679,16 +753,39 @@ int run() {
                         show(std::string("Knocks ") + (config.blocked_apps.count(state.app_key) ? "off" : "on") + " in " + name);
                     break;
                 }
-                case PanelCommand::Calibrate:
+                case PanelCommand::Calibrate: {
                     calibrator.emplace(click.kind, config.detector, t);
                     detector = knockthru::KnockDetector(calibrator->detector_config());
+                    calibration.emplace();
+                    calibration->kind = click.kind;
+                    calibration->wanted = knockthru::Calibrator::kWanted;
+                    calibration->started_t = t;
                     show("Calibrating " + kind_name + ": knock " + std::to_string(knockthru::Calibrator::kWanted) +
                         " times, about 1 s apart");
                     break;
+                }
                 case PanelCommand::CancelCalibration:
+                    if (calibrator && calibration && calibration->phase == Phase::Recording)
+                        log(heard_summary(*calibrator));
                     calibrator.reset();
+                    calibration.reset();
                     detector = knockthru::KnockDetector(config.detector);
                     show("Calibration canceled. Nothing saved.");
+                    break;
+                case PanelCommand::SaveCalibration:
+                    if (!calibrator || !calibration || !calibration->trial_passed.value_or(false)) break;
+                    try {
+                        const auto saved = calibrator->save();
+                        log("Calibrated " + kind_name + " knocks: " + thresholds(saved));
+                        calibrator.reset();
+                        calibration.reset();
+                        reload();
+                        show("Calibration saved");
+                        state.calibration_saved = click.kind;
+                        haptics.buzz(2, t);
+                    } catch (const std::exception& error) {
+                        show(std::string("Calibration not saved: ") + error.what(), true);
+                    }
                     break;
                 }
             }
@@ -702,40 +799,57 @@ int run() {
             }
         }
 
-        sampler.sample([&](Device device, const char*, const vr::TrackedDevicePose_t& pose) {
-            PoseSampler::feed(detector, t, device, pose);
-        });
+        for (const auto& sample : poses.take()) detector.push(sample.device, sample.t, sample.position, sample.velocity);
         const auto knock_event = detector.poll(t);
         const auto knocks = detector.take_knocks();
 
-        if (calibrator) {
-            for (const auto& knock : knocks)
-                if (calibrator->add(knock)) {
+        if (calibrator && calibration && calibration->phase == Phase::Recording) {
+            for (const auto& knock : knocks) calibrator->hear(knock);
+            while (const auto result = calibrator->next(t)) {
+                const auto heard = result->heard;
+                const auto& knock = result->knock;
+                if (heard == knockthru::Calibrator::Heard::Counted) {
                     haptics.buzz(1, t);
-                    if (panel) panel->invalidate();
+                    calibration->peaks = calibrator->peaks();
+                    calibration->speeds = calibrator->speeds();
+                    calibration->counted_t = t;
+                    calibration->knocked_t = knock.t;
+                } else if (heard == knockthru::Calibrator::Heard::OtherKind) {
+                    calibration->ignored = knock.kind;
+                    calibration->ignored_t = t;
+                } else if (heard == knockthru::Calibrator::Heard::TooLight) {
+                    calibration->too_light_t = t;
+                } else if (heard == knockthru::Calibrator::Heard::TooSoon) {
+                    calibration->too_soon_t = t;
                 }
-            const auto kind_name = std::string(knockthru::to_string(calibrator->kind()));
+            }
+            calibration->seconds_left = static_cast<int>(std::ceil(calibrator->seconds_left(t)));
             if (calibrator->done()) {
-                try {
-                    const double threshold = calibrator->save();
-                    calibrator.reset();
-                    reload();
-                    log("Calibrated " + kind_name + " knocks: threshold " + std::to_string(static_cast<int>(threshold)) + " m/s^2");
-                    show("Calibration saved");
-                    state.calibration_saved = true;
-                    haptics.buzz(2, t + 0.3);
-                } catch (const std::exception& error) {
-                    calibrator.reset();
-                    detector = knockthru::KnockDetector(config.detector);
-                    show(std::string("Calibration not saved: ") + error.what(), true);
-                }
+                // Straight on to the try step, which judges knocks at the new thresholds.
+                calibration->phase = Phase::Trying;
+                detector = knockthru::KnockDetector(calibrator->trial_config(config.detector));
+                haptics.buzz(2, t + 0.3);
+                log(heard_summary(*calibrator) + ". Trying thresholds: " + thresholds(calibrator->result()));
             } else if (calibrator->seconds_left(t) <= 0) {
+                log(heard_summary(*calibrator));
                 show("Time ran out after " + std::to_string(calibrator->count()) + " of " +
                     std::to_string(knockthru::Calibrator::kWanted) + " knocks. Nothing saved.", true);
                 calibrator.reset();
+                calibration.reset();
                 detector = knockthru::KnockDetector(config.detector);
             }
-        } else if (knock_event) {
+        } else if (calibrator && calibration && calibration->phase == Phase::Trying) {
+            // The try step judges knocks at the new threshold and never switches passthrough.
+            if (knock_event) {
+                const bool passed = knock_event->kind == calibrator->kind() && knock_event->count == 2;
+                calibration->trial_passed = passed;
+                calibration->trial_heard = std::string("a ") + (knock_event->count == 3 ? "triple " : "double ") +
+                    knockthru::to_string(knock_event->kind) + " knock";
+                calibration->trial_t = t;
+                log(std::string("Try step heard ") + calibration->trial_heard + (passed ? ": passed" : ": missed"));
+                haptics.buzz(passed ? 1 : 3, t);
+            }
+        } else if (!calibrator && knock_event) {
             const std::string what = std::string(" (") + (knock_event->count == 3 ? "triple " : "double ") +
                 knockthru::to_string(knock_event->kind) + " knock)";
             if (config.paused) {
@@ -781,10 +895,7 @@ int run() {
             panel->set_bar_icon(config.classic_bar_icon);
             state.enabled = config.detector.enabled;
             state.app_blocked = config.blocked_apps.count(state.app_key) > 0;
-            state.calibrating = calibrator ? std::optional(calibrator->kind()) : std::nullopt;
-            state.calibration_count = calibrator ? calibrator->count() : 0;
-            state.calibration_wanted = knockthru::Calibrator::kWanted;
-            state.calibration_seconds_left = calibrator ? static_cast<int>(std::ceil(calibrator->seconds_left(t))) : 0;
+            state.calibration = calibration;
             panel->draw(state, t);
         }
         haptics.update(t);

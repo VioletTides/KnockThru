@@ -70,7 +70,7 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
             auto& d = config.detector;
             const std::map<std::string, double*> fields{
                 {"controller_peak", &d.controller_peak}, {"confirmed_peak", &d.confirmed_peak},
-                {"partner_peak", &d.partner_peak}, {"headset_peak", &d.headset_peak},
+                {"partner_peak", &d.partner_peak}, {"headset_peak", &d.headset_peak}, {"headset_knock_peak", &d.headset_knock_peak},
                 {"max_speed_after", &d.max_speed_after}, {"surface_speed_after", &d.surface_speed_after},
                 {"max_speed_before", &d.max_speed_before}, {"together_distance", &d.together_distance},
                 {"same_spot", &d.same_spot}, {"merge_s", &d.merge_s}, {"min_gap_s", &d.min_gap_s}, {"fast_gap_s", &d.fast_gap_s},
@@ -136,35 +136,84 @@ Calibration load_calibration() {
     const auto path = user_directory() / "calibration.json";
     const auto file = read_json(path);
     Calibration calibration;
-    const auto read = [&](const char* key, std::optional<double>& out) {
-        if (!file.contains(key)) return;
-        if (!file[key].is_number()) throw std::runtime_error(path.string() + ": " + key + " must be a number");
-        out = file[key].get<double>();
+    bool legacy = false;
+    for (const auto kind : {KnockKind::Together, KnockKind::Surface, KnockKind::Headset}) {
+        const char* key = to_string(kind);
+        if (!file.contains(key)) continue;
+        const auto fail = [&](const std::string& what) {
+            throw std::runtime_error(path.string() + ": " + key + " " + what);
+        };
+        const auto& entry = file[key];
+        KindCalibration out;
+        if (entry.is_number()) {
+            out.peak = entry.get<double>();
+            legacy = true;
+        } else if (entry.is_object()) {
+            const auto number = [&](const char* field, double& value) {
+                if (!entry.contains(field)) return;
+                if (!entry[field].is_number()) fail(std::string(field) + " must be a number");
+                value = entry[field].get<double>();
+            };
+            const auto numbers = [&](const char* field, std::vector<double>& values) {
+                if (!entry.contains(field)) return;
+                if (!entry[field].is_array()) fail(std::string(field) + " must be a list of numbers");
+                for (const auto& value : entry[field]) {
+                    if (!value.is_number()) fail(std::string(field) + " must be a list of numbers");
+                    values.push_back(value.get<double>());
+                }
+            };
+            if (!entry.contains("peak")) fail("needs a peak");
+            number("peak", out.peak);
+            number("approach", out.approach);
+            numbers("peaks", out.peaks);
+            numbers("speeds", out.speeds);
+        } else {
+            fail("must be a number or an object");
+        }
+        calibration[kind] = out;
+    }
+    // Older files shared one threshold between together and headset knocks.
+    const auto peak_only = [](double peak) {
+        KindCalibration out;
+        out.peak = peak;
+        return out;
     };
-    read("surface", calibration.surface);
-    read("together", calibration.together);
-    read("headset", calibration.headset);
+    if (legacy && !calibration.headset && calibration.together) calibration.headset = peak_only(calibration.together->peak);
+    if (legacy && !calibration.together && calibration.headset) calibration.together = peak_only(calibration.headset->peak);
     return calibration;
 }
 
 void save_calibration(const Calibration& calibration) {
     json file = json::object();
-    if (calibration.surface) file["surface"] = *calibration.surface;
-    if (calibration.together) file["together"] = *calibration.together;
-    if (calibration.headset) file["headset"] = *calibration.headset;
+    auto copy = calibration;
+    for (const auto kind : {KnockKind::Together, KnockKind::Surface, KnockKind::Headset}) {
+        const auto& entry = copy[kind];
+        if (!entry) continue;
+        file[to_string(kind)] = {{"peak", entry->peak}, {"approach", entry->approach}, {"peaks", entry->peaks},
+            {"speeds", entry->speeds}};
+    }
     write_json(user_directory() / "calibration.json", file);
 }
 
 void apply_calibration(const Calibration& calibration, DetectorConfig& detector) {
-    if (calibration.surface) detector.controller_peak = *calibration.surface;
-    // Together and headset knocks share one threshold, so the softer kind wins.
-    if (calibration.together && calibration.headset)
-        detector.confirmed_peak = std::min(*calibration.together, *calibration.headset);
-    else if (calibration.together || calibration.headset)
-        detector.confirmed_peak = calibration.together ? *calibration.together : *calibration.headset;
-    // A soft together knock also gives a soft partner spike.
-    if (calibration.together || calibration.headset)
-        detector.partner_peak = std::min(detector.partner_peak, detector.confirmed_peak * 2 / 3);
+    auto copy = calibration;
+    const auto approach = [&](KnockKind kind, const KindCalibration& entry) {
+        detector.min_approach[static_cast<int>(kind)] = entry.approach;
+    };
+    if (const auto& surface = copy[KnockKind::Surface]) {
+        detector.controller_peak = surface->peak;
+        approach(KnockKind::Surface, *surface);
+    }
+    if (const auto& together = copy[KnockKind::Together]) {
+        detector.confirmed_peak = together->peak;
+        // A soft together knock also gives a soft partner spike.
+        detector.partner_peak = std::min(detector.partner_peak, together->peak * 2 / 3);
+        approach(KnockKind::Together, *together);
+    }
+    if (const auto& headset = copy[KnockKind::Headset]) {
+        detector.headset_knock_peak = headset->peak;
+        approach(KnockKind::Headset, *headset);
+    }
 }
 
 } // namespace knockthru

@@ -1,7 +1,10 @@
 // Detector tests: synthetic sequences, then replays of the Steam Frame
 // recordings in tests/data/ (see docs/knock-signal.md).
+#include "calibrator.hpp"
+#include "config.hpp"
 #include "knock_detector.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -109,7 +112,9 @@ DetectorConfig test_config() {
     if (!set) return config;
     const std::map<std::string, double*> fields{
         {"controller_peak", &config.controller_peak}, {"confirmed_peak", &config.confirmed_peak},
-        {"partner_peak", &config.partner_peak}, {"headset_peak", &config.headset_peak},
+        {"partner_peak", &config.partner_peak}, {"headset_peak", &config.headset_peak}, {"headset_knock_peak", &config.headset_knock_peak},
+        {"min_approach_together", &config.min_approach[0]}, {"min_approach_surface", &config.min_approach[1]},
+        {"min_approach_headset", &config.min_approach[2]},
         {"max_speed_after", &config.max_speed_after}, {"surface_speed_after", &config.surface_speed_after},
         {"max_speed_before", &config.max_speed_before}, {"same_spot", &config.same_spot},
         {"min_gap_s", &config.min_gap_s}, {"fast_gap_s", &config.fast_gap_s}, {"max_gap_s", &config.max_gap_s},
@@ -128,9 +133,9 @@ DetectorConfig test_config() {
     return config;
 }
 
-std::vector<KnockEvent> replay_events(const std::string& name) {
+std::vector<KnockEvent> replay_events(const std::string& name, const DetectorConfig& config) {
     const auto rows = load(std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz");
-    KnockDetector detector(test_config());
+    KnockDetector detector(config);
     std::vector<KnockEvent> events;
     for (const auto& row : rows) {
         detector.push(row.device, row.t, row.position, row.velocity);
@@ -176,7 +181,8 @@ int total(const std::map<std::string, int>& counts) {
 // Live session with a known routine: 4 each of together, surface, and headset
 // doubles, then 4 each of the same triples, about 1.5 to 2 s apart. Each entry
 // is when a sequence starts. An action must end within 1 s of that start.
-void mixed_test() {
+// Returns how many actions were right and how many wrong.
+std::pair<int, int> mixed_score(const DetectorConfig& config, bool verbose) {
     struct Expected { double start; KnockKind kind; int count; };
     std::vector<Expected> expected;
     const auto add = [&](KnockKind kind, int count, std::initializer_list<double> starts) {
@@ -190,17 +196,22 @@ void mixed_test() {
     add(KnockKind::Headset, 3, {45.45, 47.9, 49.9, 51.65});
 
     int right = 0, wrong = 0;
-    for (const auto& event : replay_events("mixed")) {
+    for (const auto& event : replay_events("mixed", config)) {
         const Expected* match = nullptr;
         for (const auto& e : expected)
             if (event.t >= e.start && event.t <= e.start + 1.0) match = &e;
         const bool ok = match && match->kind == event.kind && match->count == event.count;
         ok ? ++right : ++wrong;
-        if (!ok || std::getenv("KNOCKTHRU_TEST_VERBOSE"))
+        if (verbose && (!ok || std::getenv("KNOCKTHRU_TEST_VERBOSE")))
             std::cout << "    " << (ok ? "right" : "WRONG") << " " << event.t << " " << to_string(event.kind)
                       << "x" << event.count << "\n";
     }
-    std::cout << "  mixed: " << right << " of " << expected.size() << " right, " << wrong << " wrong\n";
+    return {right, wrong};
+}
+
+void mixed_test() {
+    const auto [right, wrong] = mixed_score(test_config(), true);
+    std::cout << "  mixed: " << right << " of 24 right, " << wrong << " wrong\n";
     check(wrong == 0, "mixed: no wrong actions");
     check(right >= 20, "mixed: at least 20 of 24 right");
 }
@@ -223,11 +234,94 @@ void replay_tests() {
     mixed_test();
 }
 
+// Runs a calibration of `kind` on a recording, as the app would.
+Calibrator calibrate(const std::string& name, KnockKind kind) {
+    const auto rows = load(std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz");
+    Calibrator calibrator(kind, DetectorConfig{}, 0);
+    KnockDetector detector(calibrator.detector_config());
+    for (const auto& row : rows) {
+        detector.push(row.device, row.t, row.position, row.velocity);
+        detector.poll(row.t);
+        for (const auto& knock : detector.take_knocks()) calibrator.hear(knock);
+        while (calibrator.next(row.t)) {}
+    }
+    return calibrator;
+}
+
+// Counts the knocks a calibration of `kind` would take from a recording.
+int calibration_count(const std::string& name, KnockKind kind) {
+    const int counted = calibrate(name, kind).count();
+    std::cout << "  calibrating " << to_string(kind) << " on " << name << ": " << counted << " counted\n";
+    return counted;
+}
+
+// Knocks heard in a surface calibration on the Frame, from application.log: t,
+// peak, approach speed, and speed before. At 42.44 s and 48.28 s the controller
+// spiked as it started a hard swing, 0.09 to 0.14 s before the knock.
+void logged_calibration_test() {
+    const double heard[][4] = {{38.180, 52, .65, .12}, {38.320, 39, .80, .28}, {38.982, 31, .20, .59},
+        {39.261, 40, 1.64, .35}, {39.520, 33, .32, .67}, {39.621, 34, .41, .66}, {39.981, 268, .99, .21},
+        {41.084, 381, 1.09, .07}, {42.441, 37, .08, .02}, {42.584, 146, .96, .02}, {44.021, 67, .71, .02},
+        {45.442, 90, .52, .03}, {46.985, 331, 1.82, .19}, {48.279, 37, .29, .03}, {48.364, 461, 1.26, .07},
+        {49.758, 173, 1.65, .14}, {51.098, 76, .66, .05}};
+    Calibrator calibrator(KnockKind::Surface, DetectorConfig{}, 38);
+    for (const auto& h : heard) {
+        Knock knock{h[0], KnockKind::Surface, 2, {0, 0, 0}, h[1], h[3], h[2]};
+        while (calibrator.next(knock.t)) {}
+        calibrator.hear(knock);
+    }
+    while (calibrator.next(60)) {}
+    const auto& peaks = calibrator.peaks();
+    const auto has = [&](double peak) { return std::find(peaks.begin(), peaks.end(), peak) != peaks.end(); };
+    check(has(146) && has(461) && !has(37), "logged: hard knocks count, not the swing starts before them");
+    check(!has(31), "logged: a slow hand movement does not count");
+}
+
+// Calibrates each kind on its recording, applies the result, and replays
+// every recording with it. Calibration must not add false or wrong actions,
+// and must keep about as many real doubles as the defaults.
+void calibrated_replay_tests() {
+    std::cout << "calibrated detection\n";
+    for (const auto kind : {KnockKind::Together, KnockKind::Surface, KnockKind::Headset}) {
+        const auto name = std::string(to_string(kind));
+        Calibration calibration;
+        calibration[kind] = calibrate(name, kind).result();
+        DetectorConfig config;
+        apply_calibration(calibration, config);
+        int doubles = 0;
+        for (const auto& event : replay_events(name, config)) doubles += event.kind == kind && event.count == 2;
+        const auto false_actions = replay_events("play", config).size() + replay_events("noise", config).size();
+        const auto [right, wrong] = mixed_score(config, false);
+        std::cout << "  " << name << ": spike " << calibration[kind]->peak << ", approach " << calibration[kind]->approach
+                  << ", " << doubles << " doubles, mixed " << right << " right " << wrong << " wrong\n";
+        check(false_actions == 0, name + " calibrated: no actions in play and noise");
+        check(wrong == 0, name + " calibrated: no wrong actions in mixed");
+        const int least = kind == KnockKind::Surface ? 17 : 19;
+        check(doubles >= least, name + " calibrated: at least " + std::to_string(least) + " doubles");
+    }
+}
+
+// Calibration lowers the thresholds, so waving the controllers must not count.
+// The knock recordings are doubles, so one knock of each pair counts.
+void calibration_tests() {
+    std::cout << "calibration\n";
+    logged_calibration_test();
+    int noise = 0;
+    for (const auto* name : {"play", "noise"})
+        for (int k = 0; k < 3; ++k) noise += calibration_count(name, static_cast<KnockKind>(k));
+    check(noise == 0, "play and noise: no knocks counted in 90 s");
+    check(calibration_count("together", KnockKind::Together) >= 10, "together: 10 knocks counted");
+    check(calibration_count("surface", KnockKind::Surface) >= 10, "surface: 10 knocks counted");
+    check(calibration_count("headset", KnockKind::Headset) >= 10, "headset: 10 knocks counted");
+}
+
 } // namespace
 
 int main() {
     synthetic_tests();
     replay_tests();
+    calibration_tests();
+    calibrated_replay_tests();
     std::cout << (failures ? std::to_string(failures) + " failed\n" : "all passed\n");
     return failures ? 1 : 0;
 }

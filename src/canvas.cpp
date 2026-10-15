@@ -90,6 +90,14 @@ void Canvas::clear(Color color) {
 void Canvas::blend(int x, int y, Color color, float coverage) {
     if (x < 0 || y < 0 || x >= width_ || y >= height_ || coverage <= 0) return;
     auto* p = &pixels_[(static_cast<std::size_t>(y) * width_ + x) * 4];
+    // A fully covered pixel of an opaque color, or one over transparency, is the color itself.
+    if (coverage >= 1 && (color.a == 255 || p[3] == 0)) {
+        p[0] = color.r;
+        p[1] = color.g;
+        p[2] = color.b;
+        p[3] = color.a;
+        return;
+    }
     const float a = coverage * color.a / 255.0f;
     const float out_a = a + p[3] / 255.0f * (1 - a);
     if (out_a <= 0) return;
@@ -106,17 +114,31 @@ void Canvas::rounded_rect(Rect rect, float radius, Color color) {
     radius = std::min({radius, rect.w / 2, rect.h / 2});
     const int x0 = static_cast<int>(std::floor(rect.x)), x1 = static_cast<int>(std::ceil(rect.x + rect.w));
     const int y0 = static_cast<int>(std::floor(rect.y)), y1 = static_cast<int>(std::ceil(rect.y + rect.h));
+    const auto coverage = [&](int x, int y) {
+        const float px = x + 0.5f, py = y + 0.5f;
+        // Signed distance to the rounded rectangle, negative inside.
+        const float dx = std::max(std::abs(px - (rect.x + rect.w / 2)) - (rect.w / 2 - radius), 0.0f);
+        const float dy = std::max(std::abs(py - (rect.y + rect.h / 2)) - (rect.h / 2 - radius), 0.0f);
+        const float distance = std::sqrt(dx * dx + dy * dy) - radius;
+        const float edge_x = std::min(px - rect.x, rect.x + rect.w - px) + 0.5f;
+        const float edge_y = std::min(py - rect.y, rect.y + rect.h - py) + 0.5f;
+        return clamp01(0.5f - distance) * clamp01(edge_x) * clamp01(edge_y);
+    };
+    // The shape is convex, so each row's fully covered pixels form one run. Only
+    // the pixels before and after it need the distance math.
     for (int y = y0; y < y1; ++y) {
-        for (int x = x0; x < x1; ++x) {
-            const float px = x + 0.5f, py = y + 0.5f;
-            // Signed distance to the rounded rectangle, negative inside.
-            const float dx = std::max(std::abs(px - (rect.x + rect.w / 2)) - (rect.w / 2 - radius), 0.0f);
-            const float dy = std::max(std::abs(py - (rect.y + rect.h / 2)) - (rect.h / 2 - radius), 0.0f);
-            const float distance = std::sqrt(dx * dx + dy * dy) - radius;
-            const float edge_x = std::min(px - rect.x, rect.x + rect.w - px) + 0.5f;
-            const float edge_y = std::min(py - rect.y, rect.y + rect.h - py) + 0.5f;
-            blend(x, y, color, clamp01(0.5f - distance) * clamp01(edge_x) * clamp01(edge_y));
+        int left = x0, right = x1 - 1;
+        for (; left <= right; ++left) {
+            const float c = coverage(left, y);
+            if (c >= 1) break;
+            blend(left, y, color, c);
         }
+        for (; right > left; --right) {
+            const float c = coverage(right, y);
+            if (c >= 1) break;
+            blend(right, y, color, c);
+        }
+        for (int x = left; x <= right; ++x) blend(x, y, color, 1);
     }
 }
 
@@ -125,18 +147,21 @@ void Canvas::circle(float cx, float cy, float radius, Color color) {
 }
 
 void Canvas::polygon(const std::vector<std::vector<Point>>& rings, Color color) {
-    float top = static_cast<float>(height_), bottom = 0;
+    float top = static_cast<float>(height_), bottom = 0, left = static_cast<float>(width_), right = 0;
     for (const auto& ring : rings) {
         for (const auto& p : ring) {
             top = std::min(top, p.y);
             bottom = std::max(bottom, p.y);
+            left = std::min(left, p.x);
+            right = std::max(right, p.x);
         }
     }
+    const int first_x = std::max(0, static_cast<int>(left)), last_x = std::min(width_, static_cast<int>(std::ceil(right)) + 1);
     // Four sample lines per pixel row. Each span adds its exact horizontal coverage.
     constexpr int kSamples = 4;
     std::vector<float> coverage(width_ + 1), crossings;
     for (int y = std::max(0, static_cast<int>(top)); y < std::min(height_, static_cast<int>(std::ceil(bottom))); ++y) {
-        std::fill(coverage.begin(), coverage.end(), 0.0f);
+        std::fill(coverage.begin() + first_x, coverage.begin() + last_x, 0.0f);
         for (int sample = 0; sample < kSamples; ++sample) {
             const float sy = y + (sample + 0.5f) / kSamples;
             crossings.clear();
@@ -160,7 +185,7 @@ void Canvas::polygon(const std::vector<std::vector<Point>>& rings, Color color) 
                 coverage[i1] += (x1 - i1) / kSamples;
             }
         }
-        for (int x = 0; x < width_; ++x) blend(x, y, color, clamp01(coverage[x]));
+        for (int x = first_x; x < last_x; ++x) blend(x, y, color, clamp01(coverage[x]));
     }
 }
 
@@ -174,8 +199,11 @@ void Canvas::arc(float cx, float cy, float inner, float outer, float from, float
             const float r = std::sqrt(dx * dx + dy * dy);
             float coverage = clamp01(outer - r + 0.5f) * (inner > 0 ? clamp01(r - inner + 0.5f) : 1.0f);
             if (!full) {
+                // Brings the angle into one turn starting at `from`, so arcs that
+                // reach past -pi or pi draw whole.
                 float angle = std::atan2(dy, dx);
                 while (angle < from) angle += 6.2831853f;
+                while (angle >= from + 6.2831853f) angle -= 6.2831853f;
                 const float outside = std::min(angle - from, to - angle);
                 // Round the arc ends by softening a few pixels past each end.
                 coverage *= clamp01(outside * r + 0.5f);
@@ -260,12 +288,34 @@ void Canvas::text(Font& font, const std::string& utf8, float x, float y, float s
     }
 }
 
-void Canvas::draw(const Canvas& image, int x, int y) {
-    for (int iy = 0; iy < image.height_; ++iy)
+void Canvas::draw(const Canvas& image, int x, int y, float alpha) {
+    const int scale = static_cast<int>(std::lround(clamp01(alpha) * 255));
+    for (int iy = 0; iy < image.height_; ++iy) {
+        const int dy = y + iy;
+        if (dy < 0 || dy >= height_) continue;
         for (int ix = 0; ix < image.width_; ++ix) {
-            const auto* p = &image.pixels_[(static_cast<std::size_t>(iy) * image.width_ + ix) * 4];
-            blend(x + ix, y + iy, {p[0], p[1], p[2], 255}, p[3] / 255.0f);
+            const int dx = x + ix;
+            if (dx < 0 || dx >= width_) continue;
+            const auto* s = &image.pixels_[(static_cast<std::size_t>(iy) * image.width_ + ix) * 4];
+            auto* d = &pixels_[(static_cast<std::size_t>(dy) * width_ + dx) * 4];
+            // An identical pixel blends to itself, give or take a little opacity.
+            // During a screen change most of the panel is background, so this skips it.
+            if (s[0] == d[0] && s[1] == d[1] && s[2] == d[2] && s[3] == d[3]) continue;
+            const int a = s[3] * scale / 255;
+            if (a == 0) continue;
+            if (a == 255 || d[3] == 0) {
+                d[0] = s[0];
+                d[1] = s[1];
+                d[2] = s[2];
+                d[3] = static_cast<std::uint8_t>(a);
+                continue;
+            }
+            // Source over destination, in 0..255 integers.
+            const int under = d[3] * (255 - a) / 255, out = a + under;
+            for (int c = 0; c < 3; ++c) d[c] = static_cast<std::uint8_t>((s[c] * a + d[c] * under + out / 2) / out);
+            d[3] = static_cast<std::uint8_t>(out);
         }
+    }
 }
 
 bool Canvas::write_png(const std::filesystem::path& path) const {

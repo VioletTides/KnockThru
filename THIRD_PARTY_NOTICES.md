@@ -122,5 +122,9 @@ International license. These logo files use that same license
 (<https://creativecommons.org/licenses/by-nc-sa/4.0/>), not the MIT license.
 KnockThru is not associated with or endorsed by Valve.
 
+The controller and headset outlines in `src/sprite_shapes.hpp`, drawn in the
+calibration animations, are traced from renders of the same CAD files, including
+Valve's Steam Frame core module. They use the same license.
+
 The wordmark text is Noto Sans SemiBold (SIL Open Font License 1.1), converted to
 outlines.
