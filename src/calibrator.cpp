@@ -28,15 +28,39 @@ double Calibrator::weakest() const {
     return *std::min_element(peaks_.begin(), peaks_.end());
 }
 
-double Calibrator::save() const {
-    const double floor = kind_ == KnockKind::Surface ? 50.0 : 20.0;
-    const double threshold = std::clamp(0.6 * weakest(), floor, 150.0);
+double Calibrator::floor(KnockKind kind) { return kind == KnockKind::Surface ? 50.0 : 20.0; }
+
+double Calibrator::threshold(KnockKind kind, const std::vector<double>& peaks, double sensitivity) {
+    if (peaks.empty()) throw std::logic_error("No knocks recorded");
+    // From 80 percent of the weakest knock at the least sensitive end to 40 percent at the most.
+    const double fraction = 0.8 - 0.4 * std::clamp(sensitivity, 0.0, 1.0);
+    return std::clamp(fraction * *std::min_element(peaks.begin(), peaks.end()), floor(kind), 150.0);
+}
+
+namespace {
+
+std::optional<double>& slot(Calibration& calibration, KnockKind kind) {
+    return kind == KnockKind::Surface ? calibration.surface
+        : kind == KnockKind::Together ? calibration.together : calibration.headset;
+}
+
+} // namespace
+
+DetectorConfig Calibrator::trial_config(const DetectorConfig& base, double sensitivity) const {
+    DetectorConfig config = base;
+    Calibration only;
+    slot(only, kind_) = threshold(kind_, peaks_, sensitivity);
+    apply_calibration(only, config);
+    config.enabled = {true, true, true};
+    return config;
+}
+
+double Calibrator::save(double sensitivity) const {
+    const double value = threshold(kind_, peaks_, sensitivity);
     auto calibration = load_calibration();
-    auto& slot = kind_ == KnockKind::Surface ? calibration.surface
-        : kind_ == KnockKind::Together ? calibration.together : calibration.headset;
-    slot = threshold;
+    slot(calibration, kind_) = value;
     save_calibration(calibration);
-    return threshold;
+    return value;
 }
 
 } // namespace knockthru

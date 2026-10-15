@@ -260,11 +260,11 @@ void Canvas::text(Font& font, const std::string& utf8, float x, float y, float s
     }
 }
 
-void Canvas::draw(const Canvas& image, int x, int y) {
+void Canvas::draw(const Canvas& image, int x, int y, float alpha) {
     for (int iy = 0; iy < image.height_; ++iy)
         for (int ix = 0; ix < image.width_; ++ix) {
             const auto* p = &image.pixels_[(static_cast<std::size_t>(iy) * image.width_ + ix) * 4];
-            blend(x + ix, y + iy, {p[0], p[1], p[2], 255}, p[3] / 255.0f);
+            blend(x + ix, y + iy, {p[0], p[1], p[2], 255}, alpha * p[3] / 255.0f);
         }
 }
 

@@ -73,8 +73,9 @@ public:
     // `max_lines` lines is shortened with "..." if the text does not fit.
     std::vector<std::string> wrap(Font& font, const std::string& utf8, float size, float width, int max_lines);
 
-    // Blends another canvas onto this one with its top left corner at (x, y).
-    void draw(const Canvas& image, int x, int y);
+    // Blends another canvas onto this one with its top left corner at (x, y),
+    // with its opacity scaled by `alpha`.
+    void draw(const Canvas& image, int x, int y, float alpha = 1);
 
     bool write_png(const std::filesystem::path& path) const;
 
