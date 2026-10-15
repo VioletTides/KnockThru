@@ -17,7 +17,7 @@ struct AppConfig {
     int debug_port = 8080;
     bool paused = false; // knocks do nothing while paused
     bool classic_bar_icon = false; // the dashboard bar icon in the logo colors, without Steam's tint
-    bool sounds = true; // Steam's switch sounds when passthrough or the style changes
+    bool sounds = true; // SteamVR's click when a knock or the panel changes a setting
 };
 
 // One knock kind's calibration.

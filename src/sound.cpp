@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <string>
 #include <thread>
+#include <vector>
 
 extern char** environ;
 
@@ -17,33 +18,26 @@ namespace {
 
 namespace fs = std::filesystem;
 
-const char* file_name(Sound sound) {
-    switch (sound) {
-    case Sound::SwitchOn: return "deck_ui_switch_toggle_on.wav";
-    case Sound::SwitchOff: return "deck_ui_switch_toggle_off.wav";
-    case Sound::Button: return "deck_ui_default_activation.wav";
-    }
-    return "";
-}
+constexpr const char* kClick = "deck_ui_misc_10.wav";
 
-// The Steam UI sounds folder, or an empty path if Steam is not where SteamOS puts it.
-fs::path sounds_directory() {
-    const char* home = std::getenv("HOME");
-    if (!home) return {};
-    for (const char* steam : {".local/share/Steam", ".steam/steam"}) {
-        const auto directory = fs::path(home) / steam / "steamui" / "sounds";
+// SteamVR's copy of the click, or Steam's copy of the same file.
+fs::path click_file() {
+    std::vector<fs::path> candidates = {"/opt/steamvr/resources/webinterface/dashboard/sounds"};
+    if (const char* home = std::getenv("HOME"))
+        for (const char* steam : {".local/share/Steam", ".steam/steam"})
+            candidates.push_back(fs::path(home) / steam / "steamui" / "sounds");
+    for (const auto& directory : candidates) {
         std::error_code error;
-        if (fs::is_directory(directory, error)) return directory;
+        if (fs::is_regular_file(directory / kClick, error)) return directory / kClick;
     }
     return {};
 }
 
 } // namespace
 
-void play(Sound sound) {
-    static const fs::path directory = sounds_directory();
-    if (directory.empty()) return;
-    const std::string path = (directory / file_name(sound)).string();
+void play_click() {
+    static const std::string path = click_file().string();
+    if (path.empty()) return;
 
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
