@@ -17,6 +17,7 @@ Calibrator::Calibrator(KnockKind kind, const DetectorConfig& base, double start)
 }
 
 void Calibrator::hear(const Knock& knock) {
+    if (knock.t < start_ + kGetReady) return;
     if (!burst_.empty() && knock.t - burst_.back().t > kBurstGap) finish_burst();
     if (burst_.empty()) burst_quiet_ = knock.t - last_heard_ >= kQuietBefore;
     burst_.push_back(knock);
@@ -69,8 +70,18 @@ double Calibrator::slow_speed(const std::vector<double>& speeds) {
     return sorted[std::min<std::size_t>(1, sorted.size() - 1)];
 }
 
+double Calibrator::quarter_speed(const std::vector<double>& speeds) {
+    if (speeds.empty()) throw std::logic_error("No knocks recorded");
+    auto sorted = speeds;
+    std::sort(sorted.begin(), sorted.end());
+    return sorted[sorted.size() / 4];
+}
+
 double Calibrator::approach_threshold(const std::vector<double>& speeds, double sensitivity) {
-    return slow_speed(speeds) * (0.8 - 0.5 * std::clamp(sensitivity, 0.0, 1.0));
+    const double s = std::clamp(sensitivity, 0.0, 1.0), slow = slow_speed(speeds), middle = 0.55 * slow;
+    if (s >= 0.5) return middle + (0.3 * slow - middle) * (s - 0.5) * 2;
+    const double least = std::max(quarter_speed(speeds), middle);
+    return least + (middle - least) * s * 2;
 }
 
 KindCalibration Calibrator::result(double sensitivity) const {

@@ -98,7 +98,7 @@ Approach speed also shows how hard a knock was more steadily than the spike. The
 Each calibrated knock kind gets two thresholds. Together and headset knocks have their own spike thresholds (`confirmed_peak` and `tap_peak`), so calibrating one no longer changes the other.
 
 - The spike threshold is 60 percent of the weakest recorded spike, at least 50 m/s² for surface knocks and 20 for together and headset knocks.
-- The approach threshold (`min_approach`) is a fraction of the second slowest recorded approach: 80 percent at the least sensitive end of the slider, 55 percent in the middle, and 30 percent at the most sensitive end.
+- The approach threshold (`min_approach`) comes from the recorded approach speeds: 30 percent of the second slowest at the most sensitive end of the slider, and 55 percent in the middle. The least sensitive end is the speed a quarter of the way up from the slowest, so dragging toward it visibly greys out the weakest recorded knocks. An earlier range (30 to 80 percent of the second slowest) sat below every recorded knock, so the slider changed nothing on the chart.
 
 A sequence needs its fastest knock to reach the approach threshold. Two other ways of applying it failed on the recordings:
 
@@ -109,9 +109,9 @@ The test calibrates each kind on its own recording, applies it at each slider no
 
 | Kind | Notch | Spike | Approach | Doubles | `mixed` right |
 |---|---|---|---|---|---|
-| together | least, middle, most | 20 | 0.57, 0.39, 0.21 | 17, 20, 20 | 19, 20, 22 |
-| surface | least, middle, most | 50 | 0.96, 0.66, 0.36 | 18, 18, 18 | 21, 22, 22 |
-| headset | least, middle, most | 20 | 0.29, 0.20, 0.11 | 19, 22, 22 | 22, 22, 22 |
+| together | least, middle, most | 20 | 0.71, 0.37, 0.20 | 14, 20, 20 | 19, 20, 22 |
+| surface | least, middle, most | 56 | 1.22, 0.56, 0.30 | 16, 18, 18 | 19, 22, 22 |
+| headset | least, middle, most | 20 | 0.37, 0.20, 0.11 | 17, 22, 22 | 22, 22, 22 |
 
 Every row has no actions in `play` and `noise` and no wrong actions in `mixed`. With default settings, the recordings give 20 together, 18 surface, and 22 headset doubles, and 22 right in `mixed`.
 

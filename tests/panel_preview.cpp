@@ -61,9 +61,9 @@ void calibration(const std::filesystem::path& out, const PanelState& idle) {
     state.calibration = view;
     shot(panel, state, 60.6, out / "calibrate-4-review.png");
     panel.press(600, 520); // anywhere on the chart grabs the line
-    panel.move(600, 470);
+    panel.move(600, 390);
     shot(panel, state, 61, out / "calibrate-4-review-drag.png");
-    panel.click(600, 455); // released near the least sensitive notch
+    panel.click(600, 372); // released near the least sensitive notch
     frames(panel, state, out, "review-snap", 61, 0.4);
 
     view.phase = CalibrationView::Phase::Trying;

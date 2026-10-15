@@ -280,7 +280,8 @@ void logged_calibration_test() {
 // Calibrates each kind on its recording, applies the result at each slider
 // notch, and replays every recording with it. Calibration must not add false
 // actions, and the middle notch must keep about as many real doubles as the
-// defaults. The least sensitive notch may lose a few: that is its job.
+// defaults. The least sensitive notch drops the slowest quarter of the
+// recorded knocks, so it loses some real doubles: the chart shows that.
 void calibrated_replay_tests() {
     std::cout << "calibrated detection\n";
     for (const auto kind : {KnockKind::Together, KnockKind::Surface, KnockKind::Headset}) {
@@ -302,7 +303,7 @@ void calibrated_replay_tests() {
                       << wrong << " wrong\n";
             check(false_actions == 0, label + ": no actions in play and noise");
             check(wrong == 0, label + ": no wrong actions in mixed");
-            const int least = sensitivity == 0 ? 15 : kind == KnockKind::Surface ? 17 : 19;
+            const int least = sensitivity == 0 ? 13 : kind == KnockKind::Surface ? 17 : 19;
             check(doubles >= least, label + ": at least " + std::to_string(least) + " doubles");
         }
     }

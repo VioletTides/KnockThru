@@ -14,10 +14,12 @@ namespace knockthru {
 //   come from replaying tests/data: surface below 50 m/s^2 splits real
 //   doubles, and together or headset below 20 lets rebounds pass the
 //   fast_gap_s check and turn doubles into triples.
-// - The approach threshold is a fraction of the second-slowest approach, from
-//   90 percent at the least sensitive end of the slider to 30 percent at the
-//   most. Approach speed varies less than the spike between similar knocks,
-//   and slow movement falls below it.
+// - The approach threshold comes from the recorded approach speeds. The most
+//   sensitive end of the slider is 30 percent of the second slowest, and the
+//   middle is 55 percent. The least sensitive end is the speed a quarter of
+//   the way up from the slowest, so moving toward it visibly drops the weakest
+//   recorded knocks. Approach speed varies
+//   less than the spike between similar knocks, and slow movement falls below it.
 //
 // At the lowered thresholds, waving the controllers or getting ready gave
 // about one knock a second in the play and noise recordings. Starting a swing
@@ -36,6 +38,9 @@ class Calibrator {
 public:
     static constexpr int kWanted = 10;
     static constexpr double kSeconds = 90;
+    // s after the start when knocks do not count yet. On the Frame, the hand
+    // coming down from pressing Start counted as a knock 1 s in.
+    static constexpr double kGetReady = 1.5;
     static constexpr double kBurstGap = 0.25;   // s, knocks closer than this are one burst
     static constexpr double kQuietBefore = 0.6; // s without another knock before a burst
     static constexpr double kMinApproach = 0.25; // m/s
@@ -77,6 +82,8 @@ public:
     static double approach_threshold(const std::vector<double>& speeds, double sensitivity);
     // The second slowest approach speed, which approach_threshold scales.
     static double slow_speed(const std::vector<double>& speeds);
+    // The speed a quarter of the way up from the slowest, the least sensitive end.
+    static double quarter_speed(const std::vector<double>& speeds);
 
     // This calibration at a sensitivity. Call after done().
     KindCalibration result(double sensitivity) const;

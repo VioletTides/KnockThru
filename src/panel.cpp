@@ -368,12 +368,16 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
         }
     }
 
-    // Pacing: a ring fills for a second after each counted knock.
-    const float cy = 610, ready = count == 0 ? 1 : anim::clamp(since / 1.0f);
+    // Pacing: a ring fills while knocks cannot count yet. First for the get-ready
+    // time after Start, then for a second after each counted knock.
+    const bool getting_ready = count == 0;
+    const float cy = 610, ready = getting_ready
+        ? anim::clamp(static_cast<float>((now_ - view.started_t) / Calibrator::kGetReady))
+        : anim::clamp(since / 1.0f);
     canvas_.arc(x + 26, cy, 20, 28, 0, 7, kRaised);
     if (ready < 1) canvas_.arc(x + 26, cy, 20, 28, anim::kPi / 2 - ready * 2 * anim::kPi, anim::kPi / 2, kAccent);
     else canvas_.circle(x + 26, cy, 28, kAccent);
-    canvas_.text(bold_, ready < 1 ? "Wait" : "Knock", x + 74, cy, 32, kText);
+    canvas_.text(bold_, ready >= 1 ? "Knock" : getting_ready ? "Get ready" : "Wait", x + 74, cy, 32, kText);
 
     // A knock of another kind, or one too light to ever count, gets a hint for a few seconds.
     const bool light = view.too_light_t > view.ignored_t;
@@ -389,8 +393,11 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
 }
 
 double Panel::slider_at(float y) const {
-    if (most_y_ == least_y_) return 0.5;
-    return std::min(1.0, std::max(0.0, static_cast<double>((y - least_y_) / (most_y_ - least_y_))));
+    // The sensitivity whose line is nearest the pointer.
+    std::size_t best = slider_ys_.size() / 2;
+    for (std::size_t i = 0; i < slider_ys_.size(); ++i)
+        if (std::abs(slider_ys_[i] - y) < std::abs(slider_ys_[best] - y)) best = i;
+    return slider_ys_.size() > 1 ? static_cast<double>(best) / (slider_ys_.size() - 1) : 0.5;
 }
 
 double Panel::slider_value(const CalibrationView& view) const {
@@ -405,8 +412,8 @@ double Panel::slider_value(const CalibrationView& view) const {
 // is the sensitivity control. The line clicks into notches on a scale at its end.
 //
 // The chart is logarithmic, from a quarter to two and a half times the second
-// slowest knock. The thresholds are fixed fractions of that knock, so on this
-// axis the scale has the same height for everyone.
+// slowest knock. The scale runs from the knock a quarter of the way up from the
+// slowest (Less) down to 30 percent of the second slowest (More).
 void Panel::review_screen(const PanelState& state, const CalibrationView& view) {
     button({kMargin, 36, 160, 64}, "Cancel", PanelClick{PanelCommand::CancelCalibration, view.kind}, std::nullopt);
     canvas_.text(bold_, "Your knocks", kMargin + 192, 68, 38, kText);
@@ -424,8 +431,9 @@ void Panel::review_screen(const PanelState& state, const CalibrationView& view) 
         const double f = v <= low ? 0 : std::min(1.0, std::log(v / low) / std::log(high / low));
         return floor_y - static_cast<float>(f) * height;
     };
-    least_y_ = y_of(Calibrator::approach_threshold(view.speeds, 0));
-    most_y_ = y_of(Calibrator::approach_threshold(view.speeds, 1));
+    slider_ys_.clear();
+    for (int i = 0; i <= 100; ++i) slider_ys_.push_back(y_of(Calibrator::approach_threshold(view.speeds, i / 100.0)));
+    const float least_y = slider_ys_.front(), most_y = slider_ys_.back();
 
     const int n = static_cast<int>(view.speeds.size());
     int caught = 0;
@@ -443,11 +451,11 @@ void Panel::review_screen(const PanelState& state, const CalibrationView& view) 
 
     // The scale: Less at the top, More at the bottom, with a tick per notch.
     const float scale_x = chart.x + chart.w - 160, line_y = y_of(threshold);
-    canvas_.text(bold_, "Sensitivity", scale_x - 20, least_y_ - 44, 26, kText);
-    canvas_.rounded_rect({scale_x - 4, least_y_, 8, most_y_ - least_y_}, 4, kRaised);
+    canvas_.text(bold_, "Sensitivity", scale_x - 20, least_y - 44, 26, kText);
+    canvas_.rounded_rect({scale_x - 4, least_y, 8, most_y - least_y}, 4, kRaised);
     const char* names[3] = {"Less", "Middle", "More"};
     for (int i = 0; i < 3; ++i) {
-        const float y = least_y_ + (most_y_ - least_y_) * i / 2;
+        const float y = slider_ys_[i * 50];
         canvas_.rounded_rect({scale_x - 20, y - 3, 40, 6}, 3, kDim);
         canvas_.text(regular_, names[i], scale_x + 48, y, 26, kDim);
     }

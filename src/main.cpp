@@ -789,6 +789,7 @@ int run() {
                     calibration.emplace();
                     calibration->kind = click.kind;
                     calibration->wanted = knockthru::Calibrator::kWanted;
+                    calibration->started_t = t;
                     calibration->sensitivity = sensitivity;
                     show("Calibrating " + kind_name + ": knock " + std::to_string(knockthru::Calibrator::kWanted) +
                         " times, about 1 s apart");
