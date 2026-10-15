@@ -1,5 +1,8 @@
+#include "calibrator.hpp"
 #include "config.hpp"
 #include "knock_detector.hpp"
+#include "overlay_texture.hpp"
+#include "panel.hpp"
 #include "room_view.hpp"
 #include "style.hpp"
 
@@ -7,6 +10,8 @@
 #include <openvr.h>
 
 #include <algorithm>
+#include <cmath>
+#include <memory>
 #include <array>
 #include <chrono>
 #include <csignal>
@@ -17,6 +22,7 @@
 #include <functional>
 #include <future>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -31,6 +37,7 @@ using json = nlohmann::json;
 using knockthru::Device;
 
 constexpr const char* kAppKey = "local.knockthru";
+constexpr const char* kPanelKey = "local.knockthru.panel";
 constexpr const char* kVersion = KNOCKTHRU_VERSION;
 
 volatile std::sig_atomic_t stopping = 0;
@@ -251,73 +258,65 @@ int detect(double seconds, const std::string& save_path) {
     return 0;
 }
 
-// Asks for 5 double knocks of one kind and sets that kind's threshold to 60
-// percent of the weakest knock. Floors come from replaying tests/data: surface
-// below 50 m/s^2 splits real doubles, and together or headset below 20 lets
-// rebounds pass the fast_gap_s check and turn doubles into triples.
+// Asks for knocks of one kind over the terminal and saves a new threshold.
 int calibrate(const std::string& kind_name) {
     const auto kind = knockthru::parse_knock_kind(kind_name);
     if (!kind) throw std::runtime_error("--calibrate takes together, surface, or headset");
     VrSession session(vr::VRApplication_Background);
-    auto config = knockthru::load_config(install_directory()).detector;
-    config.controller_peak = std::min(config.controller_peak, 30.0);
-    config.confirmed_peak = std::min(config.confirmed_peak, 12.0);
-    config.partner_peak = std::min(config.partner_peak, 8.0);
-    knockthru::KnockDetector detector(config);
+    Clock clock;
+    knockthru::Calibrator calibrator(*kind, knockthru::load_config(install_directory()).detector, clock.now());
+    knockthru::KnockDetector detector(calibrator.detector_config());
     PoseSampler sampler;
     Haptics haptics;
-    Clock clock;
 
-    constexpr std::size_t kWanted = 10;
-    std::vector<double> peaks;
-    std::cout << "Do 5 double knocks of kind \"" << kind_name << "\", about 2 s apart. "
-              << "Each knock heard gives one buzz. You have 90 s." << std::endl;
-    while (!stopping && peaks.size() < kWanted && clock.now() < 90) {
+    std::cout << "Knock " << knockthru::Calibrator::kWanted << " times, kind \"" << kind_name
+              << "\", about 1 s apart. Each knock heard gives one buzz. You have "
+              << static_cast<int>(knockthru::Calibrator::kSeconds) << " s." << std::endl;
+    while (!stopping && !calibrator.done() && calibrator.seconds_left(clock.now()) > 0) {
         const double t = clock.now();
         sampler.sample([&](Device device, const char*, const vr::TrackedDevicePose_t& pose) {
             PoseSampler::feed(detector, t, device, pose);
         });
         detector.poll(t);
         for (const auto& knock : detector.take_knocks()) {
-            if (knock.kind != *kind) {
+            if (!calibrator.add(knock)) {
                 std::cout << "  heard a " << knockthru::to_string(knock.kind) << " knock, ignored" << std::endl;
                 continue;
             }
-            peaks.push_back(knock.peak);
-            std::cout << "  knock " << peaks.size() << " of " << kWanted << ": "
+            std::cout << "  knock " << calibrator.count() << " of " << knockthru::Calibrator::kWanted << ": "
                       << static_cast<int>(knock.peak) << " m/s^2" << std::endl;
             haptics.buzz(1, t);
         }
         haptics.update(t);
         clock.tick();
     }
-    if (peaks.size() < kWanted)
-        throw std::runtime_error("Calibration stopped after " + std::to_string(peaks.size()) + " knocks. Nothing saved.");
-
-    const double weakest = *std::min_element(peaks.begin(), peaks.end());
-    const double floor = *kind == knockthru::KnockKind::Surface ? 50.0 : 20.0;
-    const double threshold = std::clamp(0.6 * weakest, floor, 150.0);
-    auto calibration = knockthru::load_calibration();
-    auto& slot = *kind == knockthru::KnockKind::Surface ? calibration.surface
-        : *kind == knockthru::KnockKind::Together ? calibration.together : calibration.headset;
-    slot = threshold;
-    knockthru::save_calibration(calibration);
-    std::cout << "Weakest knock " << static_cast<int>(weakest) << " m/s^2. Threshold for " << kind_name << " set to "
-              << static_cast<int>(threshold) << " m/s^2 in " << (knockthru::user_directory() / "calibration.json").string()
+    if (!calibrator.done())
+        throw std::runtime_error("Calibration stopped after " + std::to_string(calibrator.count()) + " knocks. Nothing saved.");
+    const double threshold = calibrator.save();
+    std::cout << "Weakest knock " << static_cast<int>(calibrator.weakest()) << " m/s^2. Threshold for " << kind_name
+              << " set to " << static_cast<int>(threshold) << " m/s^2 in "
+              << (knockthru::user_directory() / "calibration.json").string()
               << ". A running KnockThru picks it up within 2 s.\n";
     return 0;
 }
 
 fs::path manifest_path() { return knockthru::user_directory() / "app.vrmanifest"; }
 
+fs::path icon_path() { return knockthru::user_directory() / "icon.png"; }
+
 void register_app() {
     const auto binary = app_binary().generic_u8string();
+    knockthru::Canvas icon(256, 256);
+    knockthru::Panel::draw_icon(icon);
+    fs::create_directories(icon_path().parent_path());
+    if (!icon.write_png(icon_path())) throw std::runtime_error("Cannot write " + icon_path().string());
     json app = {
         {"app_key", kAppKey}, {"launch_type", "binary"}, {"is_dashboard_overlay", true},
         {"binary_path_linux", binary},
         // The Frame's native ARM runtime reads this key, not binary_path_linux (from KominoVR).
         {"binary_path_linux_arm", binary},
         {"arguments", "--run"},
+        {"image_path", icon_path().generic_u8string()},
         {"action_manifest_path", (install_directory() / "actions.json").generic_u8string()},
         {"strings", {{"en_us", {{"name", "KnockThru"}, {"description", "Double knock to toggle passthrough"}}}}}};
     fs::create_directories(manifest_path().parent_path());
@@ -354,6 +353,7 @@ void unregister() {
     }
     std::error_code error;
     fs::remove(manifest_path(), error);
+    fs::remove(icon_path(), error);
 }
 
 int uninstall() {
@@ -365,9 +365,111 @@ int uninstall() {
     return 0;
 }
 
-// The resident app. SteamVR starts it as a dashboard overlay with no visible
-// surface. A double knock turns Room View on or off, and a triple knock
-// switches translucent and opaque.
+// The KnockThru tab on the SteamVR dashboard: an overlay showing the panel
+// image, with the laser pointer as a mouse.
+class DashboardPanel {
+public:
+    explicit DashboardPanel(const fs::path& font) : panel_(font) {
+        auto* overlay = vr::VROverlay();
+        const auto error = overlay->CreateDashboardOverlay(kPanelKey, "KnockThru", &main_, &thumbnail_);
+        if (error != vr::VROverlayError_None)
+            throw std::runtime_error(std::string("Cannot add the dashboard panel: ") +
+                overlay->GetOverlayErrorNameFromEnum(error));
+        knockthru::Canvas icon(256, 256);
+        knockthru::Panel::draw_icon(icon);
+        overlay->SetOverlayRaw(thumbnail_, const_cast<std::uint8_t*>(icon.pixels().data()), 256, 256, 4);
+        overlay->SetOverlayWidthInMeters(main_, 1.6f);
+        overlay->SetOverlayInputMethod(main_, vr::VROverlayInputMethod_Mouse);
+        const vr::HmdVector2_t scale{{knockthru::Panel::kWidth, knockthru::Panel::kHeight}};
+        overlay->SetOverlayMouseScale(main_, &scale);
+        try {
+            texture_ = std::make_unique<knockthru::OverlayTexture>(knockthru::Panel::kWidth, knockthru::Panel::kHeight);
+        } catch (const std::exception& error) {
+            log(std::string("Panel uses slower image uploads: ") + error.what());
+        }
+    }
+    ~DashboardPanel() { vr::VROverlay()->DestroyOverlay(main_); }
+    DashboardPanel(const DashboardPanel&) = delete;
+
+    bool visible() const { return visible_; }
+
+    // Handles overlay events. Returns the clicked buttons and sets `shown` when
+    // the panel just opened.
+    std::vector<knockthru::PanelClick> poll(bool& shown) {
+        std::vector<knockthru::PanelClick> clicks;
+        vr::VREvent_t event{};
+        while (vr::VROverlay()->PollNextOverlayEvent(main_, &event, sizeof event)) {
+            // OpenVR puts the mouse origin at the bottom left.
+            const float x = event.data.mouse.x, y = knockthru::Panel::kHeight - event.data.mouse.y;
+            switch (event.eventType) {
+            case vr::VREvent_OverlayShown: visible_ = shown = dirty_ = true; break;
+            case vr::VREvent_OverlayHidden: visible_ = false; hover_.reset(); break;
+            case vr::VREvent_MouseMove: hover_ = std::make_pair(x, y); dirty_ = true; break;
+            case vr::VREvent_MouseButtonUp:
+                if (event.data.mouse.button == vr::VRMouseButton_Left)
+                    if (const auto click = panel_.click(x, y)) clicks.push_back(*click);
+                dirty_ = true;
+                break;
+            default: break;
+            }
+        }
+        return clicks;
+    }
+
+    void invalidate() { dirty_ = true; }
+
+    // Renders at most 20 times a second after a change, and twice a second
+    // otherwise, for countdowns and changes made outside KnockThru. Uploads
+    // only changed images.
+    void draw(const knockthru::PanelState& state, double now) {
+        if (!visible_ || now - last_draw_ < (dirty_ ? 0.05 : 0.5)) return;
+        last_draw_ = now;
+        dirty_ = false;
+        const auto& canvas = panel_.render(state, hover_);
+        if (canvas.pixels() == uploaded_) return;
+        uploaded_ = canvas.pixels();
+        if (texture_) {
+            try {
+                texture_->show(main_, uploaded_.data());
+                return;
+            } catch (const std::exception& error) {
+                log(std::string("Panel uses slower image uploads: ") + error.what());
+                texture_.reset();
+            }
+        }
+        vr::VROverlay()->SetOverlayRaw(main_, uploaded_.data(),
+            static_cast<uint32_t>(canvas.width()), static_cast<uint32_t>(canvas.height()), 4);
+    }
+
+private:
+    knockthru::Panel panel_;
+    vr::VROverlayHandle_t main_ = vr::k_ulOverlayHandleInvalid, thumbnail_ = vr::k_ulOverlayHandleInvalid;
+    bool visible_ = false, dirty_ = true;
+    double last_draw_ = -1;
+    std::optional<std::pair<float, float>> hover_;
+    std::vector<std::uint8_t> uploaded_;
+    std::unique_ptr<knockthru::OverlayTexture> texture_;
+};
+
+std::string app_name(const std::string& key) {
+    if (key.empty()) return "";
+    std::array<char, 256> name{};
+    vr::EVRApplicationError error = vr::VRApplicationError_None;
+    vr::VRApplications()->GetApplicationPropertyString(key.c_str(), vr::VRApplicationProperty_Name_String,
+        name.data(), static_cast<uint32_t>(name.size()), &error);
+    return error == vr::VRApplicationError_None ? name.data() : "";
+}
+
+// A Room View read or change running on another thread, because the debug
+// port can take a second.
+struct RoomViewResult {
+    bool on;
+    std::string message; // empty for a plain read
+};
+
+// The resident app. SteamVR starts it as a dashboard overlay. A double knock
+// turns Room View on or off, a triple knock switches translucent and opaque,
+// and the KnockThru dashboard tab has buttons for everything.
 int run() {
     open_log();
     log(std::string("KnockThru ") + kVersion + " starting");
@@ -395,6 +497,13 @@ int run() {
     vr::VRActiveActionSet_t active{};
     active.ulActionSet = action_set;
 
+    std::unique_ptr<DashboardPanel> panel;
+    try {
+        panel = std::make_unique<DashboardPanel>(install_directory() / "fonts");
+    } catch (const std::exception& error) {
+        log(error.what());
+    }
+
     const std::array<fs::path, 3> config_files{install_directory() / "config.json",
         knockthru::user_directory() / "config.json", knockthru::user_directory() / "calibration.json"};
     const auto config_stamp = [&] {
@@ -408,14 +517,70 @@ int run() {
     auto config = knockthru::load_config(install_directory());
     auto stamp = config_stamp();
     knockthru::KnockDetector detector(config.detector);
+    std::optional<knockthru::Calibrator> calibrator;
 
     PoseSampler sampler;
     Clock clock;
-    std::future<std::string> room_view_job;
-    std::string scene_app;
+    knockthru::PanelState state;
+    std::future<RoomViewResult> room_view_job;
+    bool room_view_job_toggles = false;
     double next_slow_check = 0;
     double binary_missing_since = -1;
     const auto binary = executable();
+
+    const auto show = [&](const std::string& message, bool error = false) {
+        log(message);
+        state.message = message;
+        state.message_is_error = error;
+        if (panel) panel->invalidate();
+    };
+    const auto reload = [&] {
+        config = knockthru::load_config(install_directory());
+        stamp = config_stamp();
+        if (!calibrator) detector = knockthru::KnockDetector(config.detector);
+    };
+    const auto read_room_view = [&] {
+        if (room_view_job.valid()) return;
+        const knockthru::RoomView room_view(config.debug_port);
+        room_view_job_toggles = false;
+        room_view_job = std::async(std::launch::async, [room_view] { return RoomViewResult{room_view.active(), ""}; });
+    };
+    const auto toggle_room_view = [&](const std::string& why) {
+        if (room_view_job.valid() && room_view_job_toggles) {
+            log("Ignored" + why + ": passthrough is still switching");
+            return false;
+        }
+        if (room_view_job.valid()) room_view_job.wait(); // a plain read, at most a few ms
+        const knockthru::RoomView room_view(config.debug_port);
+        room_view_job_toggles = true;
+        room_view_job = std::async(std::launch::async, [room_view, why] {
+            const bool on = room_view.toggle();
+            return RoomViewResult{on, std::string("Passthrough ") + (on ? "on" : "off") + why};
+        });
+        return true;
+    };
+    const auto toggle_style = [&](const std::string& why) {
+        try {
+            const auto style = knockthru::toggle_style();
+            state.opaque = style == knockthru::RoomViewStyle::Opaque;
+            show(std::string("Style ") + knockthru::to_string(style) + why);
+            return true;
+        } catch (const std::exception& error) {
+            show(std::string("Style not changed: ") + error.what(), true);
+            return false;
+        }
+    };
+    const auto save = [&](const std::function<void()>& write) {
+        try {
+            write();
+            reload();
+            return true;
+        } catch (const std::exception& error) {
+            show(std::string("Settings not saved: ") + error.what(), true);
+            return false;
+        }
+    };
+
     log("Ready. Double knock: Room View on or off. Triple knock: translucent or opaque.");
 
     while (!stopping) {
@@ -432,15 +597,23 @@ int run() {
 
         if (t >= next_slow_check) {
             next_slow_check = t + 2;
-            scene_app = scene_app_key();
+            state.app_key = scene_app_key();
+            state.app_name = app_name(state.app_key);
             if (const auto now_stamp = config_stamp(); now_stamp != stamp) {
                 stamp = now_stamp;
                 try {
-                    config = knockthru::load_config(install_directory());
-                    detector = knockthru::KnockDetector(config.detector);
+                    reload();
                     log("Settings reloaded");
                 } catch (const std::exception& error) {
-                    log(std::string("Settings not reloaded: ") + error.what());
+                    show(std::string("Settings not reloaded: ") + error.what(), true);
+                }
+            }
+            if (panel && panel->visible()) {
+                read_room_view(); // Room View can also change from the bar or the side button
+                try {
+                    state.opaque = knockthru::read_style() == knockthru::RoomViewStyle::Opaque;
+                } catch (const std::exception&) {
+                    state.opaque.reset();
                 }
             }
             // FrameDrop updates delete the install directory, then copy the new
@@ -456,43 +629,140 @@ int run() {
             }
         }
 
+        if (panel) {
+            bool shown = false;
+            for (const auto& click : panel->poll(shown)) {
+                using knockthru::PanelCommand;
+                const auto kind_name = std::string(knockthru::to_string(click.kind));
+                switch (click.command) {
+                case PanelCommand::RoomView: toggle_room_view(""); break;
+                case PanelCommand::Style: toggle_style(""); break;
+                case PanelCommand::Pause:
+                    if (save([&] { knockthru::save_paused(!config.paused); }))
+                        show(config.paused ? "Knocks paused" : "Knocks on");
+                    break;
+                case PanelCommand::Kind: {
+                    auto enabled = config.detector.enabled;
+                    enabled[static_cast<int>(click.kind)] = !enabled[static_cast<int>(click.kind)];
+                    if (save([&] { knockthru::save_knock_types(enabled); }))
+                        show(kind_name + " knocks " + (config.detector.enabled[static_cast<int>(click.kind)] ? "on" : "off"));
+                    break;
+                }
+                case PanelCommand::BlockApp: {
+                    if (state.app_key.empty()) break;
+                    auto blocked = config.blocked_apps;
+                    if (!blocked.erase(state.app_key)) blocked.insert(state.app_key);
+                    const auto name = state.app_name.empty() ? state.app_key : state.app_name;
+                    if (save([&] { knockthru::save_blocked_apps(blocked); }))
+                        show(std::string("Knocks ") + (config.blocked_apps.count(state.app_key) ? "off" : "on") + " in " + name);
+                    break;
+                }
+                case PanelCommand::Calibrate:
+                    calibrator.emplace(click.kind, config.detector, t);
+                    detector = knockthru::KnockDetector(calibrator->detector_config());
+                    show("Calibrating " + kind_name + ": knock " + std::to_string(knockthru::Calibrator::kWanted) +
+                        " times, about 1 s apart");
+                    break;
+                case PanelCommand::CancelCalibration:
+                    calibrator.reset();
+                    detector = knockthru::KnockDetector(config.detector);
+                    show("Calibration canceled. Nothing saved.");
+                    break;
+                }
+            }
+            if (shown) {
+                read_room_view();
+                try {
+                    state.opaque = knockthru::read_style() == knockthru::RoomViewStyle::Opaque;
+                } catch (const std::exception&) {
+                    state.opaque.reset();
+                }
+            }
+        }
+
         sampler.sample([&](Device device, const char*, const vr::TrackedDevicePose_t& pose) {
             PoseSampler::feed(detector, t, device, pose);
         });
         const auto knock_event = detector.poll(t);
-        detector.take_knocks();
+        const auto knocks = detector.take_knocks();
 
-        if (knock_event) {
-            const std::string what = std::string(knockthru::to_string(knock_event->kind)) + " x" +
-                std::to_string(knock_event->count);
-            if (config.blocked_apps.count(scene_app)) {
-                log(what + " ignored: blocked app " + scene_app);
-            } else if (knock_event->count == 3) {
-                try {
-                    log(what + ": style " + knockthru::to_string(knockthru::toggle_style()));
-                    haptics.buzz(2, t);
-                } catch (const std::exception& error) {
-                    log(what + " failed: " + error.what());
-                    haptics.buzz(3, t);
+        if (calibrator) {
+            for (const auto& knock : knocks)
+                if (calibrator->add(knock)) {
+                    haptics.buzz(1, t);
+                    if (panel) panel->invalidate();
                 }
-            } else if (room_view_job.valid()) {
-                log(what + " ignored: Room View change still in progress");
-            } else {
+            const auto kind_name = std::string(knockthru::to_string(calibrator->kind()));
+            if (calibrator->done()) {
+                try {
+                    const double threshold = calibrator->save();
+                    static constexpr const char* titles[3] = {"Controller knocks", "Surface knocks", "Headset taps"};
+                    const std::string calibrated_title = titles[static_cast<int>(calibrator->kind())];
+                    calibrator.reset();
+                    reload();
+                    log("Calibrated " + kind_name + " knocks: threshold " + std::to_string(static_cast<int>(threshold)) + " m/s^2");
+                    show("Saved. " + calibrated_title + " now match how hard you knock.");
+                    haptics.buzz(2, t + 0.3);
+                } catch (const std::exception& error) {
+                    calibrator.reset();
+                    detector = knockthru::KnockDetector(config.detector);
+                    show(std::string("Calibration not saved: ") + error.what(), true);
+                }
+            } else if (calibrator->seconds_left(t) <= 0) {
+                show("Calibration stopped after " + std::to_string(calibrator->count()) + " " + kind_name +
+                    " knocks. Nothing saved.", true);
+                calibrator.reset();
+                detector = knockthru::KnockDetector(config.detector);
+            }
+        } else if (knock_event) {
+            const std::string what = std::string(" (") + (knock_event->count == 3 ? "triple " : "double ") +
+                knockthru::to_string(knock_event->kind) + " knock)";
+            if (config.paused) {
+                log("Ignored" + what + ": paused");
+            } else if (config.blocked_apps.count(state.app_key)) {
+                log("Ignored" + what + ": knocks are off in " + state.app_key);
+            } else if (knock_event->count == 3) {
+                haptics.buzz(toggle_style(what) ? 2 : 3, t);
+            } else if (toggle_room_view(what)) {
                 // Buzz now, because the switch can take a second. A failure buzzes 3 times later.
                 haptics.buzz(1, t);
-                const knockthru::RoomView room_view(config.debug_port);
-                room_view_job = std::async(std::launch::async, [room_view, what] {
-                    return what + ": Room View " + (room_view.toggle() ? "on" : "off");
-                });
             }
         }
+
         if (room_view_job.valid() && room_view_job.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            const bool toggled = room_view_job_toggles;
+            room_view_job_toggles = false;
             try {
-                log(room_view_job.get());
+                const auto result = room_view_job.get();
+                if (state.room_view != result.on && panel) panel->invalidate();
+                state.room_view = result.on;
+                state.room_view_error.clear();
+                if (!result.message.empty()) show(result.message);
             } catch (const std::exception& error) {
-                log(std::string("Room View change failed: ") + error.what());
-                haptics.buzz(3, t);
+                state.room_view.reset();
+                const std::string reason = error.what();
+                state.room_view_error = reason.find("debug port") != std::string::npos
+                    ? "Turn on CEF Remote Debugging in the Frame's Developer settings."
+                    : reason;
+                if (toggled) {
+                    show(std::string("Passthrough not changed: ") + error.what(), true);
+                    haptics.buzz(3, t);
+                } else if (state.message != error.what()) {
+                    show(error.what(), true);
+                }
             }
+        }
+
+        if (panel) {
+            state.busy = room_view_job.valid() && room_view_job_toggles;
+            state.paused = config.paused;
+            state.enabled = config.detector.enabled;
+            state.app_blocked = config.blocked_apps.count(state.app_key) > 0;
+            state.calibrating = calibrator ? std::optional(calibrator->kind()) : std::nullopt;
+            state.calibration_count = calibrator ? calibrator->count() : 0;
+            state.calibration_wanted = knockthru::Calibrator::kWanted;
+            state.calibration_seconds_left = calibrator ? static_cast<int>(std::ceil(calibrator->seconds_left(t))) : 0;
+            panel->draw(state, t);
         }
         haptics.update(t);
         clock.tick();
