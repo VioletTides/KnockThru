@@ -38,13 +38,18 @@ public:
     // s after the start when knocks do not count yet. On the Frame, the hand
     // coming down from pressing Start counted as a knock 1 s in.
     static constexpr double kGetReady = 3;
+    // s from a counted knock until the next can count. The panel's pacing ring
+    // fills over the same time, from the knock itself.
+    static constexpr double kPace = 1;
     static constexpr double kBurstGap = 0.25;   // s, knocks closer than this are one burst
     static constexpr double kQuietBefore = 0.6; // s without another knock before a burst
     static constexpr double kMinApproach = 0.25; // m/s
     static constexpr double kStillSpeed = 0.6;  // m/s, mean speed before a surface swing
 
-    // TooLight is a deliberate knock of this kind whose spike falls under floor().
-    enum class Heard { Counted, OtherKind, TooLight, Ignored };
+    // TooSoon is a deliberate knock before the get-ready time or the pace after
+    // the last counted knock ran out. TooLight is a deliberate knock of this
+    // kind whose spike falls under floor().
+    enum class Heard { Counted, OtherKind, TooSoon, TooLight, Ignored };
     struct Result {
         Heard heard;
         Knock knock; // the burst's knock with the fastest approach
@@ -93,6 +98,7 @@ private:
     std::vector<Knock> burst_;
     bool burst_quiet_ = false;     // nothing came in the kQuietBefore before the burst
     double last_heard_ = -1e9;     // the last knock of the previous burst
+    double last_counted_ = -1e9;   // the last counted knock
     std::vector<Result> results_;  // finished bursts, oldest first
 
     void finish_burst();

@@ -836,17 +836,21 @@ int run() {
                 log(std::string("Calibration burst at ") + std::to_string(knock.t) + " s: " +
                     (heard == knockthru::Calibrator::Heard::Counted ? "counted"
                         : heard == knockthru::Calibrator::Heard::OtherKind ? "other kind"
-                        : heard == knockthru::Calibrator::Heard::TooLight ? "too light" : "ignored"));
+                        : heard == knockthru::Calibrator::Heard::TooLight ? "too light"
+                        : heard == knockthru::Calibrator::Heard::TooSoon ? "too soon" : "ignored"));
                 if (heard == knockthru::Calibrator::Heard::Counted) {
                     haptics.buzz(1, t);
                     calibration->peaks = calibrator->peaks();
                     calibration->speeds = calibrator->speeds();
                     calibration->counted_t = t;
+                    calibration->knocked_t = knock.t;
                 } else if (heard == knockthru::Calibrator::Heard::OtherKind) {
                     calibration->ignored = knock.kind;
                     calibration->ignored_t = t;
                 } else if (heard == knockthru::Calibrator::Heard::TooLight) {
                     calibration->too_light_t = t;
+                } else if (heard == knockthru::Calibrator::Heard::TooSoon) {
+                    calibration->too_soon_t = t;
                 }
             }
             calibration->seconds_left = static_cast<int>(std::ceil(calibrator->seconds_left(t)));

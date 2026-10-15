@@ -259,7 +259,7 @@ void Panel::knock_scene(KnockKind kind, Rect box, float t, int taps) {
         const float h = 150, cx = 170, table_y = 200;
         burst(canvas_, X(cx), Y(table_y), played, s);
         draw_sprite(canvas_, sprites::kControllerRight, X(cx) + shake, Y(table_y - head_radius(h) * 0.95f - 45 * gap),
-            h * s, 165 - 12 * gap);
+            h * s, 135 - 12 * gap);
         canvas_.rounded_rect({X(cx - 130), Y(table_y), 260 * s, 16 * s}, 3 * s, kTable);
     } else {
         const float h = 130, cx = 170, cy = 120, hw = 160, hx = cx + 70, edge = hx - hw / 2;
@@ -372,18 +372,20 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
     const bool getting_ready = count == 0;
     const float cy = 610, ready = getting_ready
         ? anim::clamp(static_cast<float>((now_ - view.started_t) / Calibrator::kGetReady))
-        : anim::clamp(since / 1.0f);
+        : anim::clamp(static_cast<float>((now_ - view.knocked_t) / Calibrator::kPace));
     canvas_.arc(x + 26, cy, 20, 28, 0, 7, kRaised);
     if (ready < 1) canvas_.arc(x + 26, cy, 20, 28, anim::kPi / 2 - ready * 2 * anim::kPi, anim::kPi / 2, kAccent);
     else canvas_.circle(x + 26, cy, 28, kAccent);
     canvas_.text(bold_, ready >= 1 ? "Knock" : getting_ready ? "Get ready" : "Wait", x + 74, cy, 32, kText);
 
-    // A knock of another kind, or one too light to ever count, gets a hint for a few seconds.
-    const bool light = view.too_light_t > view.ignored_t;
-    const float hint = static_cast<float>(now_ - (light ? view.too_light_t : view.ignored_t));
-    if ((light || view.ignored) && hint < 3) {
+    // A knock that did not count gets a hint for a few seconds: too soon, too
+    // light, or another kind. The newest one shows.
+    const double latest = std::max({view.too_soon_t, view.too_light_t, view.ignored ? view.ignored_t : -1.0});
+    const float hint = static_cast<float>(now_ - latest);
+    if (latest >= 0 && hint < 3) {
         const float shown = std::min(anim::ease_out(hint / 0.25f), 1 - anim::ease_in_out((hint - 2.5f) / 0.5f));
-        const auto text = light ? std::string("Too light. Knock a little harder.")
+        const auto text = latest == view.too_soon_t ? std::string("Too soon. Wait for the ring.")
+            : latest == view.too_light_t ? std::string("Too light. Knock a little harder.")
             : std::string("That looked like ") + kKindNames[static_cast<int>(*view.ignored)] + ".";
         canvas_.text(regular_, text, x, 670 + 8 * (1 - shown), 26, faded(kError, shown));
     } else if (state.message_is_error) {

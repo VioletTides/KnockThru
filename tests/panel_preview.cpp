@@ -46,6 +46,7 @@ void calibration(const std::filesystem::path& out, const PanelState& idle) {
     view.peaks = {92, 118, 76};
     view.speeds = {1.1, 1.5, 0.8};
     view.counted_t = 50;
+    view.knocked_t = 49.7;
     view.seconds_left = 74;
     state.calibration = view;
     shot(panel, state, 50.6, out / "calibrate-3-record.png");

@@ -17,7 +17,6 @@ Calibrator::Calibrator(KnockKind kind, const DetectorConfig& base, double start)
 }
 
 void Calibrator::hear(const Knock& knock) {
-    if (knock.t < start_ + kGetReady) return;
     if (!burst_.empty() && knock.t - burst_.back().t > kBurstGap) finish_burst();
     if (burst_.empty()) burst_quiet_ = knock.t - last_heard_ >= kQuietBefore;
     burst_.push_back(knock);
@@ -36,12 +35,17 @@ void Calibrator::finish_burst() {
         [](const Knock& a, const Knock& b) { return a.approach_speed < b.approach_speed; });
     const bool still = best.kind != KnockKind::Surface || burst_.front().speed_before < kStillSpeed;
     const bool deliberate = burst_quiet_ && still && best.approach_speed >= kMinApproach;
+    // The same clock as the pacing ring: from the start, then from the last counted knock.
+    const double first = burst_.front().t;
+    const bool early = first < start_ + kGetReady || first - last_counted_ < kPace;
     last_heard_ = burst_.back().t;
     burst_.clear();
     Heard heard = Heard::Ignored;
     if (deliberate && !done())
-        heard = best.kind != kind_ ? Heard::OtherKind : best.peak < floor(kind_) ? Heard::TooLight : Heard::Counted;
+        heard = early ? Heard::TooSoon : best.kind != kind_ ? Heard::OtherKind
+            : best.peak < floor(kind_) ? Heard::TooLight : Heard::Counted;
     if (heard == Heard::Counted) {
+        last_counted_ = best.t;
         peaks_.push_back(best.peak);
         speeds_.push_back(best.approach_speed);
     }

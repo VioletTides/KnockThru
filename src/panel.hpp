@@ -21,9 +21,11 @@ struct CalibrationView {
     std::vector<double> speeds;         // the same knocks' approach speeds, in m/s, which the chart shows
     double started_t = -1;              // when recording started
     double counted_t = -1;              // when the latest knock counted
+    double knocked_t = -1;              // when that knock happened, which the pacing ring runs from
     std::optional<KnockKind> ignored;   // the latest knock of another kind
     double ignored_t = -1;
     double too_light_t = -1;            // when the latest knock of this kind was too light to count
+    double too_soon_t = -1;             // when the latest knock came before the pacing ring filled
     std::optional<bool> trial_passed;   // unset until the try step hears a knock sequence
     std::string trial_heard;            // what the try step heard, for a miss
     double trial_t = -1;
