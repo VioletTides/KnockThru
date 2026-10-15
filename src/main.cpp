@@ -453,15 +453,7 @@ public:
             switch (event.eventType) {
             case vr::VREvent_OverlayShown: visible_ = shown = dirty_ = true; break;
             case vr::VREvent_OverlayHidden: visible_ = false; hover_.reset(); break;
-            case vr::VREvent_MouseMove:
-                hover_ = std::make_pair(x, y);
-                panel_.move(x, y);
-                dirty_ = true;
-                break;
-            case vr::VREvent_MouseButtonDown:
-                if (event.data.mouse.button == vr::VRMouseButton_Left) panel_.press(x, y);
-                dirty_ = true;
-                break;
+            case vr::VREvent_MouseMove: hover_ = std::make_pair(x, y); dirty_ = true; break;
             case vr::VREvent_MouseButtonUp:
                 if (event.data.mouse.button == vr::VRMouseButton_Left)
                     if (const auto click = panel_.click(x, y)) clicks.push_back(*click);
@@ -570,8 +562,7 @@ struct RoomViewResult {
 
 std::string thresholds(const knockthru::KindCalibration& calibration) {
     char line[128];
-    std::snprintf(line, sizeof line, "spike %.0f m/s^2, approach %.2f m/s, sensitivity %.2f", calibration.peak,
-        calibration.approach, calibration.sensitivity);
+    std::snprintf(line, sizeof line, "spike %.0f m/s^2, approach %.2f m/s", calibration.peak, calibration.approach);
     return line;
 }
 
@@ -785,12 +776,10 @@ int run() {
                 case PanelCommand::Calibrate: {
                     calibrator.emplace(click.kind, config.detector, t);
                     detector = knockthru::KnockDetector(calibrator->detector_config());
-                    const double sensitivity = calibration ? calibration->sensitivity : 0.5;
                     calibration.emplace();
                     calibration->kind = click.kind;
                     calibration->wanted = knockthru::Calibrator::kWanted;
                     calibration->started_t = t;
-                    calibration->sensitivity = sensitivity;
                     show("Calibrating " + kind_name + ": knock " + std::to_string(knockthru::Calibrator::kWanted) +
                         " times, about 1 s apart");
                     break;
@@ -801,28 +790,10 @@ int run() {
                     detector = knockthru::KnockDetector(config.detector);
                     show("Calibration canceled. Nothing saved.");
                     break;
-                case PanelCommand::Sensitivity:
-                    if (!calibration) break;
-                    calibration->sensitivity = click.value;
-                    // The slider clicks into its notches at the ends and the middle.
-                    if (click.value == 0 || click.value == 0.5 || click.value == 1) haptics.buzz(1, t);
-                    break;
-                case PanelCommand::TryCalibration:
-                    if (!calibrator || !calibration || !calibrator->done()) break;
-                    calibration->phase = Phase::Trying;
-                    calibration->trial_passed.reset();
-                    detector = knockthru::KnockDetector(calibrator->trial_config(config.detector, calibration->sensitivity));
-                    log("Trying " + kind_name + " thresholds: " + thresholds(calibrator->result(calibration->sensitivity)));
-                    break;
-                case PanelCommand::AdjustCalibration:
-                    if (!calibration) break;
-                    calibration->phase = Phase::Review;
-                    detector = knockthru::KnockDetector(config.detector);
-                    break;
                 case PanelCommand::SaveCalibration:
                     if (!calibrator || !calibration || !calibration->trial_passed.value_or(false)) break;
                     try {
-                        const auto saved = calibrator->save(calibration->sensitivity);
+                        const auto saved = calibrator->save();
                         log("Calibrated " + kind_name + " knocks: " + thresholds(saved));
                         calibrator.reset();
                         calibration.reset();
@@ -880,10 +851,12 @@ int run() {
             }
             calibration->seconds_left = static_cast<int>(std::ceil(calibrator->seconds_left(t)));
             if (calibrator->done()) {
-                calibration->phase = Phase::Review;
-                detector = knockthru::KnockDetector(config.detector);
+                // Straight on to the try step, which judges knocks at the new thresholds.
+                calibration->phase = Phase::Trying;
+                detector = knockthru::KnockDetector(calibrator->trial_config(config.detector));
                 haptics.buzz(2, t + 0.3);
-                log("Recorded " + std::string(knockthru::to_string(calibrator->kind())) + " knocks for calibration");
+                log("Recorded " + std::string(knockthru::to_string(calibrator->kind())) + " knocks. Trying thresholds: " +
+                    thresholds(calibrator->result()));
             } else if (calibrator->seconds_left(t) <= 0) {
                 show("Time ran out after " + std::to_string(calibrator->count()) + " of " +
                     std::to_string(knockthru::Calibrator::kWanted) + " knocks. Nothing saved.", true);
@@ -902,7 +875,7 @@ int run() {
                 log(std::string("Try step heard ") + calibration->trial_heard + (passed ? ": passed" : ": missed"));
                 haptics.buzz(passed ? 1 : 3, t);
             }
-        } else if (!calibrator && knock_event) { // the review step ignores knocks
+        } else if (!calibrator && knock_event) {
             const std::string what = std::string(" (") + (knock_event->count == 3 ? "triple " : "double ") +
                 knockthru::to_string(knock_event->kind) + " knock)";
             if (config.paused) {

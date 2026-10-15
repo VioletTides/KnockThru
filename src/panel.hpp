@@ -13,7 +13,7 @@ namespace knockthru {
 
 // A calibration in progress, filled in by the app.
 struct CalibrationView {
-    enum class Phase { Recording, Review, Trying };
+    enum class Phase { Recording, Trying };
     KnockKind kind = KnockKind::Together;
     Phase phase = Phase::Recording;
     int wanted = 10, seconds_left = 0;
@@ -24,7 +24,6 @@ struct CalibrationView {
     std::optional<KnockKind> ignored;   // the latest knock of another kind
     double ignored_t = -1;
     double too_light_t = -1;            // when the latest knock of this kind was too light to count
-    double sensitivity = 0.5;           // 0 is the least sensitive, 1 the most
     std::optional<bool> trial_passed;   // unset until the try step hears a knock sequence
     std::string trial_heard;            // what the try step heard, for a miss
     double trial_t = -1;
@@ -58,21 +57,17 @@ enum class PanelCommand {
     RoomView, Style, Pause, Kind, BlockApp, BarIcon,
     Calibrate,          // starts recording a kind, or records it again
     CancelCalibration,
-    TryCalibration,     // from the review step to the try step
-    AdjustCalibration,  // from the try step back to the review step
-    Sensitivity,        // the slider moved
     SaveCalibration,
 };
 
 struct PanelClick {
     PanelCommand command;
     KnockKind kind = KnockKind::Together; // for Kind and Calibrate
-    double value = 0;                     // for Sensitivity
 };
 
 // The KnockThru dashboard panel, drawn into an RGBA image. It has a main
 // screen, a settings screen, and a calibration walkthrough in five steps:
-// pick a kind, learn the knock, record, adjust sensitivity, and try it.
+// pick a kind, learn the knock, record, and try it.
 class Panel {
 public:
     static constexpr int kWidth = 1200, kHeight = 770;
@@ -87,12 +82,8 @@ public:
     // Whether the last render had something moving, so the next frame differs.
     bool animating() const { return animating_; }
 
-    // Pointer input in panel pixels, row 0 at the top, using the controls from the
-    // last render. A press on the slider starts a drag, and moves update it.
-    void press(float x, float y);
-    void move(float x, float y);
-    // Handles a release: a click, or the end of a slider drag. Switching
-    // screens happens here and returns nothing.
+    // Handles a click at a point, using the controls from the last render.
+    // Row 0 is the top. Switching screens happens here and returns nothing.
     std::optional<PanelClick> click(float x, float y);
 
     // Draws the KnockThru icon to fill a square canvas. The bar styles draw the mark alone on
@@ -102,7 +93,7 @@ public:
 private:
     enum class Screen { Main, Settings, Pick, Learn };
     // What is on screen, for transitions: a screen, or a calibration phase.
-    enum class View { Main, Settings, Pick, Learn, Record, Review, Try };
+    enum class View { Main, Settings, Pick, Learn, Record, Try };
     struct Target {
         Rect rect;
         std::optional<PanelClick> click = {};
@@ -122,13 +113,6 @@ private:
     bool animating_ = false;
     std::optional<View> view_;
     double view_t_ = 0;
-    // The sensitivity control is the threshold line on the knock chart. A press
-    // anywhere on the chart drags it. While dragging, the panel shows its own
-    // value. After a release near a notch, the line slides into it.
-    Rect slider_{};                          // the chart, where a press starts a drag
-    std::vector<float> slider_ys_;           // the line's height at sensitivity 0, 0.01, ... 1
-    bool dragging_ = false;
-    double drag_value_ = 0.5, snap_from_ = 0.5, snap_to_ = 0.5, snap_t_ = -1;
 
     bool hovered(Rect rect) const;
     void header(const std::string& title);
@@ -136,12 +120,9 @@ private:
     void pick_screen(const PanelState& state);
     void learn_screen(const PanelState& state);
     void record_screen(const PanelState& state, const CalibrationView& view);
-    void review_screen(const PanelState& state, const CalibrationView& view);
     void try_screen(const PanelState& state, const CalibrationView& view);
     void steps(int current);
     void knock_scene(KnockKind kind, Rect box, float t, int taps);
-    double slider_value(const CalibrationView& view) const;
-    double slider_at(float y) const;
     void settings_screen(const PanelState& state);
     void knocks_row(Rect rect, const PanelState& state);
     void passthrough_tile(Rect rect, const PanelState& state);

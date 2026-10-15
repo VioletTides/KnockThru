@@ -277,35 +277,27 @@ void logged_calibration_test() {
     check(!has(31), "logged: a slow hand movement does not count");
 }
 
-// Calibrates each kind on its recording, applies the result at each slider
-// notch, and replays every recording with it. Calibration must not add false
-// actions, and the middle notch must keep about as many real doubles as the
-// defaults. The least sensitive notch drops the slowest quarter of the
-// recorded knocks, so it loses some real doubles: the chart shows that.
+// Calibrates each kind on its recording, applies the result, and replays
+// every recording with it. Calibration must not add false or wrong actions,
+// and must keep about as many real doubles as the defaults.
 void calibrated_replay_tests() {
     std::cout << "calibrated detection\n";
     for (const auto kind : {KnockKind::Together, KnockKind::Surface, KnockKind::Headset}) {
-        const auto calibrator = calibrate(to_string(kind), kind);
         const auto name = std::string(to_string(kind));
-        for (const double sensitivity : {0.0, 0.5, 1.0}) {
-            Calibration calibration;
-            calibration[kind] = calibrator.result(sensitivity);
-            DetectorConfig config;
-            apply_calibration(calibration, config);
-            const auto label = name + " at " + std::to_string(sensitivity).substr(0, 3);
-            int doubles = 0, other = 0;
-            for (const auto& event : replay_events(name, config))
-                event.kind == kind && event.count == 2 ? ++doubles : ++other;
-            const auto false_actions = replay_events("play", config).size() + replay_events("noise", config).size();
-            const auto [right, wrong] = mixed_score(config, false);
-            std::cout << "  " << label << ": spike " << calibration[kind]->peak << ", approach "
-                      << calibration[kind]->approach << ", " << doubles << " doubles, mixed " << right << " right "
-                      << wrong << " wrong\n";
-            check(false_actions == 0, label + ": no actions in play and noise");
-            check(wrong == 0, label + ": no wrong actions in mixed");
-            const int least = sensitivity == 0 ? 13 : kind == KnockKind::Surface ? 17 : 19;
-            check(doubles >= least, label + ": at least " + std::to_string(least) + " doubles");
-        }
+        Calibration calibration;
+        calibration[kind] = calibrate(name, kind).result();
+        DetectorConfig config;
+        apply_calibration(calibration, config);
+        int doubles = 0;
+        for (const auto& event : replay_events(name, config)) doubles += event.kind == kind && event.count == 2;
+        const auto false_actions = replay_events("play", config).size() + replay_events("noise", config).size();
+        const auto [right, wrong] = mixed_score(config, false);
+        std::cout << "  " << name << ": spike " << calibration[kind]->peak << ", approach " << calibration[kind]->approach
+                  << ", " << doubles << " doubles, mixed " << right << " right " << wrong << " wrong\n";
+        check(false_actions == 0, name + " calibrated: no actions in play and noise");
+        check(wrong == 0, name + " calibrated: no wrong actions in mixed");
+        const int least = kind == KnockKind::Surface ? 17 : 19;
+        check(doubles >= least, name + " calibrated: at least " + std::to_string(least) + " doubles");
     }
 }
 

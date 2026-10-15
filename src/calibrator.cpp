@@ -62,50 +62,35 @@ double Calibrator::peak_threshold(KnockKind kind, const std::vector<double>& pea
     return std::clamp(0.6 * *std::min_element(peaks.begin(), peaks.end()), floor(kind), 150.0);
 }
 
-double Calibrator::slow_speed(const std::vector<double>& speeds) {
+double Calibrator::approach_threshold(const std::vector<double>& speeds) {
     if (speeds.empty()) throw std::logic_error("No knocks recorded");
     auto sorted = speeds;
     std::sort(sorted.begin(), sorted.end());
     // The second slowest, so one odd knock does not set the threshold alone.
-    return sorted[std::min<std::size_t>(1, sorted.size() - 1)];
+    return 0.55 * sorted[std::min<std::size_t>(1, sorted.size() - 1)];
 }
 
-double Calibrator::quarter_speed(const std::vector<double>& speeds) {
-    if (speeds.empty()) throw std::logic_error("No knocks recorded");
-    auto sorted = speeds;
-    std::sort(sorted.begin(), sorted.end());
-    return sorted[sorted.size() / 4];
-}
-
-double Calibrator::approach_threshold(const std::vector<double>& speeds, double sensitivity) {
-    const double s = std::clamp(sensitivity, 0.0, 1.0), slow = slow_speed(speeds), middle = 0.55 * slow;
-    if (s >= 0.5) return middle + (0.3 * slow - middle) * (s - 0.5) * 2;
-    const double least = std::max(quarter_speed(speeds), middle);
-    return least + (middle - least) * s * 2;
-}
-
-KindCalibration Calibrator::result(double sensitivity) const {
+KindCalibration Calibrator::result() const {
     KindCalibration out;
     out.peak = peak_threshold(kind_, peaks_);
-    out.approach = approach_threshold(speeds_, sensitivity);
-    out.sensitivity = sensitivity;
+    out.approach = approach_threshold(speeds_);
     out.peaks = peaks_;
     out.speeds = speeds_;
     return out;
 }
 
-DetectorConfig Calibrator::trial_config(const DetectorConfig& base, double sensitivity) const {
+DetectorConfig Calibrator::trial_config(const DetectorConfig& base) const {
     DetectorConfig config = base;
     Calibration only;
-    only[kind_] = result(sensitivity);
+    only[kind_] = result();
     apply_calibration(only, config);
     config.enabled = {true, true, true};
     return config;
 }
 
-KindCalibration Calibrator::save(double sensitivity) const {
+KindCalibration Calibrator::save() const {
     auto calibration = load_calibration();
-    calibration[kind_] = result(sensitivity);
+    calibration[kind_] = result();
     save_calibration(calibration);
     return *calibration[kind_];
 }

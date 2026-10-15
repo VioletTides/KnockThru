@@ -14,12 +14,9 @@ namespace knockthru {
 //   come from replaying tests/data: surface below 50 m/s^2 splits real
 //   doubles, and together or headset below 20 lets rebounds pass the
 //   fast_gap_s check and turn doubles into triples.
-// - The approach threshold comes from the recorded approach speeds. The most
-//   sensitive end of the slider is 30 percent of the second slowest, and the
-//   middle is 55 percent. The least sensitive end is the speed a quarter of
-//   the way up from the slowest, so moving toward it visibly drops the weakest
-//   recorded knocks. Approach speed varies
-//   less than the spike between similar knocks, and slow movement falls below it.
+// - The approach threshold is 55 percent of the second slowest recorded
+//   approach. Approach speed varies less than the spike between similar
+//   knocks, and slow movement falls below it.
 //
 // At the lowered thresholds, waving the controllers or getting ready gave
 // about one knock a second in the play and noise recordings. Starting a swing
@@ -32,8 +29,8 @@ namespace knockthru {
 //   Together and headset knocks have a second device to confirm them, and
 //   headset taps start with the arm rising.
 // A burst of this kind whose spike falls under floor() is TooLight and does not
-// count, so every recorded knock can count at some sensitivity. These rules
-// count no knocks in the 90 s of play and noise.
+// count, since it could never trigger an action. These rules count no knocks
+// in the 90 s of play and noise.
 class Calibrator {
 public:
     static constexpr int kWanted = 10;
@@ -46,8 +43,7 @@ public:
     static constexpr double kMinApproach = 0.25; // m/s
     static constexpr double kStillSpeed = 0.6;  // m/s, mean speed before a surface swing
 
-    // TooLight is a deliberate knock of this kind whose spike falls under floor(),
-    // so it could never count at any sensitivity.
+    // TooLight is a deliberate knock of this kind whose spike falls under floor().
     enum class Heard { Counted, OtherKind, TooLight, Ignored };
     struct Result {
         Heard heard;
@@ -77,23 +73,18 @@ public:
     static double peak_threshold(KnockKind kind, const std::vector<double>& peaks);
     // The lowest spike threshold calibration sets for a kind.
     static double floor(KnockKind kind);
-    // The approach threshold for recorded approach speeds at a sensitivity from 0
-    // (least) to 1 (most), in m/s.
-    static double approach_threshold(const std::vector<double>& speeds, double sensitivity);
-    // The second slowest approach speed, which approach_threshold scales.
-    static double slow_speed(const std::vector<double>& speeds);
-    // The speed a quarter of the way up from the slowest, the least sensitive end.
-    static double quarter_speed(const std::vector<double>& speeds);
+    // The approach threshold for recorded approach speeds, in m/s.
+    static double approach_threshold(const std::vector<double>& speeds);
 
-    // This calibration at a sensitivity. Call after done().
-    KindCalibration result(double sensitivity) const;
+    // This calibration. Call after done().
+    KindCalibration result() const;
 
-    // The app's detector settings with this kind's thresholds at a sensitivity,
-    // for trying a calibration before saving it.
-    DetectorConfig trial_config(const DetectorConfig& base, double sensitivity) const;
+    // The app's detector settings with this kind's thresholds, for trying a
+    // calibration before saving it.
+    DetectorConfig trial_config(const DetectorConfig& base) const;
 
     // Saves this kind to calibration.json and returns what it saved.
-    KindCalibration save(double sensitivity = 0.5) const;
+    KindCalibration save() const;
 
 private:
     KnockKind kind_;

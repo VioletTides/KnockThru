@@ -228,12 +228,12 @@ void Panel::main_screen(const PanelState& state) {
     if (state.message_is_error) message(state, 718);
 }
 
-// Five bars at the top right. Steps up to `current` (from 1) are filled.
+// Four bars at the top right. Steps up to `current` (from 1) are filled.
 void Panel::steps(int current) {
     const float w = 44, gap = 10, right = kWidth - kMargin, y = 64;
-    const float left = right - 5 * w - 4 * gap;
-    canvas_.text(regular_, "Step " + std::to_string(current) + " of 5", left - 20, y + 4, 24, kDim, Align::Right);
-    for (int i = 0; i < 5; ++i)
+    const float left = right - 4 * w - 3 * gap;
+    canvas_.text(regular_, "Step " + std::to_string(current) + " of 4", left - 20, y + 4, 24, kDim, Align::Right);
+    for (int i = 0; i < 4; ++i)
         canvas_.rounded_rect({left + i * (w + gap), y, w, 8}, 4, i < current ? kAccent : kRaised);
 }
 
@@ -392,92 +392,12 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
     }
 }
 
-double Panel::slider_at(float y) const {
-    // The sensitivity whose line is nearest the pointer.
-    std::size_t best = slider_ys_.size() / 2;
-    for (std::size_t i = 0; i < slider_ys_.size(); ++i)
-        if (std::abs(slider_ys_[i] - y) < std::abs(slider_ys_[best] - y)) best = i;
-    return slider_ys_.size() > 1 ? static_cast<double>(best) / (slider_ys_.size() - 1) : 0.5;
-}
-
-double Panel::slider_value(const CalibrationView& view) const {
-    if (dragging_) return drag_value_;
-    if (snap_t_ >= 0 && now_ - snap_t_ < 0.25)
-        return snap_from_ + (snap_to_ - snap_from_) * anim::ease_out(static_cast<float>((now_ - snap_t_) / 0.25));
-    if (snap_t_ >= 0 && now_ - snap_t_ < 1) return snap_to_; // until the app echoes the new value
-    return view.sensitivity;
-}
-
-// Step 4: the recorded knocks by approach speed, and the threshold line, which
-// is the sensitivity control. The line clicks into notches on a scale at its end.
-//
-// The chart is logarithmic, from a quarter to two and a half times the second
-// slowest knock. The scale runs from the knock a quarter of the way up from the
-// slowest (Less) down to 30 percent of the second slowest (More).
-void Panel::review_screen(const PanelState& state, const CalibrationView& view) {
-    button({kMargin, 36, 160, 64}, "Cancel", PanelClick{PanelCommand::CancelCalibration, view.kind}, std::nullopt);
-    canvas_.text(bold_, "Your knocks", kMargin + 192, 68, 38, kText);
-    steps(4);
-    const double value = slider_value(view);
-    const double threshold = Calibrator::approach_threshold(view.speeds, value);
-
-    const Rect chart{kMargin, 128, kWidth - 2 * kMargin, 500};
-    canvas_.rounded_rect(chart, kRadius, kSurface);
-    slider_ = chart;
-    const double slow = Calibrator::slow_speed(view.speeds), low = slow * 0.25, high = slow * 2.5;
-    // Bars stay under the heading, which takes the top 80 px.
-    const float floor_y = chart.y + chart.h - 32, height = floor_y - (chart.y + 92);
-    const auto y_of = [&](double v) {
-        const double f = v <= low ? 0 : std::min(1.0, std::log(v / low) / std::log(high / low));
-        return floor_y - static_cast<float>(f) * height;
-    };
-    slider_ys_.clear();
-    for (int i = 0; i <= 100; ++i) slider_ys_.push_back(y_of(Calibrator::approach_threshold(view.speeds, i / 100.0)));
-    const float least_y = slider_ys_.front(), most_y = slider_ys_.back();
-
-    const int n = static_cast<int>(view.speeds.size());
-    int caught = 0;
-    const float left = chart.x + 48, right = chart.x + chart.w - 320, spacing = (right - left) / std::max(1, n);
-    for (int i = 0; i < n; ++i) {
-        const bool counts = view.speeds[i] >= threshold;
-        caught += counts;
-        const float cx = left + spacing * (i + 0.5f), y = std::min(y_of(view.speeds[i]), floor_y - 12);
-        canvas_.rounded_rect({cx - 20, y, 40, floor_y - y}, 8, counts ? kAccent : kRaisedHover);
-    }
-    const auto heading = caught == n ? "All " + std::to_string(n) + " of your knocks will count"
-        : caught == 0 ? std::string("None of your knocks will count")
-        : std::to_string(caught) + " of your " + std::to_string(n) + " knocks will count";
-    canvas_.text(bold_, heading, chart.x + 32, chart.y + 46, 30, kText);
-
-    // The scale: Less at the top, More at the bottom, with a tick per notch.
-    const float scale_x = chart.x + chart.w - 160, line_y = y_of(threshold);
-    canvas_.text(bold_, "Sensitivity", scale_x - 20, least_y - 44, 26, kText);
-    canvas_.rounded_rect({scale_x - 4, least_y, 8, most_y - least_y}, 4, kRaised);
-    const char* names[3] = {"Less", "Middle", "More"};
-    for (int i = 0; i < 3; ++i) {
-        const float y = slider_ys_[i * 50];
-        canvas_.rounded_rect({scale_x - 20, y - 3, 40, 6}, 3, kDim);
-        canvas_.text(regular_, names[i], scale_x + 48, y, 26, kDim);
-    }
-
-    // The line, its label, and the handle with three grip bars.
-    canvas_.rounded_rect({chart.x + 24, line_y - 3, scale_x - chart.x - 24, 6}, 3, kText);
-    canvas_.text(bold_, "Threshold", scale_x - 52, line_y - 24, 24, kText, Align::Right);
-    canvas_.circle(scale_x, line_y, dragging_ || hovered(chart) ? 36 : 32, kText);
-    for (const float dy : {-8.0f, 0.0f, 8.0f}) canvas_.rounded_rect({scale_x - 12, line_y + dy - 2, 24, 4}, 2, kBackground);
-
-    button({kMargin, 656, 260, 72}, "Record again", PanelClick{PanelCommand::Calibrate, view.kind}, std::nullopt);
-    button({kWidth - kMargin - 260, 656, 260, 72}, "Next: try it", PanelClick{PanelCommand::TryCalibration, view.kind},
-        std::nullopt, true);
-    if (state.message_is_error) message(state, 740);
-}
-
-// Step 5: a double knock at the chosen sensitivity, without switching passthrough.
+// Step 4: a double knock at the new thresholds, without switching passthrough.
 void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
     const int k = static_cast<int>(view.kind);
     button({kMargin, 36, 160, 64}, "Cancel", PanelClick{PanelCommand::CancelCalibration, view.kind}, std::nullopt);
     canvas_.text(bold_, "Try it", kMargin + 192, 68, 38, kText);
-    steps(5);
+    steps(4);
     const Rect box{kMargin, 128, 420, 500};
     canvas_.rounded_rect(box, kRadius, kSurface);
     knock_scene(view.kind, {box.x + 20, box.y + 40, box.w - 40, 340}, static_cast<float>(std::fmod(now_, 2.6)), 2);
@@ -485,10 +405,11 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
 
     const float x = box.x + box.w + 48, w = kWidth - kMargin - x;
     canvas_.text(bold_, "Knock twice", x, 190, 36, kText);
-    canvas_.text(regular_, "The way you would to switch passthrough.", x, 240, 28, kDim);
-    canvas_.text(regular_, "Passthrough stays as it is.", x, 280, 28, kDim);
+    canvas_.text(regular_, "All " + std::to_string(view.peaks.size()) + " knocks recorded.", x, 240, 28, kDim);
+    canvas_.text(regular_, "Knock the way you would to switch passthrough.", x, 280, 28, kDim);
+    canvas_.text(regular_, "Passthrough stays as it is.", x, 320, 28, kDim);
 
-    const Rect status{x, 340, w, 240};
+    const Rect status{x, 368, w, 240};
     const float since = static_cast<float>(now_ - view.trial_t);
     if (!view.trial_passed) {
         canvas_.rounded_rect(status, kRadius, kSurface);
@@ -505,20 +426,20 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
         canvas_.polygon({{{cx - 16 * s, cy}, {cx - 6 * s, cy + 11 * s}, {cx - 6 * s, cy + 20 * s}, {cx - 21 * s, cy + 5 * s}}}, kText);
         canvas_.polygon({{{cx - 6 * s, cy + 11 * s}, {cx + 16 * s, cy - 13 * s}, {cx + 21 * s, cy - 8 * s}, {cx - 6 * s, cy + 20 * s}}}, kText);
         canvas_.text(bold_, "That worked", cx + 64, cy - 22, 34, kText);
-        canvas_.text(regular_, "Save to keep this sensitivity.", cx + 64, cy + 24, 26, kText);
+        canvas_.text(regular_, "Save to keep this calibration.", cx + 64, cy + 24, 26, kText);
     } else {
         canvas_.rounded_rect(status, kRadius, kSurface);
         const float shake = anim::buzz(since, 0, 2) * 2;
         canvas_.text(bold_, "Not quite", status.x + 40 + shake, status.y + 70, 34, kError);
         float y = status.y + 124;
-        for (const auto& line : canvas_.wrap(regular_, "Heard " + view.trial_heard + ". Try again, or press Back to catch softer knocks.",
+        for (const auto& line : canvas_.wrap(regular_, "Heard " + view.trial_heard + ". Try again, or record your knocks again.",
                  26, status.w - 80, 3)) {
             canvas_.text(regular_, line, status.x + 40, y, 26, kDim);
             y += 36;
         }
     }
 
-    button({kMargin, 656, 260, 72}, "Back", PanelClick{PanelCommand::AdjustCalibration, view.kind}, std::nullopt);
+    button({kMargin, 656, 260, 72}, "Record again", PanelClick{PanelCommand::Calibrate, view.kind}, std::nullopt);
     const bool passed = view.trial_passed.value_or(false);
     button({kWidth - kMargin - 260, 656, 260, 72}, "Save", PanelClick{PanelCommand::SaveCalibration, view.kind},
         std::nullopt, true, passed);
@@ -548,7 +469,6 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
         saved_dismissed_ = false;
     } else if (was_calibrating_) {
         screen_ = Screen::Pick; // canceled or saved
-        dragging_ = false;
     }
     was_calibrating_ = calibration.has_value();
 
@@ -556,10 +476,8 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
         : screen_ == Screen::Pick ? View::Pick : View::Learn;
     if (calibration) {
         using Phase = CalibrationView::Phase;
-        view = calibration->phase == Phase::Recording ? View::Record
-            : calibration->phase == Phase::Review ? View::Review : View::Try;
+        view = calibration->phase == Phase::Recording ? View::Record : View::Try;
         if (view == View::Record) record_screen(state, *calibration);
-        else if (view == View::Review) review_screen(state, *calibration);
         else try_screen(state, *calibration);
     } else if (screen_ == Screen::Main) {
         main_screen(state);
@@ -580,34 +498,11 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
         canvas_ = background_;
         canvas_.draw(scratch_, 0, static_cast<int>(std::lround(20 * (1 - anim::ease_out(entering)))), anim::ease_out(entering));
     }
-    animating_ = view == View::Pick || view == View::Learn || view == View::Record || view == View::Try ||
-        entering < 1 || dragging_ || (snap_t_ >= 0 && now - snap_t_ < 0.3);
+    animating_ = view == View::Pick || view == View::Learn || view == View::Record || view == View::Try || entering < 1;
     return canvas_;
 }
 
-void Panel::press(float x, float y) {
-    if (view_ != View::Review || !slider_.contains(x, y)) return;
-    dragging_ = true;
-    drag_value_ = slider_at(y);
-}
-
-void Panel::move(float, float y) {
-    if (dragging_) drag_value_ = slider_at(y);
-}
-
 std::optional<PanelClick> Panel::click(float x, float y) {
-    if (dragging_) {
-        dragging_ = false;
-        drag_value_ = slider_at(y);
-        // Clicks into a notch when released near one.
-        double target = drag_value_;
-        for (const double notch : {0.0, 0.5, 1.0})
-            if (std::abs(drag_value_ - notch) < 0.08) target = notch;
-        snap_from_ = drag_value_;
-        snap_to_ = target;
-        snap_t_ = now_;
-        return PanelClick{PanelCommand::Sensitivity, KnockKind::Together, target};
-    }
     for (const auto& target : targets_) {
         if (!target.rect.contains(x, y)) continue;
         if (target.go_to) {

@@ -165,7 +165,6 @@ Calibration load_calibration() {
             if (!entry.contains("peak")) fail("needs a peak");
             number("peak", out.peak);
             number("approach", out.approach);
-            number("sensitivity", out.sensitivity);
             numbers("peaks", out.peaks);
             numbers("speeds", out.speeds);
         } else {
@@ -190,8 +189,8 @@ void save_calibration(const Calibration& calibration) {
     for (const auto kind : {KnockKind::Together, KnockKind::Surface, KnockKind::Headset}) {
         const auto& entry = copy[kind];
         if (!entry) continue;
-        file[to_string(kind)] = {{"peak", entry->peak}, {"approach", entry->approach},
-            {"sensitivity", entry->sensitivity}, {"peaks", entry->peaks}, {"speeds", entry->speeds}};
+        file[to_string(kind)] = {{"peak", entry->peak}, {"approach", entry->approach}, {"peaks", entry->peaks},
+            {"speeds", entry->speeds}};
     }
     write_json(user_directory() / "calibration.json", file);
 }

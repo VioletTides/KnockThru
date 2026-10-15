@@ -98,20 +98,20 @@ Approach speed also shows how hard a knock was more steadily than the spike. The
 Each calibrated knock kind gets two thresholds. Together and headset knocks have their own spike thresholds (`confirmed_peak` and `tap_peak`), so calibrating one no longer changes the other.
 
 - The spike threshold is 60 percent of the weakest recorded spike, at least 50 m/s² for surface knocks and 20 for together and headset knocks.
-- The approach threshold (`min_approach`) comes from the recorded approach speeds: 30 percent of the second slowest at the most sensitive end of the slider, and 55 percent in the middle. The least sensitive end is the speed a quarter of the way up from the slowest, so dragging toward it visibly greys out the weakest recorded knocks. An earlier range (30 to 80 percent of the second slowest) sat below every recorded knock, so the slider changed nothing on the chart.
+- The approach threshold (`min_approach`) is 55 percent of the second slowest recorded approach. An earlier build had a sensitivity slider from 30 to 80 percent. In the replays, anything stricter than 55 percent only lost real doubles. 30 percent matched 55 percent on surface and headset knocks and did a little better on together knocks (22 against 20 right in `mixed`), but it leaves less margin against movement that the recordings lack. The walkthrough uses 55 percent and has no slider.
 
 A sequence needs its fastest knock to reach the approach threshold. Two other ways of applying it failed on the recordings:
 
 - Dropping slow knocks before the sequence logic let two leftover spikes form false doubles in `play` (together at approach 0.43 m/s) and `noise` (at 0.64 m/s). A slow knock still has to join its sequence, so clapping runs and busy bursts stay rejected.
 - Requiring every knock in a sequence to be fast lost most together doubles (2 to 11 of 20), because the later knocks of a quick double start from the rebound.
 
-The test calibrates each kind on its own recording, applies it at each slider notch, and replays every recording:
+The test calibrates each kind on its own recording, applies it, and replays every recording:
 
-| Kind | Notch | Spike | Approach | Doubles | `mixed` right |
-|---|---|---|---|---|---|
-| together | least, middle, most | 20 | 0.71, 0.37, 0.20 | 14, 20, 20 | 19, 20, 22 |
-| surface | least, middle, most | 56 | 1.22, 0.56, 0.30 | 16, 18, 18 | 19, 22, 22 |
-| headset | least, middle, most | 20 | 0.37, 0.20, 0.11 | 17, 22, 22 | 22, 22, 22 |
+| Kind | Spike | Approach | Doubles | `mixed` right |
+|---|---|---|---|---|
+| together | 20 | 0.37 | 20 | 20 |
+| surface | 56 | 0.56 | 18 | 22 |
+| headset | 20 | 0.20 | 22 | 22 |
 
 Every row has no actions in `play` and `noise` and no wrong actions in `mixed`. With default settings, the recordings give 20 together, 18 surface, and 22 headset doubles, and 22 right in `mixed`.
 

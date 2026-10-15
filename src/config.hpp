@@ -23,8 +23,7 @@ struct AppConfig {
 struct KindCalibration {
     double peak = 0;           // m/s^2, the spike threshold
     double approach = 0;       // m/s, the slowest approach that counts
-    double sensitivity = 0.5;  // the slider position, from 0 (least) to 1 (most)
-    std::vector<double> peaks, speeds; // the recorded knocks, for moving the slider later
+    std::vector<double> peaks, speeds; // the recorded knocks
 };
 
 // calibration.json: one entry per calibrated knock kind. Older files hold a

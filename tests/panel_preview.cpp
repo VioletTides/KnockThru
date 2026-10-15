@@ -54,29 +54,19 @@ void calibration(const std::filesystem::path& out, const PanelState& idle) {
     state.calibration->ignored_t = 51.5;
     shot(panel, state, 51.8, out / "calibrate-3-record-hint.png");
 
-    view.phase = CalibrationView::Phase::Review;
     // Robin's surface calibration on the Frame, 2026-10-15, with its one too-light knock raised to 64.
     view.peaks = {80, 401, 115, 342, 446, 91, 57, 234, 64, 147};
     view.speeds = {1.21, 0.85, 0.71, 0.81, 0.62, 0.77, 0.63, 0.53, 0.72, 1.71};
-    state.calibration = view;
-    shot(panel, state, 60.6, out / "calibrate-4-review.png");
-    panel.press(600, 520); // anywhere on the chart grabs the line
-    panel.move(600, 390);
-    shot(panel, state, 61, out / "calibrate-4-review-drag.png");
-    panel.click(600, 372); // released near the least sensitive notch
-    frames(panel, state, out, "review-snap", 61, 0.4);
-
     view.phase = CalibrationView::Phase::Trying;
-    view.sensitivity = 1;
     state.calibration = view;
-    shot(panel, state, 70.6, out / "calibrate-5-try.png");
+    shot(panel, state, 70.6, out / "calibrate-4-try.png");
     frames(panel, state, out, "try", 71, 2.6);
     state.calibration->trial_passed = false;
     state.calibration->trial_heard = "a triple surface knock";
     state.calibration->trial_t = 74;
-    shot(panel, state, 74.6, out / "calibrate-5-try-miss.png");
+    shot(panel, state, 74.6, out / "calibrate-4-try-miss.png");
     state.calibration->trial_passed = true;
-    shot(panel, state, 75.6, out / "calibrate-5-try-pass.png");
+    shot(panel, state, 75.6, out / "calibrate-4-try-pass.png");
 
     state.calibration.reset();
     state.calibration_saved = true;

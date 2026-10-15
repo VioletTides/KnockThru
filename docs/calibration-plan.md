@@ -95,7 +95,9 @@ Robin picked "drag the line" (option 1 of two mockups) for the sensitivity step,
 - Together and headset knocks have separate thresholds.
 - `docs/knock-signal.md` ("Calibrated thresholds") has the replay results at each notch.
 
-Not done: lowering the knock count, and moving the slider later without recording again. The saved file already holds what that needs.
+Later the same day, testing showed the slider earned little: its middle and most sensitive ends gave nearly the same replay results, and its least sensitive end only lost real knocks. Robin chose to drop it. The walkthrough is four steps (pick, learn, record, try), and the approach threshold is fixed at 55 percent of the second slowest knock.
+
+Not done: lowering the knock count.
 
 ### Logic acceptance
 
