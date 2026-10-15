@@ -185,11 +185,14 @@ bool RoomView::toggle() const {
 }
 
 void RoomView::tint_icon(const std::string& overlay_key) const {
-    // The thumbnail's alpha masks a fill in currentColor. object-position moves the
-    // image itself out of view.
+    // A layer over the thumbnail, cut to its shape, multiplies it by currentColor. The
+    // layer is the ::after of the img's parent, because an img has no pseudo-elements.
     const auto url = "https://steamloopback.host/overlays/thumbnail?key=" + overlay_key;
-    const auto css = "img[src*=\"key=" + overlay_key + "\"] { background-color: currentColor; -webkit-mask: url(\"" +
-                     url + "\") center / contain no-repeat; object-position: -9999px 0; }";
+    const auto parent = ":has(> img[src*=\"key=" + overlay_key + "\"])";
+    const auto css = parent + " { position: relative; } " + parent +
+                     "::after { content: \"\"; position: absolute; inset: 0; background-color: currentColor; "
+                     "mix-blend-mode: multiply; pointer-events: none; -webkit-mask: url(\"" + url +
+                     "\") center / contain no-repeat; }";
     evaluate("(() => {\n"
              "  let style = document.getElementById('knockthru-icon');\n"
              "  if (!style) {\n"
