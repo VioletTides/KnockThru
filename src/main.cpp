@@ -793,7 +793,10 @@ int run() {
                     show("Calibration canceled. Nothing saved.");
                     break;
                 case PanelCommand::Sensitivity:
-                    if (calibration) calibration->sensitivity = click.value;
+                    if (!calibration) break;
+                    calibration->sensitivity = click.value;
+                    // The slider clicks into its notches at the ends and the middle.
+                    if (click.value == 0 || click.value == 0.5 || click.value == 1) haptics.buzz(1, t);
                     break;
                 case PanelCommand::TryCalibration:
                     if (!calibrator || !calibration || !calibrator->done()) break;

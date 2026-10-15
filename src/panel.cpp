@@ -397,7 +397,7 @@ double Panel::slider_value(const CalibrationView& view) const {
 // Step 4: the recorded knocks against the threshold, and the sensitivity slider.
 void Panel::review_screen(const PanelState& state, const CalibrationView& view) {
     button({kMargin, 36, 160, 64}, "Cancel", PanelClick{PanelCommand::CancelCalibration, view.kind}, std::nullopt);
-    canvas_.text(bold_, "Sensitivity", kMargin + 192, 68, 38, kText);
+    canvas_.text(bold_, "Your knocks", kMargin + 192, 68, 38, kText);
     steps(4);
     const double value = slider_value(view);
     const double threshold = Calibrator::threshold(view.kind, view.peaks, value);
@@ -420,14 +420,14 @@ void Panel::review_screen(const PanelState& state, const CalibrationView& view) 
     }
     const float line_y = y_of(threshold);
     canvas_.rounded_rect({chart.x + 24, line_y - 2, chart.w - 48 - 200, 4}, 2, kText);
-    canvas_.text(regular_, "Knocks above", chart.x + chart.w - 32, line_y - 18, 24, kDim, Align::Right);
-    canvas_.text(regular_, "the line count", chart.x + chart.w - 32, line_y + 16, 24, kDim, Align::Right);
+    canvas_.text(bold_, "Threshold", chart.x + chart.w - 32, line_y, 26, kText, Align::Right);
     canvas_.text(bold_, std::to_string(caught) + " of " + std::to_string(n) + " of your knocks count", chart.x + 32,
         chart.y + 40, 28, kText);
 
     // The slider, with notches at the ends and the middle.
     slider_ = {kMargin + 80, 530, kWidth - 2 * kMargin - 160, 12};
     const float knob_x = slider_.x + static_cast<float>(value) * slider_.w, cy = slider_.y + slider_.h / 2;
+    canvas_.text(bold_, "Sensitivity", slider_.x, slider_.y - 38, 28, kText);
     canvas_.rounded_rect(slider_, 6, kRaised);
     canvas_.rounded_rect({slider_.x, slider_.y, knob_x - slider_.x, slider_.h}, 6, kAccent);
     for (const float notch : {0.0f, 0.5f, 1.0f})
