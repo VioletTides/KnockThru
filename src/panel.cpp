@@ -306,7 +306,7 @@ void Panel::learn_screen(const PanelState& state) {
     const float x = box.x + box.w + 48, w = kWidth - kMargin - x;
     canvas_.text(bold_, "Knock once, then wait.", x, 190, 36, kText);
     float y = 250;
-    for (const std::string& line : {std::string(kKindOnce[k]), std::string("Wait about a second before the next one."),
+    for (const std::string& line : {std::string(kKindOnce[k]), std::string("Hold still for a second before each knock."),
                                    std::string("Do it 10 times. One buzz means it counted."),
                                    std::string("Knock as hard as you would to switch passthrough.")}) {
         for (const auto& part : canvas_.wrap(regular_, line, 28, w, 2)) {

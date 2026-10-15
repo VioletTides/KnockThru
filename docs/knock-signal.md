@@ -77,4 +77,15 @@ Result: 22 of 24 right, 0 wrong. The 2 misses are surface doubles where hard hit
 - At the default thresholds, `fast` gives 13 doubles (was 7), and every other recording keeps its result.
 - With together or headset thresholds under 20 m/s², soft rebounds pass the 105 ms gap and turn doubles into triples. Calibration never sets them below 20.
 
+## Calibration knocks
+
+Calibration lowers the thresholds (controller 30 m/s², confirmed 12, partner 8) to catch soft knocks. At those thresholds, `play` and `noise` give a knock candidate about once a second: 84 and 82 in 45 s each. As surface or together knocks, most of them would count.
+
+A calibration knock counts only when it is deliberate:
+
+- No other knock candidate in the 0.6 s before it. Waving makes clusters of spikes, and the wearer waits between calibration knocks.
+- The knocking controller averages under 0.6 m/s from 0.6 to 0.15 s before the spike. Real knocks averaged 0.03 to 0.56 m/s there, and false surface knocks in `play` and `noise` mostly 0.64 to 2.8 m/s.
+
+With both rules, calibration counts 2 knocks in the 90 s of `play` and `noise`. It still counts 10 of 10 in `together`, `surface`, and `headset`, where the first knock of each double passes. The recordings hold doubles only, so the rule is untested on single knocks recorded for calibration.
+
 Background on tap detection: [ST design tip DT0101](https://www.st.com/resource/en/design_tip/dt0101-setting-up-singletap-and-doubletap-recognition-with-sts-mems-accelerometers-stmicroelectronics.pdf) and [NXP AN3919](https://www.nxp.com/docs/en/application-note/AN3919.pdf) describe threshold, pulse width, quiet time, and latency windows for double taps.

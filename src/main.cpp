@@ -329,10 +329,10 @@ int calibrate(const std::string& kind_name) {
         });
         detector.poll(t);
         for (const auto& knock : detector.take_knocks()) {
-            if (!calibrator.add(knock)) {
+            const auto heard = calibrator.add(knock);
+            if (heard == knockthru::Calibrator::Heard::OtherKind)
                 std::cout << "  heard a " << knockthru::to_string(knock.kind) << " knock, ignored" << std::endl;
-                continue;
-            }
+            if (heard != knockthru::Calibrator::Heard::Counted) continue;
             std::cout << "  knock " << calibrator.count() << " of " << knockthru::Calibrator::kWanted << ": "
                       << static_cast<int>(knock.peak) << " m/s^2" << std::endl;
             haptics.buzz(1, t);
@@ -829,11 +829,12 @@ int run() {
 
         if (calibrator && calibration && calibration->phase == Phase::Recording) {
             for (const auto& knock : knocks) {
-                if (calibrator->add(knock)) {
+                const auto heard = calibrator->add(knock);
+                if (heard == knockthru::Calibrator::Heard::Counted) {
                     haptics.buzz(1, t);
                     calibration->peaks = calibrator->peaks();
                     calibration->counted_t = t;
-                } else if (knock.kind != calibrator->kind()) {
+                } else if (heard == knockthru::Calibrator::Heard::OtherKind) {
                     calibration->ignored = knock.kind;
                     calibration->ignored_t = t;
                 }

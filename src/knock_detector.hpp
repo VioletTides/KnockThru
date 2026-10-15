@@ -40,6 +40,7 @@ struct Knock {
     int source; // Device as int, or -1 for both controllers
     Vec3 position;
     double peak;
+    double speed_before = 0; // m/s, mean speed of the knocking controller 0.6 to 0.15 s before the spike
 };
 
 struct KnockEvent {
@@ -73,7 +74,7 @@ private:
     using History = std::deque<Sample>;
 
     static constexpr double kJudgeDelay = 0.05;
-    static constexpr double kKeep = 0.5;
+    static constexpr double kKeep = 0.8; // covers speed_before
 
     DetectorConfig config_;
     std::array<History, 3> history_;
@@ -89,6 +90,7 @@ private:
     std::optional<KnockEvent> finish_sequence();
     static const Sample* nearest(const History& history, double t);
     static double peak_in(const History& history, double from, double to);
+    static double mean_speed(const History& history, double from, double to);
 };
 
 } // namespace knockthru

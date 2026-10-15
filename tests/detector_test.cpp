@@ -1,5 +1,6 @@
 // Detector tests: synthetic sequences, then replays of the Steam Frame
 // recordings in tests/data/ (see docs/knock-signal.md).
+#include "calibrator.hpp"
 #include "knock_detector.hpp"
 
 #include <cstdio>
@@ -223,11 +224,41 @@ void replay_tests() {
     mixed_test();
 }
 
+// Counts the knocks a calibration of `kind` would take from a recording.
+int calibration_count(const std::string& name, KnockKind kind) {
+    const auto rows = load(std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz");
+    Calibrator calibrator(kind, DetectorConfig{}, 0);
+    KnockDetector detector(calibrator.detector_config());
+    int counted = 0;
+    for (const auto& row : rows) {
+        detector.push(row.device, row.t, row.position, row.velocity);
+        detector.poll(row.t);
+        for (const auto& knock : detector.take_knocks())
+            if (!calibrator.done() && calibrator.add(knock) == Calibrator::Heard::Counted) ++counted;
+    }
+    std::cout << "  calibrating " << to_string(kind) << " on " << name << ": " << counted << " counted\n";
+    return counted;
+}
+
+// Calibration lowers the thresholds, so waving the controllers must not count.
+// The knock recordings are doubles, so the first knock of each pair counts.
+void calibration_tests() {
+    std::cout << "calibration\n";
+    int noise = 0;
+    for (const auto* name : {"play", "noise"})
+        for (int k = 0; k < 3; ++k) noise += calibration_count(name, static_cast<KnockKind>(k));
+    check(noise <= 2, "play and noise: at most 2 knocks counted in 90 s");
+    check(calibration_count("together", KnockKind::Together) >= 10, "together: 10 knocks counted");
+    check(calibration_count("surface", KnockKind::Surface) >= 10, "surface: 10 knocks counted");
+    check(calibration_count("headset", KnockKind::Headset) >= 10, "headset: 10 knocks counted");
+}
+
 } // namespace
 
 int main() {
     synthetic_tests();
     replay_tests();
+    calibration_tests();
     std::cout << (failures ? std::to_string(failures) + " failed\n" : "all passed\n");
     return failures ? 1 : 0;
 }

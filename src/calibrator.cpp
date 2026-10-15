@@ -15,10 +15,13 @@ Calibrator::Calibrator(KnockKind kind, const DetectorConfig& base, double start)
     config_.enabled = {true, true, true};
 }
 
-bool Calibrator::add(const Knock& knock) {
-    if (knock.kind != kind_ || done()) return false;
+Calibrator::Heard Calibrator::add(const Knock& knock) {
+    const bool deliberate = knock.t - last_heard_ >= kQuietBefore && knock.speed_before < kStillSpeed;
+    last_heard_ = knock.t;
+    if (!deliberate || done()) return Heard::Ignored;
+    if (knock.kind != kind_) return Heard::OtherKind;
     peaks_.push_back(knock.peak);
-    return true;
+    return Heard::Counted;
 }
 
 double Calibrator::seconds_left(double now) const { return std::max(0.0, kSeconds - (now - start_)); }

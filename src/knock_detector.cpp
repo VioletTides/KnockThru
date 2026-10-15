@@ -53,6 +53,17 @@ const KnockDetector::Sample* KnockDetector::nearest(const History& history, doub
     return best;
 }
 
+double KnockDetector::mean_speed(const History& history, double from, double to) {
+    double sum = 0;
+    int count = 0;
+    for (const auto& sample : history)
+        if (sample.t >= from && sample.t <= to) {
+            sum += norm(sample.velocity);
+            ++count;
+        }
+    return count ? sum / count : 0;
+}
+
 double KnockDetector::peak_in(const History& history, double from, double to) {
     double peak = 0;
     for (const auto& sample : history)
@@ -69,7 +80,8 @@ std::optional<Knock> KnockDetector::judge(Device device, std::size_t i) const {
     for (std::size_t k = i > 3 ? i - 3 : 0; k < std::min(history.size(), i + 4); ++k)
         if (history[k].accel > sample.accel) return std::nullopt;
 
-    Knock knock{sample.t, KnockKind::Surface, index(device), sample.position, sample.accel};
+    Knock knock{sample.t, KnockKind::Surface, index(device), sample.position, sample.accel,
+                mean_speed(history, sample.t - 0.6, sample.t - 0.15)};
     const auto& hmd = history_[index(Device::Hmd)];
     const auto& other = history_[index(device == Device::Left ? Device::Right : Device::Left)];
     const auto* other_now = nearest(other, sample.t);
