@@ -13,6 +13,10 @@ struct Color {
     std::uint8_t r, g, b, a = 255;
 };
 
+struct Point {
+    float x, y;
+};
+
 struct Rect {
     float x, y, w, h;
     bool contains(float px, float py) const { return px >= x && px < x + w && py >= y && py < y + h; }
@@ -54,6 +58,8 @@ public:
     void clear(Color color);
     void rounded_rect(Rect rect, float radius, Color color);
     void circle(float cx, float cy, float radius, Color color);
+    // Fills closed rings with the even-odd rule, so a ring inside another cuts a hole.
+    void polygon(const std::vector<std::vector<Point>>& rings, Color color);
     // A ring between two radii, limited to angles from `from` to `to` (radians,
     // 0 points right, counterclockwise on screen).
     void arc(float cx, float cy, float inner, float outer, float from, float to, Color color);

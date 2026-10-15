@@ -1,4 +1,4 @@
-# KnockThru
+# <img src="images/logo-wordmark.svg" alt="KnockThru" width="400">
 
 Knock twice to turn Steam Frame passthrough (Room View) on or off. Knock three times to switch Room View between translucent and opaque.
 
