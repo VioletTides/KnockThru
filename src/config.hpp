@@ -15,6 +15,7 @@ struct AppConfig {
     std::set<std::string> blocked_apps; // SteamVR app keys, for example steam.app.620980
     int debug_port = 8080;
     bool paused = false; // knocks do nothing while paused
+    bool classic_bar_icon = false; // the dashboard bar icon in the logo colors, without Steam's tint
 };
 
 // Peaks recorded by --calibrate, per knock kind.
@@ -34,6 +35,7 @@ AppConfig load_config(const std::filesystem::path& install_directory);
 // Changes settings in the user config.json and keeps every other key. The
 // dashboard panel uses these.
 void save_paused(bool paused);
+void save_classic_bar_icon(bool classic);
 void save_knock_types(const std::array<bool, 3>& enabled);
 void save_blocked_apps(const std::set<std::string>& apps);
 

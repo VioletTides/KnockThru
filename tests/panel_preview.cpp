@@ -41,13 +41,29 @@ int main(int argc, char** argv) {
     // Opens the calibration screen through its button, as a click would.
     panel.click(1050, 620);
     PanelState done = idle;
-    done.message = "Saved. Controller knocks now match how hard you knock.";
+    done.message = "Calibration saved";
+    done.calibration_saved = true;
     panel.render(done, std::make_pair(600.0f, 420.0f)).write_png(out / "panel-calibrate.png");
+
+    PanelState none = idle;
+    none.enabled = {false, false, false};
+    Panel back_panel(KNOCKTHRU_FONTS);
+    back_panel.render(none).write_png(out / "panel-no-kinds.png");
+
+    // Opens the settings screen through its button, as a click would.
+    Panel settings_panel(KNOCKTHRU_FONTS);
+    settings_panel.render(idle);
+    settings_panel.click(460, 60);
+    settings_panel.render(idle, std::make_pair(600.0f, 200.0f)).write_png(out / "panel-settings.png");
+    idle.classic_bar_icon = true;
+    settings_panel.render(idle).write_png(out / "panel-settings-color.png");
 
     Canvas icon(256, 256);
     Panel::draw_icon(icon);
     icon.write_png(out / "icon.png");
-    Panel::draw_icon(icon, false);
+    Panel::draw_icon(icon, IconStyle::BarWhite);
     icon.write_png(out / "icon-dashboard.png");
+    Panel::draw_icon(icon, IconStyle::BarColor);
+    icon.write_png(out / "icon-dashboard-classic.png");
     std::cout << "Wrote panel previews to " << out << "\n";
 }

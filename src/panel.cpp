@@ -18,15 +18,18 @@ constexpr Color kAccent{58, 145, 232};
 constexpr Color kAccentHover{80, 160, 240};
 constexpr Color kKnobOff{196, 200, 208};
 constexpr Color kError{240, 110, 100};
+// The knocks row is a tint of the accent while knocks act, so the passthrough tile keeps the full accent.
+constexpr Color kActive{34, 62, 94};
+constexpr Color kActiveHover{40, 72, 108};
 
 // Containers use a 16 px radius. Switches and the style control are pills.
 constexpr float kRadius = 16;
 constexpr float kMargin = 40;
 
 constexpr const char* kKindTitles[3] = {"Controllers together", "Controller on a surface", "Tap on the headset"};
-constexpr const char* kKindHowTo[3] = {"Knock the controllers together, about 1 s apart.",
-                                       "Knock one controller on a table or wall, about 1 s apart.",
-                                       "Tap the side of the headset, about 1 s apart."};
+constexpr const char* kKindHowTo[3] = {"Knock the controllers together 10 times, at least 1 second apart.",
+                                       "Knock one controller on a table or wall 10 times, at least 1 second apart.",
+                                       "Tap the side of the headset 10 times, at least 1 second apart."};
 
 } // namespace
 
@@ -35,10 +38,11 @@ Panel::Panel(const std::filesystem::path& fonts)
 
 bool Panel::hovered(Rect rect) const { return hover_ && rect.contains(hover_->first, hover_->second); }
 
-void Panel::switch_control(float right, float cy, bool on, bool enabled) {
-    const Rect track{right - 80, cy - 24, 80, 48};
-    canvas_.rounded_rect(track, 24, !enabled ? kSurfaceHover : on ? kAccent : kRaised);
-    canvas_.circle(on ? track.x + track.w - 24 : track.x + 24, cy, 18, !enabled ? kFaint : on ? kText : kKnobOff);
+void Panel::switch_control(float right, float cy, bool on, bool enabled, float scale) {
+    const float h = 48 * scale, w = 80 * scale, r = h / 2;
+    const Rect track{right - w, cy - r, w, h};
+    canvas_.rounded_rect(track, r, !enabled ? kSurfaceHover : on ? kAccent : kRaisedHover);
+    canvas_.circle(on ? track.x + track.w - r : track.x + r, cy, r - 6 * scale, !enabled ? kFaint : on ? kText : kKnobOff);
 }
 
 void Panel::button(Rect rect, const std::string& label, std::optional<PanelClick> click, std::optional<Screen> go_to,
@@ -116,12 +120,25 @@ void Panel::switch_row(Rect rect, std::optional<PanelClick> click, bool on, cons
     if (!detail.empty())
         canvas_.text(regular_, canvas_.fit(regular_, detail, 26, rect.w - 150), rect.x + 24, rect.y + rect.h / 2 + 21,
             26, enabled ? kDim : kFaint);
-    switch_control(rect.x + rect.w - 24, rect.y + rect.h / 2, on, enabled);
+    switch_control(rect.x + rect.w - 24, rect.y + rect.h / 2, on, enabled, 1);
     if (enabled && click) targets_.push_back({rect, click, std::nullopt});
+}
+
+void Panel::knocks_row(Rect rect, const PanelState& state) {
+    const bool any_kind = state.enabled[0] || state.enabled[1] || state.enabled[2];
+    const bool active = !state.paused && any_kind;
+    const bool hover = hovered(rect);
+    canvas_.rounded_rect(rect, kRadius, active ? (hover ? kActiveHover : kActive) : (hover ? kRaisedHover : kRaised));
+    const float cy = rect.y + rect.h / 2;
+    const std::string title = state.paused ? "KnockThru Off" : "KnockThru On";
+    canvas_.text(bold_, title, rect.x + 28, cy, 38, kText);
+    switch_control(rect.x + rect.w - 28, cy, !state.paused, true, 1.25f);
+    targets_.push_back({rect, PanelClick{PanelCommand::Pause}, std::nullopt});
 }
 
 void Panel::main_screen(const PanelState& state) {
     header("KnockThru");
+    button({kMargin + 500 - 160, 36, 160, 64}, "Settings", std::nullopt, Screen::Settings);
     const float left_w = 500;
     passthrough_tile({kMargin, 128, left_w, 340}, state);
     style_control({kMargin, 500, left_w, 170}, state);
@@ -130,17 +147,12 @@ void Panel::main_screen(const PanelState& state) {
     canvas_.rounded_rect({x, 40, w, 648}, kRadius, kSurface);
     float y = 40;
 
-    const bool any_kind = state.enabled[0] || state.enabled[1] || state.enabled[2];
-    const std::string status = state.paused ? "Paused. Knocks do nothing."
-        : !any_kind ? "Turn on at least one knock below." : "Double: passthrough. Triple: style.";
-    switch_row({x, y, w, 112}, PanelClick{PanelCommand::Pause}, !state.paused, "Knocks", status, true, false);
+    knocks_row({x + 8, y + 8, w - 16, 104}, state);
     y += 112;
 
-    canvas_.rounded_rect({x + 24, y, w - 48, 1.5f}, 0, kHairline);
-    canvas_.text(regular_, "Count these knocks", x + 24, y + 34, 26, state.paused ? kFaint : kDim);
-    y += 56;
-    for (int k = 0; k < 3; ++k, y += 80)
-        switch_row({x, y, w, 80}, PanelClick{PanelCommand::Kind, static_cast<KnockKind>(k)}, state.enabled[k],
+    y += 24;
+    for (int k = 0; k < 3; ++k, y += 88)
+        switch_row({x, y, w, 88}, PanelClick{PanelCommand::Kind, static_cast<KnockKind>(k)}, state.enabled[k],
             kKindTitles[k], "", !state.paused, false);
     y += 8;
 
@@ -154,8 +166,7 @@ void Panel::main_screen(const PanelState& state) {
     y += 112;
 
     canvas_.rounded_rect({x + 24, y, w - 48, 1.5f}, 0, kHairline);
-    canvas_.text(bold_, "Soft knocks missed?", x + 24, y + 56 - 17, 30, kText);
-    canvas_.text(regular_, "Tune to how hard you knock", x + 24, y + 56 + 21, 26, kDim);
+    canvas_.text(bold_, "Knocks getting missed?", x + 24, y + 56, 30, kText);
     button({x + w - 24 - 170, y + 28, 170, 56}, "Calibrate", std::nullopt, Screen::Calibrate);
 
     // The tiles already show what worked, so the main screen only shows errors.
@@ -170,15 +181,16 @@ void Panel::calibrate_screen(const PanelState& state) {
         const float x = kMargin + 48;
         canvas_.text(bold_, kKindTitles[k], x, 196, 34, kText);
         canvas_.text(regular_, kKindHowTo[k], x, 248, 28, kDim);
-        canvas_.text(regular_, "Each knock that counts gives one buzz.", x, 292, 28, kDim);
+        canvas_.text(regular_, "Knock as softly as you want KnockThru to catch.", x, 292, 28, kDim);
+        canvas_.text(regular_, "One buzz means a knock counted.", x, 336, 28, kDim);
         canvas_.text(bold_, std::to_string(state.calibration_count) + " of " + std::to_string(state.calibration_wanted),
-            x, 400, 96, kText);
+            x, 430, 96, kText);
         for (int i = 0; i < state.calibration_wanted; ++i) {
             const float cx = x + 20 + i * 56;
-            if (i < state.calibration_count) canvas_.circle(cx, 500, 18, kAccent);
-            else canvas_.arc(cx, 500, 15, 18, 0, 7, kRaisedHover);
+            if (i < state.calibration_count) canvas_.circle(cx, 520, 18, kAccent);
+            else canvas_.arc(cx, 520, 15, 18, 0, 7, kRaisedHover);
         }
-        canvas_.text(regular_, std::to_string(state.calibration_seconds_left) + " s left", x, 578, 28, kDim);
+        canvas_.text(regular_, std::to_string(state.calibration_seconds_left) + " s left", x, 588, 28, kDim);
         button({kWidth - kMargin - 48 - 200, 548, 200, 64}, "Cancel",
             PanelClick{PanelCommand::CancelCalibration, *state.calibrating}, std::nullopt);
         return;
@@ -186,13 +198,7 @@ void Panel::calibrate_screen(const PanelState& state) {
 
     button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Main);
     canvas_.text(bold_, "Calibrate", kMargin + 172, 68, 38, kText);
-    float y = 150;
-    for (const auto& line : canvas_.wrap(regular_,
-             "Pick the knock that does not count, then knock that way 10 times.", 28, kWidth - 2 * kMargin, 2)) {
-        canvas_.text(regular_, line, kMargin, y, 28, kDim);
-        y += 40;
-    }
-    const float top = 210, row = 128, w = kWidth - 2 * kMargin;
+    const float top = 136, row = 128, w = kWidth - 2 * kMargin;
     canvas_.rounded_rect({kMargin, top, w, 3 * row}, kRadius, kSurface);
     for (int k = 0; k < 3; ++k) {
         const Rect rect{kMargin, top + k * row, w, row};
@@ -207,7 +213,29 @@ void Panel::calibrate_screen(const PanelState& state) {
         // The whole row starts calibration, so there is one control per row.
         targets_.push_back({rect, PanelClick{PanelCommand::Calibrate, static_cast<KnockKind>(k)}, std::nullopt});
     }
-    message(state, top + 3 * row + 50);
+    if (state.calibration_saved && !saved_dismissed_) {
+        const Rect done{kMargin, top + 3 * row + 32, w, 120};
+        canvas_.rounded_rect(done, kRadius, kActive);
+        canvas_.text(bold_, "Saved", done.x + 32, done.y + done.h / 2 - 20, 38, kText);
+        canvas_.text(regular_, "Knocks as soft as your softest one now count.", done.x + 32, done.y + done.h / 2 + 24, 26,
+            kText);
+        button({done.x + done.w - 32 - 170, done.y + 30, 170, 60}, "Done", std::nullopt, Screen::Main, true);
+    } else {
+        message(state, top + 3 * row + 50);
+    }
+}
+
+void Panel::settings_screen(const PanelState& state) {
+    button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Main);
+    canvas_.text(bold_, "Settings", kMargin + 172, 68, 38, kText);
+    const float top = 150, w = kWidth - 2 * kMargin;
+    canvas_.rounded_rect({kMargin, top, w, 128}, kRadius, kSurface);
+    switch_row({kMargin, top, w, 128}, PanelClick{PanelCommand::BarIcon}, state.classic_bar_icon, "Classic bar icon",
+        "Show the logo colors in the dashboard bar", true, false);
+    Canvas icon(64, 64);
+    draw_icon(icon, state.classic_bar_icon ? IconStyle::BarColor : IconStyle::BarWhite);
+    canvas_.draw(icon, static_cast<int>(kMargin + w - 24 - 80 - 40 - 64), static_cast<int>(top + 32));
+    if (state.message_is_error) message(state, top + 128 + 50);
 }
 
 const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<float, float>> hover) {
@@ -215,8 +243,12 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
     targets_.clear();
     canvas_.clear({0, 0, 0, 0});
     canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, kBackground);
-    if (state.calibrating) screen_ = Screen::Calibrate;
+    if (state.calibrating) {
+        screen_ = Screen::Calibrate;
+        saved_dismissed_ = false;
+    }
     if (screen_ == Screen::Main) main_screen(state);
+    else if (screen_ == Screen::Settings) settings_screen(state);
     else calibrate_screen(state);
     return canvas_;
 }
@@ -224,13 +256,18 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
 std::optional<PanelClick> Panel::click(float x, float y) {
     for (const auto& target : targets_) {
         if (!target.rect.contains(x, y)) continue;
-        if (target.go_to) screen_ = *target.go_to;
+        if (target.go_to) {
+            // Leaving the calibration screen hides the Saved banner.
+            if (screen_ == Screen::Calibrate) saved_dismissed_ = true;
+            screen_ = *target.go_to;
+        }
         return target.click;
     }
     return std::nullopt;
 }
 
-void Panel::draw_icon(Canvas& canvas, bool tile) {
+void Panel::draw_icon(Canvas& canvas, IconStyle style) {
+    const bool tile = style == IconStyle::Tile;
     const float s = static_cast<float>(canvas.width());
     canvas.clear({0, 0, 0, 0});
     if (tile) canvas.rounded_rect({0, 0, s, s}, s * 0.22f, {kBackground.r, kBackground.g, kBackground.b});
@@ -249,7 +286,11 @@ void Panel::draw_icon(Canvas& canvas, bool tile) {
             auto& ring = rings.emplace_back();
             for (int i = 0; i < ring_sizes[r]; ++i, point += 2) ring.push_back({(point[0] - shift) * k, (point[1] - shift) * k});
         }
-        canvas.polygon(rings, shape.fill == logo::Fill::Text ? kText : kAccent);
+        // The white bar icon takes Steam's tint: grey when idle, and white on hover. Its accent
+        // parts are half transparent, so they stay apart from the controllers like the blue does.
+        const bool accent = shape.fill == logo::Fill::Accent;
+        canvas.polygon(rings, style == IconStyle::BarWhite ? Color{255, 255, 255, static_cast<std::uint8_t>(accent ? 128 : 255)}
+                              : accent ? kAccent : kText);
     }
 }
 

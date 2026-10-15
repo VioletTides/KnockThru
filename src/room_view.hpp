@@ -18,10 +18,11 @@ public:
     bool toggle() const;
 
     // Adds a style to the bar page that multiplies the thumbnail of `overlay_key` by the
-    // text color of its bar button, so it dims when idle and lightens on hover like
-    // Steam's own icons, while keeping its colors.
-    // The style stays until the page reloads. Adding it again replaces it.
-    void tint_icon(const std::string& overlay_key) const;
+    // text color of its bar button. A white icon then turns grey when idle and white on
+    // hover, like Steam's own icons.
+    // The style stays until the page reloads. Adding it again replaces it. With `tint`
+    // false, removes the style.
+    void tint_icon(const std::string& overlay_key, bool tint = true) const;
 
 private:
     int port_;

@@ -375,9 +375,6 @@ public:
         if (error != vr::VROverlayError_None)
             throw std::runtime_error(std::string("Cannot add the dashboard panel: ") +
                 overlay->GetOverlayErrorNameFromEnum(error));
-        knockthru::Canvas icon(256, 256);
-        knockthru::Panel::draw_icon(icon, false);
-        overlay->SetOverlayRaw(thumbnail_, const_cast<std::uint8_t*>(icon.pixels().data()), 256, 256, 4);
         overlay->SetOverlayWidthInMeters(main_, 1.6f);
         overlay->SetOverlayInputMethod(main_, vr::VROverlayInputMethod_Mouse);
         const vr::HmdVector2_t scale{{knockthru::Panel::kWidth, knockthru::Panel::kHeight}};
@@ -418,6 +415,15 @@ public:
 
     void invalidate() { dirty_ = true; }
 
+    // Sets the dashboard bar icon: the mark in the logo colors, or in white for Steam's tint.
+    void set_bar_icon(bool classic) {
+        if (bar_icon_classic_ == classic) return;
+        bar_icon_classic_ = classic;
+        knockthru::Canvas icon(256, 256);
+        knockthru::Panel::draw_icon(icon, classic ? knockthru::IconStyle::BarColor : knockthru::IconStyle::BarWhite);
+        vr::VROverlay()->SetOverlayRaw(thumbnail_, const_cast<std::uint8_t*>(icon.pixels().data()), 256, 256, 4);
+    }
+
     // Renders at most 20 times a second after a change, and twice a second
     // otherwise, for countdowns and changes made outside KnockThru. Uploads
     // only changed images.
@@ -447,6 +453,7 @@ private:
     bool visible_ = false, dirty_ = true;
     double last_draw_ = -1;
     std::optional<std::pair<float, float>> hover_;
+    std::optional<bool> bar_icon_classic_;
     std::vector<std::uint8_t> uploaded_;
     std::unique_ptr<knockthru::OverlayTexture> texture_;
 };
@@ -533,6 +540,7 @@ int run() {
         log(message);
         state.message = message;
         state.message_is_error = error;
+        state.calibration_saved = false;
         if (panel) panel->invalidate();
     };
     const auto reload = [&] {
@@ -599,12 +607,13 @@ int run() {
         if (t >= next_slow_check) {
             next_slow_check = t + 2;
             // Restyles the bar icon while the dashboard is open, in case the bar page
-            // reloaded. If this fails, the icon stays in the bar's idle grey.
+            // reloaded. If this fails, the icon stays undimmed. The classic icon has no tint.
             if (vr::VROverlay()->IsDashboardVisible() &&
                 (!tint_job.valid() || tint_job.wait_for(std::chrono::seconds(0)) == std::future_status::ready)) {
                 if (tint_job.valid()) try { tint_job.get(); } catch (const std::exception&) {}
                 const knockthru::RoomView bar(config.debug_port);
-                tint_job = std::async(std::launch::async, [bar] { bar.tint_icon(kPanelKey); });
+                const bool tint = !config.classic_bar_icon;
+                tint_job = std::async(std::launch::async, [bar, tint] { bar.tint_icon(kPanelKey, tint); });
             }
             state.app_key = scene_app_key();
             state.app_name = app_name(state.app_key);
@@ -648,7 +657,11 @@ int run() {
                 case PanelCommand::Style: toggle_style(""); break;
                 case PanelCommand::Pause:
                     if (save([&] { knockthru::save_paused(!config.paused); }))
-                        show(config.paused ? "Knocks paused" : "Knocks on");
+                        show(config.paused ? "KnockThru off" : "KnockThru on");
+                    break;
+                case PanelCommand::BarIcon:
+                    if (save([&] { knockthru::save_classic_bar_icon(!config.classic_bar_icon); }))
+                        show(config.classic_bar_icon ? "Classic bar icon on" : "Classic bar icon off");
                     break;
                 case PanelCommand::Kind: {
                     auto enabled = config.detector.enabled;
@@ -705,12 +718,11 @@ int run() {
             if (calibrator->done()) {
                 try {
                     const double threshold = calibrator->save();
-                    static constexpr const char* titles[3] = {"Controller knocks", "Surface knocks", "Headset taps"};
-                    const std::string calibrated_title = titles[static_cast<int>(calibrator->kind())];
                     calibrator.reset();
                     reload();
                     log("Calibrated " + kind_name + " knocks: threshold " + std::to_string(static_cast<int>(threshold)) + " m/s^2");
-                    show("Saved. " + calibrated_title + " now match how hard you knock.");
+                    show("Calibration saved");
+                    state.calibration_saved = true;
                     haptics.buzz(2, t + 0.3);
                 } catch (const std::exception& error) {
                     calibrator.reset();
@@ -718,8 +730,8 @@ int run() {
                     show(std::string("Calibration not saved: ") + error.what(), true);
                 }
             } else if (calibrator->seconds_left(t) <= 0) {
-                show("Calibration stopped after " + std::to_string(calibrator->count()) + " " + kind_name +
-                    " knocks. Nothing saved.", true);
+                show("Time ran out after " + std::to_string(calibrator->count()) + " of " +
+                    std::to_string(knockthru::Calibrator::kWanted) + " knocks. Nothing saved.", true);
                 calibrator.reset();
                 detector = knockthru::KnockDetector(config.detector);
             }
@@ -765,6 +777,8 @@ int run() {
         if (panel) {
             state.busy = room_view_job.valid() && room_view_job_toggles;
             state.paused = config.paused;
+            state.classic_bar_icon = config.classic_bar_icon;
+            panel->set_bar_icon(config.classic_bar_icon);
             state.enabled = config.detector.enabled;
             state.app_blocked = config.blocked_apps.count(state.app_key) > 0;
             state.calibrating = calibrator ? std::optional(calibrator->kind()) : std::nullopt;
