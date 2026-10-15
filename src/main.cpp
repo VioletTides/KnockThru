@@ -524,6 +524,7 @@ int run() {
     knockthru::PanelState state;
     std::future<RoomViewResult> room_view_job;
     bool room_view_job_toggles = false;
+    std::future<void> tint_job;
     double next_slow_check = 0;
     double binary_missing_since = -1;
     const auto binary = executable();
@@ -597,6 +598,14 @@ int run() {
 
         if (t >= next_slow_check) {
             next_slow_check = t + 2;
+            // Restyles the bar icon while the dashboard is open, in case the bar page
+            // reloaded. If this fails, the icon stays in the bar's idle grey.
+            if (vr::VROverlay()->IsDashboardVisible() &&
+                (!tint_job.valid() || tint_job.wait_for(std::chrono::seconds(0)) == std::future_status::ready)) {
+                if (tint_job.valid()) try { tint_job.get(); } catch (const std::exception&) {}
+                const knockthru::RoomView bar(config.debug_port);
+                tint_job = std::async(std::launch::async, [bar] { bar.tint_icon(kPanelKey); });
+            }
             state.app_key = scene_app_key();
             state.app_name = app_name(state.app_key);
             if (const auto now_stamp = config_stamp(); now_stamp != stamp) {

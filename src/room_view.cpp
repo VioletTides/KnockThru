@@ -184,4 +184,22 @@ bool RoomView::toggle() const {
     throw std::runtime_error("Clicked Room View, but its state did not change");
 }
 
+void RoomView::tint_icon(const std::string& overlay_key) const {
+    // The thumbnail's alpha masks a fill in currentColor. object-position moves the
+    // image itself out of view.
+    const auto url = "https://steamloopback.host/overlays/thumbnail?key=" + overlay_key;
+    const auto css = "img[src*=\"key=" + overlay_key + "\"] { background-color: currentColor; -webkit-mask: url(\"" +
+                     url + "\") center / contain no-repeat; object-position: -9999px 0; }";
+    evaluate("(() => {\n"
+             "  let style = document.getElementById('knockthru-icon');\n"
+             "  if (!style) {\n"
+             "    style = document.createElement('style');\n"
+             "    style.id = 'knockthru-icon';\n"
+             "    document.head.append(style);\n"
+             "  }\n"
+             "  style.textContent = " + json(css).dump() + ";\n"
+             "  return 'ok';\n"
+             "})()");
+}
+
 } // namespace knockthru
