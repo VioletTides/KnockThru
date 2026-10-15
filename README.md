@@ -4,12 +4,13 @@ Knock twice to see your room without taking off your Steam Frame. Knock three ti
 
 ![Knocking twice turns passthrough on in the KnockThru panel, and knocking three times switches it to opaque](images/hero.gif)
 
-[![Install with FrameDrop](images/framedrop-button.svg)](https://framedropvr.com/install?manifest=https%3A%2F%2Fgithub.com%2FVioletTides%2FKnockThru%2Freleases%2Flatest%2Fdownload%2Fknockthru.framedrop.json)
-
 ## Install
 
 1. On the Frame, turn on **Developer Mode**. Then turn on **CEF Remote Debugging** in the Developer settings. KnockThru needs it to press the Room View button for you.
-2. Click the **Install with FrameDrop** button above.
+2. Click this button:
+
+   [![Install with FrameDrop](images/framedrop-button.svg)](https://framedropvr.com/install?manifest=https%3A%2F%2Fgithub.com%2FVioletTides%2FKnockThru%2Freleases%2Flatest%2Fdownload%2Fknockthru.framedrop.json)
+
 3. Open **Library → Non-Steam** and launch **KnockThru** once.
 
 From now on KnockThru starts with SteamVR and runs in the background.
