@@ -63,6 +63,29 @@ domain or MIT terms. The MIT notice is reproduced below for binary distributions
 - License: MIT. The full notice is included at
   [third_party/json/LICENSE.MIT](third_party/json/LICENSE.MIT).
 
+## Noto Sans
+
+- Source: [notofonts/latin-greek-cyrillic](https://github.com/notofonts/latin-greek-cyrillic), version 2.015
+- Copyright 2022 The Noto Project Authors.
+- License: SIL Open Font License 1.1. The full license is included at
+  [assets/fonts/OFL.txt](assets/fonts/OFL.txt).
+- `NotoSans-SemiBold.ttf` and `NotoSans-Regular.ttf` draw the dashboard panel text.
+
+## stb_truetype and stb_image_write
+
+- Source: [nothings/stb](https://github.com/nothings/stb), stb_truetype v1.26 and stb_image_write v1.16
+- Copyright (c) 2017 Sean Barrett.
+- License: MIT or public domain, at your choice. The notice is at the end of
+  each header in `third_party/stb/`.
+
+## Vulkan headers
+
+- Source: [KhronosGroup/Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers), header version 1.4.357
+- Copyright 2015-2026 The Khronos Group Inc.
+- License: Apache-2.0 or MIT, at your choice. The MIT notice is included at
+  [third_party/vulkan/MIT.txt](third_party/vulkan/MIT.txt).
+- The Vulkan loader is loaded from the device at runtime, not bundled.
+
 ## JsonCpp notice from the OpenVR SDK
 
 ```text

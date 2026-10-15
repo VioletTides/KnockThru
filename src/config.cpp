@@ -57,6 +57,9 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
                 if (!app.is_string()) fail("blocked_apps must be a list of app keys");
                 config.blocked_apps.insert(app.get<std::string>());
             }
+        } else if (key == "paused") {
+            if (!value.is_boolean()) fail("paused must be true or false");
+            config.paused = value.get<bool>();
         } else if (key == "debug_port") {
             if (!value.is_number_integer()) fail("debug_port must be a whole number");
             config.debug_port = value.get<int>();
@@ -99,6 +102,30 @@ AppConfig load_config(const fs::path& install_directory) {
     apply_calibration(load_calibration(), config.detector);
     return config;
 }
+
+namespace {
+
+void update_user_config(const std::string& key, const json& value) {
+    const auto path = user_directory() / "config.json";
+    auto file = read_json(path);
+    file[key] = value;
+    AppConfig check;
+    merge(check, file, path); // never write a file that load_config would reject
+    write_json(path, file);
+}
+
+} // namespace
+
+void save_paused(bool paused) { update_user_config("paused", paused); }
+
+void save_knock_types(const std::array<bool, 3>& enabled) {
+    json kinds = json::array();
+    for (int k = 0; k < 3; ++k)
+        if (enabled[k]) kinds.push_back(to_string(static_cast<KnockKind>(k)));
+    update_user_config("knock_types", kinds);
+}
+
+void save_blocked_apps(const std::set<std::string>& apps) { update_user_config("blocked_apps", apps); }
 
 Calibration load_calibration() {
     const auto path = user_directory() / "calibration.json";
