@@ -15,6 +15,8 @@ constexpr Color kText{236, 238, 241};
 constexpr Color kDim{150, 156, 168};
 constexpr Color kFaint{96, 102, 114};
 constexpr Color kAccent{58, 145, 232};
+// The color of the Steam dashboard bar icons when idle.
+constexpr Color kBarIcon{139, 146, 154};
 constexpr Color kAccentHover{80, 160, 240};
 constexpr Color kKnobOff{196, 200, 208};
 constexpr Color kError{240, 110, 100};
@@ -235,7 +237,8 @@ void Panel::draw_icon(Canvas& canvas, bool tile) {
     canvas.clear({0, 0, 0, 0});
     if (tile) canvas.rounded_rect({0, 0, s, s}, s * 0.22f, {kBackground.r, kBackground.g, kBackground.b});
     // Two Steam Frame controllers knocking heads, from logo_shapes.hpp on a 64 by 64 grid. The
-    // mark spans x 7.3 to 56.7 and y 8.1 to 56.2. Without the tile, it fills the canvas.
+    // mark spans x 7.3 to 56.7 and y 8.1 to 56.2. Without the tile, it fills the canvas in the
+    // bar's grey, like Steam's own icons.
     const float k = tile ? s / 64 : s / 50;
     const float shift = tile ? 0 : 7;
     const float* point = logo::kPoints;
@@ -245,7 +248,7 @@ void Panel::draw_icon(Canvas& canvas, bool tile) {
             auto& ring = rings.emplace_back();
             for (int i = 0; i < logo::kRingSizes[r]; ++i, point += 2) ring.push_back({(point[0] - shift) * k, (point[1] - shift) * k});
         }
-        canvas.polygon(rings, shape.fill == logo::Fill::Text ? kText : kAccent);
+        canvas.polygon(rings, !tile ? kBarIcon : shape.fill == logo::Fill::Text ? kText : kAccent);
     }
 }
 
