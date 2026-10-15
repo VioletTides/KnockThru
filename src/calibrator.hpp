@@ -42,6 +42,7 @@ public:
     double seconds_left(double now) const;
     double weakest() const;
     const std::vector<double>& peaks() const { return peaks_; }
+    const std::vector<double>& speeds() const { return speeds_; } // approach speeds, m/s
 
     // The threshold for recorded peaks at a sensitivity from 0 (least) to 1 (most).
     static double threshold(KnockKind kind, const std::vector<double>& peaks, double sensitivity);
@@ -60,7 +61,7 @@ private:
     DetectorConfig config_;
     double start_;
     double last_heard_ = -1e9;
-    std::vector<double> peaks_;
+    std::vector<double> peaks_, speeds_;
 };
 
 } // namespace knockthru

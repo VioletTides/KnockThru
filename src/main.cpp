@@ -482,12 +482,12 @@ public:
         vr::VROverlay()->SetOverlayRaw(thumbnail_, const_cast<std::uint8_t*>(icon.pixels().data()), 256, 256, 4);
     }
 
-    // Renders at most 20 times a second after a change or while something moves,
-    // and twice a second otherwise, for countdowns and changes made outside
-    // KnockThru. Uploads only changed images.
+    // Renders 30 times a second while something moves, at most 20 times a second
+    // after a change, and twice a second otherwise, for countdowns and changes
+    // made outside KnockThru. Uploads only changed images.
     void draw(const knockthru::PanelState& state, double now) {
-        const bool busy = dirty_ || panel_.animating();
-        if (!visible_ || now - last_draw_ < (busy ? 0.05 : 0.5)) return;
+        const double interval = panel_.animating() ? 1.0 / 30 : dirty_ ? 0.05 : 0.5;
+        if (!visible_ || now - last_draw_ < interval) return;
         last_draw_ = now;
         dirty_ = false;
         const auto start = std::chrono::steady_clock::now();
@@ -512,7 +512,7 @@ private:
             static_cast<uint32_t>(canvas.width()), static_cast<uint32_t>(canvas.height()), 4);
     }
 
-    // Logs the render and upload time every 600 frames, about 30 s of animation.
+    // Logs the render and upload time every 600 frames, about 20 s of animation.
     void time_frame(double ms) {
         frame_ms_total_ += ms;
         frame_ms_max_ = std::max(frame_ms_max_, ms);
@@ -833,6 +833,7 @@ int run() {
                 if (heard == knockthru::Calibrator::Heard::Counted) {
                     haptics.buzz(1, t);
                     calibration->peaks = calibrator->peaks();
+                    calibration->speeds = calibrator->speeds();
                     calibration->counted_t = t;
                 } else if (heard == knockthru::Calibrator::Heard::OtherKind) {
                     calibration->ignored = knock.kind;

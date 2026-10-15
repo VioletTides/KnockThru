@@ -81,7 +81,9 @@ float head_radius(float height) { return 0.288f * height; } // measured on the c
 
 Panel::Panel(const std::filesystem::path& fonts)
     : bold_(fonts / "NotoSans-SemiBold.ttf"), regular_(fonts / "NotoSans-Regular.ttf"), canvas_(kWidth, kHeight),
-      scratch_(kWidth, kHeight) {}
+      scratch_(kWidth, kHeight), background_(kWidth, kHeight) {
+    background_.rounded_rect({0, 0, kWidth, kHeight}, 28, kBackground);
+}
 
 bool Panel::hovered(Rect rect) const { return hover_ && rect.contains(hover_->first, hover_->second); }
 
@@ -337,17 +339,17 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
     canvas_.text(bold_, std::to_string(count) + " of " + std::to_string(view.wanted), x, 190, 80, kText);
     canvas_.text(regular_, std::to_string(view.seconds_left) + " s left", kWidth - kMargin, 190, 28, kDim, Align::Right);
 
-    // One bar per knock above its dot. Taller bars are stronger knocks.
+    // One bar per knock above its dot, by how fast the controller moved into it.
+    // A full bar is 2 m/s, a little faster than the hardest recorded knocks.
     const float since = static_cast<float>(now_ - view.counted_t);
-    double strongest = 1;
-    for (const double peak : view.peaks) strongest = std::max(strongest, peak);
     const float base = 470, tallest = 180, spacing = 64, r = 18;
     for (int i = 0; i < view.wanted; ++i) {
         const float cx = x + r + i * spacing;
         const bool latest = i == count - 1;
         if (i < count) {
             const float grow = latest ? anim::ease_out(since / 0.35f) : 1;
-            const float h = std::max(8.0f, static_cast<float>(view.peaks[i] / strongest) * tallest * grow);
+            const double speed = i < static_cast<int>(view.speeds.size()) ? view.speeds[i] : 0;
+            const float h = std::max(8.0f, static_cast<float>(std::min(1.0, speed / 2.0)) * tallest * grow);
             canvas_.rounded_rect({cx - 14, base - h, 28, h}, 8, latest ? kAccent : kRaisedHover);
             const float pop = latest ? anim::ease_out_back(since / 0.25f) : 1;
             canvas_.circle(cx, base + 44, r * pop, kAccent);
@@ -512,8 +514,7 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
     hover_ = hover;
     now_ = now;
     targets_.clear();
-    canvas_.clear({0, 0, 0, 0});
-    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, kBackground);
+    canvas_ = background_;
     const auto& calibration = state.calibration;
     if (calibration) {
         saved_dismissed_ = false;
@@ -548,8 +549,7 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
     const float entering = static_cast<float>((now - view_t_) / 0.3);
     if (entering < 1 && now > 0) {
         scratch_ = canvas_;
-        canvas_.clear({0, 0, 0, 0});
-        canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, kBackground);
+        canvas_ = background_;
         canvas_.draw(scratch_, 0, static_cast<int>(std::lround(20 * (1 - anim::ease_out(entering)))), anim::ease_out(entering));
     }
     animating_ = view == View::Pick || view == View::Learn || view == View::Record || view == View::Try ||

@@ -18,6 +18,7 @@ struct CalibrationView {
     Phase phase = Phase::Recording;
     int wanted = 10, seconds_left = 0;
     std::vector<double> peaks;          // counted knocks, oldest first, in m/s^2
+    std::vector<double> speeds;         // the same knocks' approach speeds, in m/s
     double counted_t = -1;              // when the latest knock counted
     std::optional<KnockKind> ignored;   // the latest knock of another kind
     double ignored_t = -1;
@@ -108,7 +109,7 @@ private:
     };
 
     Font bold_, regular_;
-    Canvas canvas_, scratch_;
+    Canvas canvas_, scratch_, background_;
     Screen screen_ = Screen::Main;
     KnockKind learn_kind_ = KnockKind::Together;
     bool saved_dismissed_ = false;

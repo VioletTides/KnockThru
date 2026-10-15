@@ -41,6 +41,10 @@ struct Knock {
     Vec3 position;
     double peak;
     double speed_before = 0; // m/s, mean speed of the knocking controller 0.6 to 0.15 s before the spike
+    // m/s, the knocking controller's fastest speed in the 100 ms before the spike. It
+    // shows how hard a knock was more steadily than `peak`, which divides by pose
+    // update gaps that vary from 2 to 7 ms.
+    double approach_speed = 0;
 };
 
 struct KnockEvent {
@@ -91,6 +95,7 @@ private:
     static const Sample* nearest(const History& history, double t);
     static double peak_in(const History& history, double from, double to);
     static double mean_speed(const History& history, double from, double to);
+    static double max_speed(const History& history, double from, double to);
 };
 
 } // namespace knockthru

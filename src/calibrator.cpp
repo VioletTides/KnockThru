@@ -21,6 +21,7 @@ Calibrator::Heard Calibrator::add(const Knock& knock) {
     if (!deliberate || done()) return Heard::Ignored;
     if (knock.kind != kind_) return Heard::OtherKind;
     peaks_.push_back(knock.peak);
+    speeds_.push_back(knock.approach_speed);
     return Heard::Counted;
 }
 
