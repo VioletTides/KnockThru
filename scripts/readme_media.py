@@ -87,7 +87,7 @@ def place(image, name, x, y, height, angle=0.0):
 
 
 def head_radius(height):
-    return 0.5 * 571 / 984 * height  # the controller sprite is 571 by 984
+    return 0.288 * height  # measured on the controller sprites
 
 
 def burst(draw, x, y, strength, scale=1.0):
@@ -195,12 +195,13 @@ def knock_kinds():
         draw.rectangle([cx - 130, table_y, cx + 130, table_y + 16], fill=TABLE)
         burst(draw, cx, table_y, strength)
 
-        # A tap on the side of the headset.
-        cx, cy, hw, h = 2 * cell + cell // 2, 150, 170, 150
-        place(image, "headset-front", cx - 60, cy, round(hw * 532 / 984))
-        hx = cx - 60 + hw / 2
-        place(image, "controller-right", hx + head_radius(h) * 0.95 + 40 * gap, cy, h, angle=150)
-        burst(draw, hx, cy, strength)
+        # The left controller taps the left side of the headset.
+        cx, cy, hw, h = 2 * cell + cell // 2, 110, 160, 130
+        hx = cx + 70  # headset center
+        place(image, "headset-front", hx, cy, round(hw * 600 / 1110))
+        edge = hx - hw / 2
+        place(image, "controller-left", edge - head_radius(h) * 0.95 - 30 * gap, cy, h, angle=-60)
+        burst(draw, edge, cy, strength)
 
         for c, text in enumerate(("Controllers together", "Controller on a surface", "Tap on the headset")):
             w = draw.textlength(text, font=label)

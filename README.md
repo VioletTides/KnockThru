@@ -14,6 +14,8 @@ Knock twice to see your room without taking off your Steam Frame. Knock three ti
 
 From now on KnockThru starts with SteamVR and runs in the background.
 
+To pause knocks, turn off **Knocks** in the [dashboard tab](#the-dashboard-tab). To remove KnockThru, run `<install folder>/knockthru --uninstall` over SSH, then delete the install folder. Your settings stay in `~/.config/knockthru` until you delete that folder too.
+
 ## How to knock
 
 Any of these three knocks works. Use the same kind for every knock in a set.
@@ -142,7 +144,7 @@ README images (needs Pillow and ffmpeg, after the host build):
 python3 scripts/readme_media.py
 ```
 
-The controller and headset sprites in `images/cad/` come from Valve's CAD files. To render them again, download the STEP files from [Valve's Steam Frame repository](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) into one folder, then run this (needs cadquery and opencv-python, and takes several minutes):
+The controller and headset sprites in `images/cad/` come from Valve's CAD files. To render them again, download the STEP files from [Valve's Steam Frame repository](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) into one folder, then run this (needs cadquery and opencv-python, and takes about 2 minutes):
 
 ```sh
 python3 scripts/cad_sprites.py <CAD folder>
@@ -159,4 +161,4 @@ python3 scripts/cad_sprites.py <CAD folder>
 
 - The controller and headset drawings are rendered from [Valve's Steam Frame CAD files](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) (CC BY-NC-SA 4.0). Those images keep that license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). KnockThru is not associated with or endorsed by Valve.
 
-[MIT licensed](LICENSE). Developed with help from coding agents.
+Made with love for everyone who wants to see their room without taking the headset off. [MIT licensed](LICENSE). Developed with help from coding agents.
