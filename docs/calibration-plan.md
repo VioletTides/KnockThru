@@ -18,7 +18,7 @@ Branch `calibration-redo`, worktree `../KnockThru-calibration`. The UI comes fir
 Branch `readme-revamp` (worktree `../KnockThru-readme`, local only, still in progress) already scripts the knock animations in Python for the README GIFs. The panel animations port from it, so the motion matches the README.
 
 - `scripts/readme_media.py` has the easing curves (`ease_in`, `ease_out`, `ease_in_out`, `ease_out_back`) and a `keyframes` interpolator.
-- The same file has the knock motion: `knock_motion` (pull back, hit, rebound, settle), `impact` and `burst` (accent lines flying out from the contact), `buzz` (a shake per haptic buzz), and `knock_pair` (two controllers swinging from the wrist). One timeline drives them: first knock at 0.5 s, 0.3 s between knocks, 0.4 s to the action.
+- The same file has the knock motion: `knock_motion` (pull back, contact, rebound, settle), `impact` and `burst` (accent lines flying out from the contact), `buzz` (a shake per haptic buzz), and `knock_pair` (two controllers swinging from the wrist). One timeline drives them: first knock at 0.5 s, 0.3 s between knocks, 0.4 s to the action.
 - `knock_kinds()` in that file draws one card per knock kind, which is the layout the "Pick a kind" step needs.
 - The README loops play a double, then a triple. Calibration wants one knock, then a rest. `knock_motion` already takes the knock count, so the calibration loop calls it with one knock and a longer pause. Only the "Try it" step shows a double.
 - `scripts/cad_sprites.py` renders the controller and headset sprites in `images/cad/` from Valve's CAD files, in the logo style.

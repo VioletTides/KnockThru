@@ -112,7 +112,7 @@ DetectorConfig test_config() {
     if (!set) return config;
     const std::map<std::string, double*> fields{
         {"controller_peak", &config.controller_peak}, {"confirmed_peak", &config.confirmed_peak},
-        {"partner_peak", &config.partner_peak}, {"headset_peak", &config.headset_peak}, {"tap_peak", &config.tap_peak},
+        {"partner_peak", &config.partner_peak}, {"headset_peak", &config.headset_peak}, {"headset_knock_peak", &config.headset_knock_peak},
         {"min_approach_together", &config.min_approach[0]}, {"min_approach_surface", &config.min_approach[1]},
         {"min_approach_headset", &config.min_approach[2]},
         {"max_speed_after", &config.max_speed_after}, {"surface_speed_after", &config.surface_speed_after},

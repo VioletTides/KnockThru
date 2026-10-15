@@ -28,7 +28,7 @@ namespace knockthru {
 // - Its knock approached at 0.25 m/s or faster.
 // - For surface knocks, the controller was nearly still before the swing.
 //   Together and headset knocks have a second device to confirm them, and
-//   headset taps start with the arm rising.
+//   headset knocks start with the arm rising.
 // A burst of this kind whose spike falls under floor() is TooLight and does not
 // count, since it could never trigger an action. These rules count no knocks
 // in the 90 s of play and noise.

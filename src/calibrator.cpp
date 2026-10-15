@@ -11,7 +11,7 @@ Calibrator::Calibrator(KnockKind kind, const DetectorConfig& base, double start)
     : kind_(kind), config_(base), start_(start) {
     config_.controller_peak = std::min(config_.controller_peak, 30.0);
     config_.confirmed_peak = std::min(config_.confirmed_peak, 12.0);
-    config_.tap_peak = std::min(config_.tap_peak, 12.0);
+    config_.headset_knock_peak = std::min(config_.headset_knock_peak, 12.0);
     config_.partner_peak = std::min(config_.partner_peak, 8.0);
     config_.enabled = {true, true, true};
 }

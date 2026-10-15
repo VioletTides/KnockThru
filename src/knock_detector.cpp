@@ -83,7 +83,7 @@ double KnockDetector::peak_in(const History& history, double from, double to) {
 std::optional<Knock> KnockDetector::judge(Device device, std::size_t i) const {
     const auto& history = history_[index(device)];
     const auto& sample = history[i];
-    if (sample.accel < std::min({config_.controller_peak, config_.confirmed_peak, config_.tap_peak})) return std::nullopt;
+    if (sample.accel < std::min({config_.controller_peak, config_.confirmed_peak, config_.headset_knock_peak})) return std::nullopt;
     for (std::size_t k = i > 3 ? i - 3 : 0; k < std::min(history.size(), i + 4); ++k)
         if (history[k].accel > sample.accel) return std::nullopt;
 
@@ -105,7 +105,7 @@ std::optional<Knock> KnockDetector::judge(Device device, std::size_t i) const {
     // enough. A table knock rebounds, so the controller may still be moving.
     const bool surface = knock.kind == KnockKind::Surface;
     const double threshold = surface ? config_.controller_peak
-        : knock.kind == KnockKind::Together ? config_.confirmed_peak : config_.tap_peak;
+        : knock.kind == KnockKind::Together ? config_.confirmed_peak : config_.headset_knock_peak;
     if (sample.accel < threshold) return std::nullopt;
     const auto* before = nearest(history, sample.t - 0.03);
     const auto* after = nearest(history, sample.t + 0.03);

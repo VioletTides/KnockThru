@@ -23,7 +23,7 @@ The controller nearly stops after a knock. During motion it keeps moving. Spike 
 
 Kinds:
 
-- `headset`: the headset spikes above 25 m/s² within 30 ms of a controller spike. Headset taps reach 40 to 215 m/s². Head shaking reaches 22 m/s², and controller knocks move the headset less than 10 m/s².
+- `headset`: the headset spikes above 25 m/s² within 30 ms of a controller spike. Headset knocks reach 40 to 215 m/s². Head shaking reaches 22 m/s², and controller knocks move the headset less than 10 m/s².
 - `together`: the other controller spikes above 20 m/s² within 40 ms, with the controllers less than 15 cm apart. The second controller often spikes much weaker than the first.
 - `surface`: anything else. Both knocks of a double must land within 3 cm of each other, because the table does not move.
 
@@ -67,7 +67,7 @@ The second session is `tests/data/mixed.csv.gz`, with a known routine: 4 each of
 - A surface knock may still move at 0.55 m/s 30 ms later, because hard table knocks rebound.
 - Knocks in a sequence must be at most 350 ms apart (was 450). Real gaps were 170 to 290 ms. The wider window let two weak spikes 357 ms apart in `play` form a false double.
 
-Result: 22 of 24 right, 0 wrong. The 2 misses are surface doubles where hard hits bounced several times.
+Result: 22 of 24 right, 0 wrong. The 2 misses are surface doubles where hard knocks bounced several times.
 
 ## Fast doubles
 
@@ -87,7 +87,7 @@ Knocks less than 0.25 s apart form a burst, and the burst stands for its knock w
 
 - No knock came in the 0.6 s before it. Waving makes clusters of spikes, and the wearer waits between calibration knocks.
 - Its knock approached at 0.25 m/s or faster.
-- For surface knocks, the controller averaged under 0.6 m/s from 0.6 to 0.15 s before the first knock in the burst. Real surface knocks averaged 0.02 to 0.51 m/s there, and false ones in `play` and `noise` mostly 0.64 to 2.8 m/s. Together and headset knocks skip this rule. Their false knocks never got past the first two rules, and headset taps start with the arm rising at up to 1.3 m/s.
+- For surface knocks, the controller averaged under 0.6 m/s from 0.6 to 0.15 s before the first knock in the burst. Real surface knocks averaged 0.02 to 0.51 m/s there, and false ones in `play` and `noise` mostly 0.64 to 2.8 m/s. Together and headset knocks skip this rule. Their false knocks never got past the first two rules, and headset knocks start with the arm rising at up to 1.3 m/s.
 
 With these rules, calibration counts 1 knock in the 90 s of `play` and `noise`, and 10 of 10 in `together`, `surface`, and `headset`. That one knock spiked under the surface floor of 50 m/s². Calibration now turns such knocks away as too light, since they could never count, which leaves 0 in `play` and `noise`. In the logged Frame session, the hard knocks count instead of the swing starts, and the slow hand movement does not count.
 
@@ -95,7 +95,7 @@ Approach speed also shows how hard a knock was more steadily than the spike. The
 
 ## Calibrated thresholds
 
-Each calibrated knock kind gets two thresholds. Together and headset knocks have their own spike thresholds (`confirmed_peak` and `tap_peak`), so calibrating one does not change the other.
+Each calibrated knock kind gets two thresholds. Together and headset knocks have their own spike thresholds (`confirmed_peak` and `headset_knock_peak`), so calibrating one does not change the other.
 
 - The spike threshold is 60 percent of the weakest recorded spike, at least 50 m/s² for surface knocks and 20 for together and headset knocks.
 - The approach threshold (`min_approach`) is 55 percent of the second slowest recorded approach. An earlier build had a sensitivity slider from 30 to 80 percent. In the replays, anything stricter than 55 percent only lost real doubles. 30 percent matched 55 percent on surface and headset knocks and did a little better on together knocks (22 against 20 right in `mixed`), but it leaves less margin against movement that the recordings lack. The walkthrough uses 55 percent and has no slider.
@@ -115,4 +115,4 @@ The test calibrates each kind on its own recording, applies it, and replays ever
 
 Every row has no actions in `play` and `noise` and no wrong actions in `mixed`. With default settings, the recordings give 20 together, 18 surface, and 22 headset doubles, and 22 right in `mixed`.
 
-Background on tap detection: [ST design tip DT0101](https://www.st.com/resource/en/design_tip/dt0101-setting-up-singletap-and-doubletap-recognition-with-sts-mems-accelerometers-stmicroelectronics.pdf) and [NXP AN3919](https://www.nxp.com/docs/en/application-note/AN3919.pdf) describe threshold, pulse width, quiet time, and latency windows for double taps.
+Background: [ST design tip DT0101](https://www.st.com/resource/en/design_tip/dt0101-setting-up-singletap-and-doubletap-recognition-with-sts-mems-accelerometers-stmicroelectronics.pdf) and [NXP AN3919](https://www.nxp.com/docs/en/application-note/AN3919.pdf) describe threshold, pulse width, quiet time, and latency windows for accelerometer double-tap detection.

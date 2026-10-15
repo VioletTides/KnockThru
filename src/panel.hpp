@@ -124,7 +124,7 @@ private:
     void record_screen(const PanelState& state, const CalibrationView& view);
     void try_screen(const PanelState& state, const CalibrationView& view);
     void steps(int current);
-    void knock_scene(KnockKind kind, Rect box, float t, int taps);
+    void knock_scene(KnockKind kind, Rect box, float t, int knocks);
     void settings_screen(const PanelState& state);
     void knocks_row(Rect rect, const PanelState& state);
     void passthrough_tile(Rect rect, const PanelState& state);

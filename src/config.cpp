@@ -70,7 +70,7 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
             auto& d = config.detector;
             const std::map<std::string, double*> fields{
                 {"controller_peak", &d.controller_peak}, {"confirmed_peak", &d.confirmed_peak},
-                {"partner_peak", &d.partner_peak}, {"headset_peak", &d.headset_peak}, {"tap_peak", &d.tap_peak},
+                {"partner_peak", &d.partner_peak}, {"headset_peak", &d.headset_peak}, {"headset_knock_peak", &d.headset_knock_peak},
                 {"max_speed_after", &d.max_speed_after}, {"surface_speed_after", &d.surface_speed_after},
                 {"max_speed_before", &d.max_speed_before}, {"together_distance", &d.together_distance},
                 {"same_spot", &d.same_spot}, {"merge_s", &d.merge_s}, {"min_gap_s", &d.min_gap_s}, {"fast_gap_s", &d.fast_gap_s},
@@ -211,7 +211,7 @@ void apply_calibration(const Calibration& calibration, DetectorConfig& detector)
         approach(KnockKind::Together, *together);
     }
     if (const auto& headset = copy[KnockKind::Headset]) {
-        detector.tap_peak = headset->peak;
+        detector.headset_knock_peak = headset->peak;
         approach(KnockKind::Headset, *headset);
     }
 }

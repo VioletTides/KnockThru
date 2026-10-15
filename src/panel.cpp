@@ -33,10 +33,10 @@ constexpr Color kTable{120, 92, 70};
 constexpr float kRadius = 16;
 constexpr float kMargin = 40;
 
-constexpr const char* kKindTitles[3] = {"Controllers together", "Controller on a surface", "Tap on the headset"};
-constexpr const char* kKindOnce[3] = {"Tap the controllers together.", "Knock one controller on a table or wall.",
-                                      "Tap the side of the headset with a controller."};
-constexpr const char* kKindNames[3] = {"a together knock", "a surface knock", "a headset tap"};
+constexpr const char* kKindTitles[3] = {"Controllers together", "Controller on a surface", "Knock on the headset"};
+constexpr const char* kKindOnce[3] = {"Knock the controllers together.", "Knock one controller on a table or wall.",
+                                      "Knock on the side of the headset with a controller."};
+constexpr const char* kKindNames[3] = {"a together knock", "a surface knock", "a headset knock"};
 
 Color faded(Color color, float alpha) {
     return {color.r, color.g, color.b, static_cast<std::uint8_t>(std::lround(color.a * anim::clamp(alpha)))};
@@ -238,15 +238,15 @@ void Panel::steps(int current) {
 
 // One knock kind on the shared knock timeline, fit into `box`. The layout is on
 // a 340 by 240 grid, the same as the README's knock kind cards.
-void Panel::knock_scene(KnockKind kind, Rect box, float t, int taps) {
+void Panel::knock_scene(KnockKind kind, Rect box, float t, int knocks) {
     const float s = std::min(box.w / 340, box.h / 240);
     const float ox = box.x + (box.w - 340 * s) / 2, oy = box.y + (box.h - 240 * s) / 2;
     const auto X = [&](float x) { return ox + x * s; };
     const auto Y = [&](float y) { return oy + y * s; };
-    const float gap = anim::knock_motion(t, taps);
-    const auto played = anim::impact(t, taps);
+    const float gap = anim::knock_motion(t, knocks);
+    const auto played = anim::impact(t, knocks);
     // A counted calibration knock buzzes at once. An action buzzes after the 0.4 s wait.
-    const float action = anim::knock_time(taps - 1) + (taps == 1 ? 0.05f : 0.4f);
+    const float action = anim::knock_time(knocks - 1) + (knocks == 1 ? 0.05f : 0.4f);
     const float shake = anim::buzz(t, action, 1) * s;
     if (kind == KnockKind::Together) {
         const float h = 150, cx = 170, cy = 105;

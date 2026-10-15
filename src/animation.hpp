@@ -53,22 +53,22 @@ inline float knock_time(int i, float start = kFirstKnock) { return start + i * k
 // How far a controller is from the contact point, from 0 (touching) to 1 (rest).
 // Each knock pulls back a little, speeds up into the contact, and rebounds. After
 // the last knock it settles back to rest.
-inline float knock_motion(float t, int taps, float start = kFirstKnock) {
-    const float first = knock_time(0, start), last = knock_time(taps - 1, start);
+inline float knock_motion(float t, int knocks, float start = kFirstKnock) {
+    const float first = knock_time(0, start), last = knock_time(knocks - 1, start);
     if (t <= first)
         return keyframes(t, {{first - 0.3f, 1.0f, ease_in_out}, {first - 0.13f, 1.18f, ease_in_out}, {first, 0.0f, ease_in}});
-    for (int i = 1; i < taps; ++i) {
-        const float hit = knock_time(i, start), previous = knock_time(i - 1, start);
-        if (t <= hit) return keyframes(t, {{previous, 0.0f, ease_in}, {hit - kKnockGap / 2, 0.55f, ease_out}, {hit, 0.0f, ease_in}});
+    for (int i = 1; i < knocks; ++i) {
+        const float contact = knock_time(i, start), previous = knock_time(i - 1, start);
+        if (t <= contact) return keyframes(t, {{previous, 0.0f, ease_in}, {contact - kKnockGap / 2, 0.55f, ease_out}, {contact, 0.0f, ease_in}});
     }
     return keyframes(t, {{last, 0.0f, ease_in}, {last + 0.35f, 1.0f, ease_out_back}});
 }
 
-// How far the latest impact has played, from 0 (just hit) to 1 (faded), or nothing.
-inline std::optional<float> impact(float t, int taps, float start = kFirstKnock) {
-    for (int i = taps - 1; i >= 0; --i) {
-        const float hit = knock_time(i, start);
-        if (hit <= t && t < hit + 0.3f) return (t - hit) / 0.3f;
+// How far the latest impact has played, from 0 (just made contact) to 1 (faded), or nothing.
+inline std::optional<float> impact(float t, int knocks, float start = kFirstKnock) {
+    for (int i = knocks - 1; i >= 0; --i) {
+        const float contact = knock_time(i, start);
+        if (contact <= t && t < contact + 0.3f) return (t - contact) / 0.3f;
     }
     return std::nullopt;
 }

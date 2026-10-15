@@ -19,7 +19,7 @@ std::optional<KnockKind> parse_knock_kind(const std::string& name);
 struct DetectorConfig {
     double controller_peak = 60;   // m/s^2, spike on the knocking controller
     double confirmed_peak = 40;    // m/s^2, controller spike for a together knock, which the other controller confirms
-    double tap_peak = 40;          // m/s^2, controller spike for a headset tap, which the headset confirms
+    double headset_knock_peak = 40; // m/s^2, controller spike for a headset knock, which the headset confirms
     double partner_peak = 20;      // m/s^2, spike on the other controller for a together knock
     double headset_peak = 25;      // m/s^2, spike on the headset for a headset knock
     double max_speed_after = 0.4;  // m/s, 30 ms after the spike
