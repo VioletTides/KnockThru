@@ -1,5 +1,7 @@
 #include "panel.hpp"
 
+#include "logo_shapes.hpp"
+
 namespace knockthru {
 namespace {
 
@@ -231,12 +233,18 @@ std::optional<PanelClick> Panel::click(float x, float y) {
 void Panel::draw_icon(Canvas& canvas) {
     const float s = static_cast<float>(canvas.width());
     canvas.clear({0, 0, 0, 0});
-    canvas.rounded_rect({0, 0, s, s}, s * 0.22f, kAccent);
-    // A knuckle with two knock waves.
-    const float cx = s * 0.36f, cy = s * 0.5f;
-    canvas.circle(cx, cy, s * 0.13f, kText);
-    canvas.arc(cx, cy, s * 0.23f, s * 0.29f, -0.75f, 0.75f, kText);
-    canvas.arc(cx, cy, s * 0.37f, s * 0.43f, -0.65f, 0.65f, kText);
+    canvas.rounded_rect({0, 0, s, s}, s * 0.22f, {kBackground.r, kBackground.g, kBackground.b});
+    // Two Steam Frame controllers knocking heads, from logo_shapes.hpp on a 64 by 64 grid.
+    const float k = s / 64;
+    const float* point = logo::kPoints;
+    for (const auto& shape : logo::kShapes) {
+        std::vector<std::vector<Point>> rings;
+        for (int r = shape.first_ring; r < shape.first_ring + shape.ring_count; ++r) {
+            auto& ring = rings.emplace_back();
+            for (int i = 0; i < logo::kRingSizes[r]; ++i, point += 2) ring.push_back({point[0] * k, point[1] * k});
+        }
+        canvas.polygon(rings, shape.fill == logo::Fill::Text ? kText : kAccent);
+    }
 }
 
 } // namespace knockthru

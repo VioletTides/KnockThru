@@ -124,6 +124,46 @@ void Canvas::circle(float cx, float cy, float radius, Color color) {
     arc(cx, cy, 0, radius, 0, 7, color);
 }
 
+void Canvas::polygon(const std::vector<std::vector<Point>>& rings, Color color) {
+    float top = static_cast<float>(height_), bottom = 0;
+    for (const auto& ring : rings) {
+        for (const auto& p : ring) {
+            top = std::min(top, p.y);
+            bottom = std::max(bottom, p.y);
+        }
+    }
+    // Four sample lines per pixel row. Each span adds its exact horizontal coverage.
+    constexpr int kSamples = 4;
+    std::vector<float> coverage(width_ + 1), crossings;
+    for (int y = std::max(0, static_cast<int>(top)); y < std::min(height_, static_cast<int>(std::ceil(bottom))); ++y) {
+        std::fill(coverage.begin(), coverage.end(), 0.0f);
+        for (int sample = 0; sample < kSamples; ++sample) {
+            const float sy = y + (sample + 0.5f) / kSamples;
+            crossings.clear();
+            for (const auto& ring : rings) {
+                for (std::size_t i = 0; i < ring.size(); ++i) {
+                    const Point a = ring[i], b = ring[(i + 1) % ring.size()];
+                    if ((a.y <= sy) != (b.y <= sy)) crossings.push_back(a.x + (sy - a.y) * (b.x - a.x) / (b.y - a.y));
+                }
+            }
+            std::sort(crossings.begin(), crossings.end());
+            for (std::size_t i = 0; i + 1 < crossings.size(); i += 2) {
+                const float x0 = std::clamp(crossings[i], 0.0f, static_cast<float>(width_));
+                const float x1 = std::clamp(crossings[i + 1], 0.0f, static_cast<float>(width_));
+                const int i0 = static_cast<int>(x0), i1 = static_cast<int>(x1);
+                if (i0 == i1) {
+                    coverage[i0] += (x1 - x0) / kSamples;
+                    continue;
+                }
+                coverage[i0] += (i0 + 1 - x0) / kSamples;
+                for (int x = i0 + 1; x < i1; ++x) coverage[x] += 1.0f / kSamples;
+                coverage[i1] += (x1 - i1) / kSamples;
+            }
+        }
+        for (int x = 0; x < width_; ++x) blend(x, y, color, clamp01(coverage[x]));
+    }
+}
+
 void Canvas::arc(float cx, float cy, float inner, float outer, float from, float to, Color color) {
     const int x0 = static_cast<int>(std::floor(cx - outer - 1)), x1 = static_cast<int>(std::ceil(cx + outer + 1));
     const int y0 = static_cast<int>(std::floor(cy - outer - 1)), y1 = static_cast<int>(std::ceil(cy + outer + 1));
