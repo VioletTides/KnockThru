@@ -623,7 +623,8 @@ int run() {
         stamp = config_stamp();
         if (!calibrator) detector = knockthru::KnockDetector(config.detector);
     };
-    // SteamVR's dashboard click, on every panel press and every knock that acts.
+    // SteamVR's dashboard click. Steam already clicks when the Room View button
+    // is pressed, so a double knock and the panel's Room View button stay silent.
     const auto play_click = [&] {
         if (config.sounds) knockthru::play_click();
     };
@@ -729,8 +730,8 @@ int run() {
         if (panel) {
             bool shown = false;
             for (const auto& click : panel->poll(shown)) {
-                play_click();
                 using knockthru::PanelCommand;
+                if (click.command != PanelCommand::RoomView) play_click();
                 const auto kind_name = std::string(knockthru::to_string(click.kind));
                 switch (click.command) {
                 case PanelCommand::RoomView: toggle_room_view(""); break;
@@ -867,8 +868,7 @@ int run() {
                 if (changed) play_click();
                 haptics.buzz(changed ? 2 : 3, t);
             } else if (toggle_room_view(what)) {
-                // Click and buzz now, because the switch can take a second. A failure buzzes 3 times later.
-                play_click();
+                // Buzz now, because the switch can take a second. A failure buzzes 3 times later.
                 haptics.buzz(1, t);
             }
         }
