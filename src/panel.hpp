@@ -18,7 +18,7 @@ struct CalibrationView {
     Phase phase = Phase::Recording;
     int wanted = 10, seconds_left = 0;
     std::vector<double> peaks;          // counted knocks, oldest first, in m/s^2
-    std::vector<double> speeds;         // the same knocks' approach speeds, in m/s
+    std::vector<double> speeds;         // the same knocks' approach speeds, in m/s, which the chart shows
     double counted_t = -1;              // when the latest knock counted
     std::optional<KnockKind> ignored;   // the latest knock of another kind
     double ignored_t = -1;
@@ -120,9 +120,11 @@ private:
     bool animating_ = false;
     std::optional<View> view_;
     double view_t_ = 0;
-    // The sensitivity slider. While dragging, the panel shows its own value. After
-    // a release, the knob slides into the nearest notch.
-    Rect slider_{};
+    // The sensitivity control is the threshold line on the knock chart. A press
+    // anywhere on the chart drags it. While dragging, the panel shows its own
+    // value. After a release near a notch, the line slides into it.
+    Rect slider_{};                          // the chart, where a press starts a drag
+    float least_y_ = 0, most_y_ = 0;         // the line's height at sensitivity 0 and 1
     bool dragging_ = false;
     double drag_value_ = 0.5, snap_from_ = 0.5, snap_to_ = 0.5, snap_t_ = -1;
 
@@ -137,7 +139,7 @@ private:
     void steps(int current);
     void knock_scene(KnockKind kind, Rect box, float t, int taps);
     double slider_value(const CalibrationView& view) const;
-    double slider_at(float x) const;
+    double slider_at(float y) const;
     void settings_screen(const PanelState& state);
     void knocks_row(Rect rect, const PanelState& state);
     void passthrough_tile(Rect rect, const PanelState& state);

@@ -93,4 +93,26 @@ With these rules, calibration counts 1 knock in the 90 s of `play` and `noise`, 
 
 Approach speed also shows how hard a knock was more steadily than the spike. The spike divides a velocity change by the gap between pose updates, which varies from 2 to 7 ms. In the knock recordings, the top tenth of spikes ran 2.8 to 8.3 times the bottom tenth, and approach speeds ran 1.7 to 2.5 times.
 
+## Calibrated thresholds
+
+Each calibrated knock kind gets two thresholds. Together and headset knocks have their own spike thresholds (`confirmed_peak` and `tap_peak`), so calibrating one no longer changes the other.
+
+- The spike threshold is 60 percent of the weakest recorded spike, at least 50 m/s² for surface knocks and 20 for together and headset knocks.
+- The approach threshold (`min_approach`) is a fraction of the second slowest recorded approach: 80 percent at the least sensitive end of the slider, 55 percent in the middle, and 30 percent at the most sensitive end.
+
+A sequence needs its fastest knock to reach the approach threshold. Two other ways of applying it failed on the recordings:
+
+- Dropping slow knocks before the sequence logic let two leftover spikes form false doubles in `play` (together at approach 0.43 m/s) and `noise` (at 0.64 m/s). A slow knock still has to join its sequence, so clapping runs and busy bursts stay rejected.
+- Requiring every knock in a sequence to be fast lost most together doubles (2 to 11 of 20), because the later knocks of a quick double start from the rebound.
+
+The test calibrates each kind on its own recording, applies it at each slider notch, and replays every recording:
+
+| Kind | Notch | Spike | Approach | Doubles | `mixed` right |
+|---|---|---|---|---|---|
+| together | least, middle, most | 20 | 0.57, 0.39, 0.21 | 17, 20, 20 | 19, 20, 22 |
+| surface | least, middle, most | 50 | 0.96, 0.66, 0.36 | 18, 18, 18 | 21, 22, 22 |
+| headset | least, middle, most | 20 | 0.29, 0.20, 0.11 | 19, 22, 22 | 22, 22, 22 |
+
+Every row has no actions in `play` and `noise` and no wrong actions in `mixed`. With default settings, the recordings give 20 together, 18 surface, and 22 headset doubles, and 22 right in `mixed`.
+
 Background on tap detection: [ST design tip DT0101](https://www.st.com/resource/en/design_tip/dt0101-setting-up-singletap-and-doubletap-recognition-with-sts-mems-accelerometers-stmicroelectronics.pdf) and [NXP AN3919](https://www.nxp.com/docs/en/application-note/AN3919.pdf) describe threshold, pulse width, quiet time, and latency windows for double taps.

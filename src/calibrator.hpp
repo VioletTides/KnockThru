@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config.hpp"
 #include "knock_detector.hpp"
 
 #include <optional>
@@ -7,12 +8,16 @@
 
 namespace knockthru {
 
-// Collects knocks of one kind with lowered thresholds, then sets that kind's
-// threshold to a fraction of the weakest knock. The sensitivity slider picks
-// the fraction, and the middle of the slider gives 60 percent. Floors come from replaying
-// tests/data: surface below 50 m/s^2 splits real doubles, and together or
-// headset below 20 lets rebounds pass the fast_gap_s check and turn doubles
-// into triples.
+// Collects knocks of one kind with lowered thresholds, then sets two
+// thresholds for that kind:
+// - The spike threshold is 60 percent of the weakest knock's spike. Floors
+//   come from replaying tests/data: surface below 50 m/s^2 splits real
+//   doubles, and together or headset below 20 lets rebounds pass the
+//   fast_gap_s check and turn doubles into triples.
+// - The approach threshold is a fraction of the second-slowest approach, from
+//   90 percent at the least sensitive end of the slider to 30 percent at the
+//   most. Approach speed varies less than the spike between similar knocks,
+//   and slow movement falls below it.
 //
 // At the lowered thresholds, waving the controllers or getting ready gave
 // about one knock a second in the play and noise recordings. Starting a swing
@@ -59,17 +64,23 @@ public:
     const std::vector<double>& peaks() const { return peaks_; }
     const std::vector<double>& speeds() const { return speeds_; } // approach speeds, m/s
 
-    // The threshold for recorded peaks at a sensitivity from 0 (least) to 1 (most).
-    static double threshold(KnockKind kind, const std::vector<double>& peaks, double sensitivity);
-    // The lowest threshold calibration sets for a kind.
+    // The spike threshold for recorded spikes, in m/s^2.
+    static double peak_threshold(KnockKind kind, const std::vector<double>& peaks);
+    // The lowest spike threshold calibration sets for a kind.
     static double floor(KnockKind kind);
+    // The approach threshold for recorded approach speeds at a sensitivity from 0
+    // (least) to 1 (most), in m/s.
+    static double approach_threshold(const std::vector<double>& speeds, double sensitivity);
 
-    // The app's detector settings with this kind's threshold at a sensitivity, for
-    // trying a calibration before saving it.
+    // This calibration at a sensitivity. Call after done().
+    KindCalibration result(double sensitivity) const;
+
+    // The app's detector settings with this kind's thresholds at a sensitivity,
+    // for trying a calibration before saving it.
     DetectorConfig trial_config(const DetectorConfig& base, double sensitivity) const;
 
-    // Saves the threshold to calibration.json and returns it. Call after done().
-    double save(double sensitivity = 0.5) const;
+    // Saves this kind to calibration.json and returns what it saved.
+    KindCalibration save(double sensitivity = 0.5) const;
 
 private:
     KnockKind kind_;

@@ -5,6 +5,7 @@
 #include "logo_shapes.hpp"
 #include "sprite_shapes.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 namespace knockthru {
@@ -382,8 +383,9 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
     }
 }
 
-double Panel::slider_at(float x) const {
-    return std::min(1.0, std::max(0.0, static_cast<double>((x - slider_.x) / slider_.w)));
+double Panel::slider_at(float y) const {
+    if (most_y_ == least_y_) return 0.5;
+    return std::min(1.0, std::max(0.0, static_cast<double>((y - least_y_) / (most_y_ - least_y_))));
 }
 
 double Panel::slider_value(const CalibrationView& view) const {
@@ -394,54 +396,71 @@ double Panel::slider_value(const CalibrationView& view) const {
     return view.sensitivity;
 }
 
-// Step 4: the recorded knocks against the threshold, and the sensitivity slider.
+// Step 4: the recorded knocks by approach speed, and the threshold line, which
+// is the sensitivity control. The line clicks into notches on a scale at its end.
 void Panel::review_screen(const PanelState& state, const CalibrationView& view) {
     button({kMargin, 36, 160, 64}, "Cancel", PanelClick{PanelCommand::CancelCalibration, view.kind}, std::nullopt);
     canvas_.text(bold_, "Your knocks", kMargin + 192, 68, 38, kText);
     steps(4);
     const double value = slider_value(view);
-    const double threshold = Calibrator::threshold(view.kind, view.peaks, value);
+    const double threshold = Calibrator::approach_threshold(view.speeds, value);
+    const double spike = Calibrator::peak_threshold(view.kind, view.peaks);
 
-    const Rect chart{kMargin, 128, kWidth - 2 * kMargin, 330};
+    const Rect chart{kMargin, 128, kWidth - 2 * kMargin, 500};
     canvas_.rounded_rect(chart, kRadius, kSurface);
-    double top = threshold;
-    for (const double peak : view.peaks) top = std::max(top, peak);
-    top *= 1.15;
-    const float floor_y = chart.y + chart.h - 40, height = chart.h - 110;
-    const auto y_of = [&](double v) { return floor_y - static_cast<float>(v / top) * height; };
-    const int n = static_cast<int>(view.peaks.size());
-    int caught = 0;
-    const float spacing = (chart.w - 280) / std::max(1, n);
-    for (int i = 0; i < n; ++i) {
-        const bool counts = view.peaks[i] >= threshold;
-        caught += counts;
-        const float cx = chart.x + 48 + spacing * (i + 0.5f), y = y_of(view.peaks[i]);
-        canvas_.rounded_rect({cx - 16, y, 32, floor_y - y}, 8, counts ? kAccent : kRaisedHover);
-    }
-    const float line_y = y_of(threshold);
-    canvas_.rounded_rect({chart.x + 24, line_y - 2, chart.w - 48 - 200, 4}, 2, kText);
-    canvas_.text(bold_, "Threshold", chart.x + chart.w - 32, line_y, 26, kText, Align::Right);
-    canvas_.text(bold_, std::to_string(caught) + " of " + std::to_string(n) + " of your knocks count", chart.x + 32,
-        chart.y + 40, 28, kText);
+    slider_ = chart;
+    // The chart tops out a little above most knocks, so the line has room to
+    // move. Faster knocks run off the top.
+    auto sorted = view.speeds;
+    std::sort(sorted.begin(), sorted.end());
+    const double typical = sorted.empty() ? 1 : sorted[sorted.size() * 8 / 10];
+    const double top = std::max(Calibrator::approach_threshold(view.speeds, 0) * 1.3, typical);
+    const float floor_y = chart.y + chart.h - 48, height = chart.h - 118;
+    const auto y_of = [&](double v) { return floor_y - static_cast<float>(std::min(v, top * 1.08) / top) * height; };
+    least_y_ = y_of(Calibrator::approach_threshold(view.speeds, 0));
+    most_y_ = y_of(Calibrator::approach_threshold(view.speeds, 1));
 
-    // The slider, with notches at the ends and the middle.
-    slider_ = {kMargin + 80, 530, kWidth - 2 * kMargin - 160, 12};
-    const float knob_x = slider_.x + static_cast<float>(value) * slider_.w, cy = slider_.y + slider_.h / 2;
-    canvas_.text(bold_, "Sensitivity", slider_.x, slider_.y - 38, 28, kText);
-    canvas_.rounded_rect(slider_, 6, kRaised);
-    canvas_.rounded_rect({slider_.x, slider_.y, knob_x - slider_.x, slider_.h}, 6, kAccent);
-    for (const float notch : {0.0f, 0.5f, 1.0f})
-        canvas_.circle(slider_.x + notch * slider_.w, cy, 10, notch <= value + 1e-6 ? kAccent : kRaisedHover);
-    const Rect grab{slider_.x - 40, slider_.y - 40, slider_.w + 80, slider_.h + 80};
-    canvas_.circle(knob_x, cy, dragging_ || hovered(grab) ? 30 : 26, kText);
-    canvas_.text(regular_, "Fewer false knocks", slider_.x, cy + 56, 26, kDim);
-    canvas_.text(regular_, "Middle", slider_.x + slider_.w / 2, cy + 56, 26, kDim, Align::Center);
-    canvas_.text(regular_, "Catches softer knocks", slider_.x + slider_.w, cy + 56, 26, kDim, Align::Right);
+    // A knock counts when it approached fast enough and its spike clears the spike threshold.
+    const int n = static_cast<int>(view.speeds.size());
+    int caught = 0, too_light = 0;
+    const float left = chart.x + 48, right = chart.x + chart.w - 300, spacing = (right - left) / std::max(1, n);
+    for (int i = 0; i < n; ++i) {
+        const bool strong = i < static_cast<int>(view.peaks.size()) && view.peaks[i] >= spike;
+        const bool counts = view.speeds[i] >= threshold && strong;
+        caught += counts;
+        too_light += !strong;
+        const float cx = left + spacing * (i + 0.5f), y = y_of(view.speeds[i]);
+        canvas_.rounded_rect({cx - 18, y, 36, floor_y - y}, 8, counts ? kAccent : kRaisedHover);
+    }
+    canvas_.text(bold_, std::to_string(caught) + " of your " + std::to_string(n) + " knocks will count", chart.x + 32,
+        chart.y + 44, 30, kText);
+    // A knock below the spike threshold stays grey wherever the line goes.
+    if (too_light)
+        canvas_.text(regular_, too_light == 1 ? "1 knock was too light to count at any setting."
+            : std::to_string(too_light) + " knocks were too light to count at any setting.", chart.x + 32, floor_y + 22, 22, kDim);
+
+    // The scale: Less at the top, More at the bottom, with a tick per notch.
+    const float scale_x = chart.x + chart.w - 140, line_y = y_of(threshold);
+    // Left-aligned over the ticks, so it stays clear of the Threshold label.
+    canvas_.text(bold_, "Sensitivity", scale_x - 14, least_y_ - 40, 24, kText);
+    canvas_.rounded_rect({scale_x - 3, least_y_, 6, most_y_ - least_y_}, 3, kRaised);
+    const char* names[3] = {"Less", "Middle", "More"};
+    for (int i = 0; i < 3; ++i) {
+        const float y = least_y_ + (most_y_ - least_y_) * i / 2;
+        canvas_.rounded_rect({scale_x - 14, y - 2, 28, 4}, 2, kDim);
+        canvas_.text(regular_, names[i], scale_x + 40, y, 22, kDim);
+    }
+
+    // The line, its label, and the handle with three grip bars.
+    canvas_.rounded_rect({chart.x + 24, line_y - 2, scale_x - chart.x - 24, 4}, 2, kText);
+    canvas_.text(bold_, "Threshold", scale_x - 44, line_y - 22, 22, kText, Align::Right);
+    canvas_.circle(scale_x, line_y, dragging_ || hovered(chart) ? 30 : 26, kText);
+    for (const float dy : {-6.0f, 0.0f, 6.0f}) canvas_.rounded_rect({scale_x - 9, line_y + dy - 1.5f, 18, 3}, 1.5f, kBackground);
 
     button({kMargin, 656, 260, 72}, "Record again", PanelClick{PanelCommand::Calibrate, view.kind}, std::nullopt);
     button({kWidth - kMargin - 260, 656, 260, 72}, "Next: try it", PanelClick{PanelCommand::TryCalibration, view.kind},
         std::nullopt, true);
-    if (state.message_is_error) message(state, 620);
+    if (state.message_is_error) message(state, 740);
 }
 
 // Step 5: a double knock at the chosen sensitivity, without switching passthrough.
@@ -558,21 +577,19 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
 }
 
 void Panel::press(float x, float y) {
-    if (view_ != View::Review) return;
-    const Rect grab{slider_.x - 40, slider_.y - 40, slider_.w + 80, slider_.h + 80};
-    if (!grab.contains(x, y)) return;
+    if (view_ != View::Review || !slider_.contains(x, y)) return;
     dragging_ = true;
-    drag_value_ = slider_at(x);
+    drag_value_ = slider_at(y);
 }
 
-void Panel::move(float x, float) {
-    if (dragging_) drag_value_ = slider_at(x);
+void Panel::move(float, float y) {
+    if (dragging_) drag_value_ = slider_at(y);
 }
 
 std::optional<PanelClick> Panel::click(float x, float y) {
     if (dragging_) {
         dragging_ = false;
-        drag_value_ = slider_at(x);
+        drag_value_ = slider_at(y);
         // Clicks into a notch when released near one.
         double target = drag_value_;
         for (const double notch : {0.0, 0.5, 1.0})

@@ -7,6 +7,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <vector>
 
 namespace knockthru {
 
@@ -18,9 +19,21 @@ struct AppConfig {
     bool classic_bar_icon = false; // the dashboard bar icon in the logo colors, without Steam's tint
 };
 
-// Peaks recorded by --calibrate, per knock kind.
+// One knock kind's calibration.
+struct KindCalibration {
+    double peak = 0;           // m/s^2, the spike threshold
+    double approach = 0;       // m/s, the slowest approach that counts
+    double sensitivity = 0.5;  // the slider position, from 0 (least) to 1 (most)
+    std::vector<double> peaks, speeds; // the recorded knocks, for moving the slider later
+};
+
+// calibration.json: one entry per calibrated knock kind. Older files hold a
+// bare spike threshold per kind, which loads as `peak` alone.
 struct Calibration {
-    std::optional<double> surface, together, headset;
+    std::optional<KindCalibration> surface, together, headset;
+    std::optional<KindCalibration>& operator[](KnockKind kind) {
+        return kind == KnockKind::Surface ? surface : kind == KnockKind::Together ? together : headset;
+    }
 };
 
 // ~/.config/knockthru, or $XDG_CONFIG_HOME/knockthru. Holds config.json,

@@ -87,6 +87,16 @@ Later: a "Reset to defaults" action that deletes the saved thresholds.
 
 The existing floors stay: surface never below 50 m/s², together and headset never below 20. `docs/knock-signal.md` explains why.
 
+### Phase 2 status, 2026-10-15
+
+Robin picked "drag the line" (option 1 of two mockups) for the sensitivity step, and asked for whatever testing showed best against movement. Done on this branch:
+
+- The chart, the line, and the slider use approach speed. Each kind saves a spike threshold and an approach threshold, plus the slider position and the recorded knocks.
+- Together and headset knocks have separate thresholds.
+- `docs/knock-signal.md` ("Calibrated thresholds") has the replay results at each notch.
+
+Not done: lowering the knock count, and moving the slider later without recording again. The saved file already holds what that needs.
+
 ### Logic acceptance
 
 - `ctest` passes: no actions in `play` and `noise`, and no wrong actions in `mixed`.

@@ -343,9 +343,10 @@ int calibrate(const std::string& kind_name) {
     }
     if (!calibrator.done())
         throw std::runtime_error("Calibration stopped after " + std::to_string(calibrator.count()) + " knocks. Nothing saved.");
-    const double threshold = calibrator.save();
-    std::cout << "Weakest knock " << static_cast<int>(calibrator.weakest()) << " m/s^2. Threshold for " << kind_name
-              << " set to " << static_cast<int>(threshold) << " m/s^2 in "
+    const auto saved = calibrator.save();
+    char thresholds[96];
+    std::snprintf(thresholds, sizeof thresholds, "spike %.0f m/s^2, approach %.2f m/s", saved.peak, saved.approach);
+    std::cout << "Thresholds for " << kind_name << " set to " << thresholds << " in "
               << (knockthru::user_directory() / "calibration.json").string()
               << ". A running KnockThru picks it up within 2 s.\n";
     return 0;
@@ -566,6 +567,13 @@ struct RoomViewResult {
     bool on;
     std::string message; // empty for a plain read
 };
+
+std::string thresholds(const knockthru::KindCalibration& calibration) {
+    char line[128];
+    std::snprintf(line, sizeof line, "spike %.0f m/s^2, approach %.2f m/s, sensitivity %.2f", calibration.peak,
+        calibration.approach, calibration.sensitivity);
+    return line;
+}
 
 // The resident app. SteamVR starts it as a dashboard overlay. A double knock
 // turns Room View on or off, a triple knock switches translucent and opaque,
@@ -803,9 +811,7 @@ int run() {
                     calibration->phase = Phase::Trying;
                     calibration->trial_passed.reset();
                     detector = knockthru::KnockDetector(calibrator->trial_config(config.detector, calibration->sensitivity));
-                    log("Trying " + kind_name + " threshold " +
-                        std::to_string(static_cast<int>(knockthru::Calibrator::threshold(
-                            calibrator->kind(), calibrator->peaks(), calibration->sensitivity))) + " m/s^2");
+                    log("Trying " + kind_name + " thresholds: " + thresholds(calibrator->result(calibration->sensitivity)));
                     break;
                 case PanelCommand::AdjustCalibration:
                     if (!calibration) break;
@@ -815,9 +821,8 @@ int run() {
                 case PanelCommand::SaveCalibration:
                     if (!calibrator || !calibration || !calibration->trial_passed.value_or(false)) break;
                     try {
-                        const double threshold = calibrator->save(calibration->sensitivity);
-                        log("Calibrated " + kind_name + " knocks: threshold " + std::to_string(static_cast<int>(threshold)) +
-                            " m/s^2, sensitivity " + std::to_string(calibration->sensitivity));
+                        const auto saved = calibrator->save(calibration->sensitivity);
+                        log("Calibrated " + kind_name + " knocks: " + thresholds(saved));
                         calibrator.reset();
                         calibration.reset();
                         reload();

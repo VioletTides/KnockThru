@@ -11,6 +11,7 @@ Calibrator::Calibrator(KnockKind kind, const DetectorConfig& base, double start)
     : kind_(kind), config_(base), start_(start) {
     config_.controller_peak = std::min(config_.controller_peak, 30.0);
     config_.confirmed_peak = std::min(config_.confirmed_peak, 12.0);
+    config_.tap_peak = std::min(config_.tap_peak, 12.0);
     config_.partner_peak = std::min(config_.partner_peak, 8.0);
     config_.enabled = {true, true, true};
 }
@@ -54,37 +55,44 @@ double Calibrator::weakest() const {
 
 double Calibrator::floor(KnockKind kind) { return kind == KnockKind::Surface ? 50.0 : 20.0; }
 
-double Calibrator::threshold(KnockKind kind, const std::vector<double>& peaks, double sensitivity) {
+double Calibrator::peak_threshold(KnockKind kind, const std::vector<double>& peaks) {
     if (peaks.empty()) throw std::logic_error("No knocks recorded");
-    // From 80 percent of the weakest knock at the least sensitive end to 40 percent at the most.
-    const double fraction = 0.8 - 0.4 * std::clamp(sensitivity, 0.0, 1.0);
-    return std::clamp(fraction * *std::min_element(peaks.begin(), peaks.end()), floor(kind), 150.0);
+    return std::clamp(0.6 * *std::min_element(peaks.begin(), peaks.end()), floor(kind), 150.0);
 }
 
-namespace {
-
-std::optional<double>& slot(Calibration& calibration, KnockKind kind) {
-    return kind == KnockKind::Surface ? calibration.surface
-        : kind == KnockKind::Together ? calibration.together : calibration.headset;
+double Calibrator::approach_threshold(const std::vector<double>& speeds, double sensitivity) {
+    if (speeds.empty()) throw std::logic_error("No knocks recorded");
+    auto sorted = speeds;
+    std::sort(sorted.begin(), sorted.end());
+    // The second slowest, so one odd knock does not set the threshold alone.
+    const double slow = sorted[std::min<std::size_t>(1, sorted.size() - 1)];
+    return slow * (0.8 - 0.5 * std::clamp(sensitivity, 0.0, 1.0));
 }
 
-} // namespace
+KindCalibration Calibrator::result(double sensitivity) const {
+    KindCalibration out;
+    out.peak = peak_threshold(kind_, peaks_);
+    out.approach = approach_threshold(speeds_, sensitivity);
+    out.sensitivity = sensitivity;
+    out.peaks = peaks_;
+    out.speeds = speeds_;
+    return out;
+}
 
 DetectorConfig Calibrator::trial_config(const DetectorConfig& base, double sensitivity) const {
     DetectorConfig config = base;
     Calibration only;
-    slot(only, kind_) = threshold(kind_, peaks_, sensitivity);
+    only[kind_] = result(sensitivity);
     apply_calibration(only, config);
     config.enabled = {true, true, true};
     return config;
 }
 
-double Calibrator::save(double sensitivity) const {
-    const double value = threshold(kind_, peaks_, sensitivity);
+KindCalibration Calibrator::save(double sensitivity) const {
     auto calibration = load_calibration();
-    slot(calibration, kind_) = value;
+    calibration[kind_] = result(sensitivity);
     save_calibration(calibration);
-    return value;
+    return *calibration[kind_];
 }
 
 } // namespace knockthru
