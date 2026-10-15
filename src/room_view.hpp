@@ -17,8 +17,9 @@ public:
     // Clicks the Room View button and returns the new state.
     bool toggle() const;
 
-    // Adds a style to the bar page that draws the thumbnail of `overlay_key` in the
-    // text color of its bar button, so it lightens on hover like Steam's own icons.
+    // Adds a style to the bar page that multiplies the thumbnail of `overlay_key` by the
+    // text color of its bar button, so it dims when idle and lightens on hover like
+    // Steam's own icons, while keeping its colors.
     // The style stays until the page reloads. Adding it again replaces it.
     void tint_icon(const std::string& overlay_key) const;
 
