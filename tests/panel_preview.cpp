@@ -34,7 +34,7 @@ void calibration(const std::filesystem::path& out, const PanelState& idle) {
     panel.render(idle, std::nullopt, 10);
     panel.click(1050, 620); // Calibrate on the main screen
     shot(panel, idle, 10.6, out / "calibrate-1-pick.png", std::make_pair(600.0f, 400.0f));
-    frames(panel, idle, out, "pick", 20, 2);
+    frames(panel, idle, out, "pick", 20.8, 2.6);
     panel.click(600, 400); // the surface card
     shot(panel, idle, 30.6, out / "calibrate-2-learn.png");
     frames(panel, idle, out, "learn", 40, 2);

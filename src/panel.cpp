@@ -267,17 +267,17 @@ void Panel::knock_scene(KnockKind kind, Rect box, float t, int taps) {
     }
 }
 
-// Step 1: three cards, each knocking once on a loop.
+// Step 1: three cards, each knocking twice on a loop, as knocks work outside calibration.
 void Panel::pick_screen(const PanelState& state) {
     button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Main);
     canvas_.text(bold_, "Calibrate", kMargin + 172, 68, 38, kText);
     steps(1);
     canvas_.text(regular_, "Which knock gets missed? Pick one to tune.", kMargin, 160, 28, kDim);
-    const float t = static_cast<float>(std::fmod(now_, 2.0));
+    const float t = static_cast<float>(std::fmod(now_, 2.6));
     for (int k = 0; k < 3; ++k) {
         const Rect card{kMargin + k * 384.0f, 200, 352, 340};
         canvas_.rounded_rect(card, kRadius, hovered(card) ? kSurfaceHover : kSurface);
-        knock_scene(static_cast<KnockKind>(k), {card.x + 16, card.y + 16, card.w - 32, 240}, t, 1);
+        knock_scene(static_cast<KnockKind>(k), {card.x + 16, card.y + 16, card.w - 32, 240}, t, 2);
         canvas_.text(bold_, kKindTitles[k], card.x + card.w / 2, card.y + 296, 28, kText, Align::Center);
         targets_.push_back({card, std::nullopt, Screen::Learn, static_cast<KnockKind>(k)});
     }
