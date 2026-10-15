@@ -45,11 +45,11 @@ Then the render loop:
 
 ### Wizard steps
 
-1. **Pick a kind.** Three cards, each with a short looping animation of that knock, ported from `knock_kinds()`.
-2. **Show how.** One screen per kind with the single-knock animation large. The instruction says "one knock, then wait" in plain words. Ask for a normal knock, not the softest one.
-3. **Record.** A pacing cue (a ring that fills over about a second) shows when the next knock can come. Each counted knock pops a dot and pulses a ring. A live strength bar shows each knock's peak against the current threshold. A knock of the wrong kind gets a hint ("That looked like a surface knock") instead of silence.
-4. **Review.** Plot the recorded peaks with the threshold line. The sensitivity slider sits under the plot, and the line moves as the slider moves.
-5. **Try it.** This step is required before saving. The user does one double knock at the chosen threshold. The panel shows whether it would have toggled passthrough, without toggling it. A pass unlocks Save. A miss offers to raise sensitivity or redo the recording.
+1. **Pick a kind:** three cards, each with a short looping animation of that knock, ported from `knock_kinds()`.
+2. **Show how:** one screen per kind with the single-knock animation large. The instruction says "one knock, then wait" in plain words. Ask for a normal knock, not the softest one.
+3. **Record:** a pacing cue (a ring that fills over about a second) shows when the next knock can come. Each counted knock pops a dot and pulses a ring. A live strength bar shows each knock's peak against the current threshold. A knock of the wrong kind gets a hint ("That looked like a surface knock") instead of silence.
+4. **Review:** plot the recorded peaks with the threshold line. The sensitivity slider sits under the plot, and the line moves as the slider moves.
+5. **Try it:** this step is required before saving. The user does one double knock at the chosen threshold. The panel shows whether it would have toggled passthrough, without toggling it. A pass unlocks Save. A miss offers to raise sensitivity or redo the recording.
 
 ### Sensitivity slider
 
@@ -102,12 +102,13 @@ Not done: lowering the knock count.
 ### Logic acceptance
 
 - `ctest` passes: no actions in `play` and `noise`, and no wrong actions in `mixed`.
-- A new host test feeds peaks from the recordings into `Calibrator` and checks the saved threshold at each notch.
+- A host test calibrates each kind on its recording, applies the saved thresholds, and replays every recording.
 - `mixed` still sorts together and headset knocks correctly with the split thresholds.
 - `--calibrate` on the command line keeps working with the new logic.
 
 ## Decisions
 
-- Sensitivity is a slider with notches at minimum, middle, and maximum that the knob snaps to.
+- No sensitivity slider. The approach threshold is 55 percent of the second slowest recorded knock (see "Phase 2 status").
 - The "Try it" step is required before saving.
 - Together and headset knocks get separate thresholds.
+- Recording opens with a 3 s get-ready ring, and each knock must wait for the 1 s pacing ring.

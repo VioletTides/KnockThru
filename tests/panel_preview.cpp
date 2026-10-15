@@ -54,6 +54,13 @@ void calibration(const std::filesystem::path& out, const PanelState& idle) {
     state.calibration->ignored = KnockKind::Together;
     state.calibration->ignored_t = 51.5;
     shot(panel, state, 51.8, out / "calibrate-3-record-hint.png");
+    // The get-ready ring after Start, with a knock that came too soon.
+    PanelState ready = state;
+    ready.calibration->peaks.clear();
+    ready.calibration->speeds.clear();
+    ready.calibration->started_t = 55;
+    ready.calibration->too_soon_t = 55.8;
+    shot(panel, ready, 56.2, out / "calibrate-3-record-ready.png");
 
     // Robin's surface calibration on the Frame, 2026-10-15, with its one too-light knock raised to 64.
     view.peaks = {80, 401, 115, 342, 446, 91, 57, 234, 64, 147};
@@ -70,8 +77,10 @@ void calibration(const std::filesystem::path& out, const PanelState& idle) {
     shot(panel, state, 75.6, out / "calibrate-4-try-pass.png");
 
     state.calibration.reset();
-    state.calibration_saved = true;
+    state.calibration_saved = KnockKind::Surface;
     shot(panel, state, 80, out / "calibrate-saved.png");
+    state.enabled[static_cast<int>(KnockKind::Surface)] = false;
+    shot(panel, state, 81, out / "calibrate-saved-kind-off.png");
 }
 
 int main(int argc, char** argv) {

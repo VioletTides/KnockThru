@@ -34,9 +34,8 @@ constexpr float kRadius = 16;
 constexpr float kMargin = 40;
 
 constexpr const char* kKindTitles[3] = {"Controllers together", "Controller on a surface", "Tap on the headset"};
-constexpr const char* kKindOnce[3] = {"Tap the controllers together once.",
-                                      "Knock one controller on a table or wall once.",
-                                      "Tap the side of the headset once with a controller."};
+constexpr const char* kKindOnce[3] = {"Tap the controllers together.", "Knock one controller on a table or wall.",
+                                      "Tap the side of the headset with a controller."};
 constexpr const char* kKindNames[3] = {"a together knock", "a surface knock", "a headset tap"};
 
 Color faded(Color color, float alpha) {
@@ -278,6 +277,12 @@ void Panel::pick_screen(const PanelState& state) {
     const float t = static_cast<float>(std::fmod(now_, 2.6));
     // The cards fill the panel, and make room when the Saved banner shows.
     const bool banner = state.calibration_saved && !saved_dismissed_;
+    // A saved kind that is turned off, or KnockThru paused, would leave knocks doing nothing.
+    const int saved = state.calibration_saved ? static_cast<int>(*state.calibration_saved) : 0;
+    const std::string saved_note = !banner ? ""
+        : state.paused ? "KnockThru is off. Turn it on from the main screen to use knocks."
+        : !state.enabled[saved] ? std::string(kKindTitles[saved]) + " is off. Turn it on from the main screen."
+        : "KnockThru now listens for knocks like the ones you tried.";
     const float card_h = banner ? 420 : 560;
     for (int k = 0; k < 3; ++k) {
         const Rect card{kMargin + k * 384.0f, 128, 352, card_h};
@@ -290,8 +295,8 @@ void Panel::pick_screen(const PanelState& state) {
         const Rect done{kMargin, 572, kWidth - 2 * kMargin, 120};
         canvas_.rounded_rect(done, kRadius, kActive);
         canvas_.text(bold_, "Saved", done.x + 32, done.y + done.h / 2 - 20, 38, kText);
-        canvas_.text(regular_, "KnockThru now listens for knocks like the ones you tried.", done.x + 32,
-            done.y + done.h / 2 + 24, 26, kText);
+        canvas_.text(regular_, canvas_.fit(regular_, saved_note, 26, done.w - 260), done.x + 32, done.y + done.h / 2 + 24,
+            26, kText);
         button({done.x + done.w - 32 - 170, done.y + 30, 170, 60}, "Done", std::nullopt, Screen::Main, true);
     } else if (state.message_is_error) {
         message(state, 730);
@@ -309,9 +314,10 @@ void Panel::learn_screen(const PanelState& state) {
     knock_scene(learn_kind_, {box.x + 30, box.y + 60, box.w - 60, 440}, static_cast<float>(std::fmod(now_, 2.0)), 1);
 
     const float x = box.x + box.w + 48, w = kWidth - kMargin - x;
-    canvas_.text(bold_, "Knock once, then wait.", x, 190, 36, kText);
+    canvas_.text(bold_, "Wait for the ring, then knock once.", x, 190, 36, kText);
     float y = 250;
-    for (const std::string& line : {std::string(kKindOnce[k]), std::string("Hold still for a second before each knock."),
+    for (const std::string& line : {std::string(kKindOnce[k]),
+                                   std::string("Hold still while the ring fills."),
                                    std::string("Do it 10 times. One buzz means it counted."),
                                    std::string("Knock as hard as you would to switch passthrough.")}) {
         for (const auto& part : canvas_.wrap(regular_, line, 28, w, 2)) {
@@ -335,7 +341,7 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
     canvas_.rounded_rect(box, kRadius, kSurface);
     knock_scene(view.kind, {box.x + 20, box.y + 40, box.w - 40, 340}, static_cast<float>(std::fmod(now_, 2.0)), 1);
     canvas_.text(bold_, kKindTitles[k], box.x + box.w / 2, box.y + 440, 28, kText, Align::Center);
-    canvas_.text(regular_, "Knock once, then wait", box.x + box.w / 2, box.y + 486, 26, kDim, Align::Center);
+    canvas_.text(regular_, "Wait for the ring, then knock once", box.x + box.w / 2, box.y + 486, 26, kDim, Align::Center);
 
     const float x = box.x + box.w + 48;
     const int count = static_cast<int>(view.peaks.size());

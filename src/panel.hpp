@@ -44,7 +44,7 @@ struct PanelState {
     std::string app_key, app_name;   // the running game, empty when none
     bool app_blocked = false;
     std::optional<CalibrationView> calibration;
-    bool calibration_saved = false;  // the last calibration just saved
+    std::optional<KnockKind> calibration_saved; // the kind the last calibration just saved
     std::string message;
     bool message_is_error = false;
 };
@@ -68,7 +68,7 @@ struct PanelClick {
 };
 
 // The KnockThru dashboard panel, drawn into an RGBA image. It has a main
-// screen, a settings screen, and a calibration walkthrough in five steps:
+// screen, a settings screen, and a calibration walkthrough in four steps:
 // pick a kind, learn the knock, record, and try it.
 class Panel {
 public:

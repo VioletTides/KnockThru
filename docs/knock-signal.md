@@ -95,7 +95,7 @@ Approach speed also shows how hard a knock was more steadily than the spike. The
 
 ## Calibrated thresholds
 
-Each calibrated knock kind gets two thresholds. Together and headset knocks have their own spike thresholds (`confirmed_peak` and `tap_peak`), so calibrating one no longer changes the other.
+Each calibrated knock kind gets two thresholds. Together and headset knocks have their own spike thresholds (`confirmed_peak` and `tap_peak`), so calibrating one does not change the other.
 
 - The spike threshold is 60 percent of the weakest recorded spike, at least 50 m/s² for surface knocks and 20 for together and headset knocks.
 - The approach threshold (`min_approach`) is 55 percent of the second slowest recorded approach. An earlier build had a sensitivity slider from 30 to 80 percent. In the replays, anything stricter than 55 percent only lost real doubles. 30 percent matched 55 percent on surface and headset knocks and did a little better on together knocks (22 against 20 right in `mixed`), but it leaves less margin against movement that the recordings lack. The walkthrough uses 55 percent and has no slider.

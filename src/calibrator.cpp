@@ -49,6 +49,7 @@ void Calibrator::finish_burst() {
         peaks_.push_back(best.peak);
         speeds_.push_back(best.approach_speed);
     }
+    ++heard_[static_cast<int>(heard)];
     results_.push_back({heard, best});
 }
 

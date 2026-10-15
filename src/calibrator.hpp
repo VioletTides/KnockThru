@@ -3,6 +3,7 @@
 #include "config.hpp"
 #include "knock_detector.hpp"
 
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -50,6 +51,7 @@ public:
     // the last counted knock ran out. TooLight is a deliberate knock of this
     // kind whose spike falls under floor().
     enum class Heard { Counted, OtherKind, TooSoon, TooLight, Ignored };
+    static constexpr int kHeardKinds = 5;
     struct Result {
         Heard heard;
         Knock knock; // the burst's knock with the fastest approach
@@ -70,6 +72,8 @@ public:
     int count() const { return static_cast<int>(peaks_.size()); }
     bool done() const { return count() >= kWanted; }
     double seconds_left(double now) const;
+    // How many finished bursts ended each way, for the log.
+    int heard(Heard heard) const { return heard_[static_cast<int>(heard)]; }
     double weakest() const;
     const std::vector<double>& peaks() const { return peaks_; }
     const std::vector<double>& speeds() const { return speeds_; } // approach speeds, m/s
@@ -99,6 +103,7 @@ private:
     bool burst_quiet_ = false;     // nothing came in the kQuietBefore before the burst
     double last_heard_ = -1e9;     // the last knock of the previous burst
     double last_counted_ = -1e9;   // the last counted knock
+    std::array<int, kHeardKinds> heard_{};
     std::vector<Result> results_;  // finished bursts, oldest first
 
     void finish_burst();
