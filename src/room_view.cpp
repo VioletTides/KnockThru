@@ -184,7 +184,11 @@ bool RoomView::toggle() const {
     throw std::runtime_error("Clicked Room View, but its state did not change");
 }
 
-void RoomView::tint_icon(const std::string& overlay_key) const {
+void RoomView::tint_icon(const std::string& overlay_key, bool tint) const {
+    if (!tint) {
+        evaluate("(() => { document.getElementById('knockthru-icon')?.remove(); return 'ok'; })()");
+        return;
+    }
     // A layer over the thumbnail, cut to its shape, multiplies it by currentColor. The
     // layer is the ::after of the img's parent, because an img has no pseudo-elements.
     const auto url = "https://steamloopback.host/overlays/thumbnail?key=" + overlay_key;

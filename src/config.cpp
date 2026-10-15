@@ -60,6 +60,9 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
         } else if (key == "paused") {
             if (!value.is_boolean()) fail("paused must be true or false");
             config.paused = value.get<bool>();
+        } else if (key == "classic_bar_icon") {
+            if (!value.is_boolean()) fail("classic_bar_icon must be true or false");
+            config.classic_bar_icon = value.get<bool>();
         } else if (key == "debug_port") {
             if (!value.is_number_integer()) fail("debug_port must be a whole number");
             config.debug_port = value.get<int>();
@@ -117,6 +120,8 @@ void update_user_config(const std::string& key, const json& value) {
 } // namespace
 
 void save_paused(bool paused) { update_user_config("paused", paused); }
+
+void save_classic_bar_icon(bool classic) { update_user_config("classic_bar_icon", classic); }
 
 void save_knock_types(const std::array<bool, 3>& enabled) {
     json kinds = json::array();

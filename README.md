@@ -41,6 +41,7 @@ Put your settings in `~/.config/knockthru/config.json`. This file survives updat
 - `knock_types`: which knock kinds count. The default is all three.
 - `blocked_apps`: SteamVR app keys where knocks do nothing. Run `knockthru --current-app` while a game runs to get its key.
 - `debug_port`: the CEF Remote Debugging port. The default is 8080.
+- `classic_bar_icon`: `true` shows the dashboard bar icon in the logo colors. The default `false` shows the logo in grey, and white on hover, like Steam's own icons.
 
 ## Calibration
 
