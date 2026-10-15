@@ -263,7 +263,9 @@ def hero(panel_dir):
     on = ("on", "Your room appears", "Passthrough on, see-through style.")
     knock_style = ("on", "Knock three times", "Switch the style.")
     opaque = ("opaque", "Only the room", "Opaque style hides the game.")
-    knock_off = ("opaque", "Knock twice", "Back to the game.")
+    knock_back = ("opaque", "Knock three times", "Switch back.")
+    see_through = ("on", "See-through again", "Passthrough on, see-through style.")
+    knock_off = ("on", "Knock twice", "Back to the game.")
 
     def knock_scene(before, state, after, taps, buzzes, hold):
         scene(state, knock_times(taps)[-1] + WAIT + hold, after, taps, buzzes, before)
@@ -271,8 +273,10 @@ def hero(panel_dir):
     scene(off, 1.0)
     knock_scene(off, knock_on, on, 2, 1, 1.8)
     knock_scene(on, knock_style, opaque, 3, 2, 1.8)
-    # The last knock returns to the opening frame, so the loop has no cut.
-    knock_scene(opaque, knock_off, off, 2, 1, 1.0)
+    knock_scene(opaque, knock_back, see_through, 3, 2, 1.8)
+    # The last knock returns to the opening frame, so the loop has no cut. Each knock
+    # changes one thing: two knocks only turn passthrough on or off, three only switch the style.
+    knock_scene(see_through, knock_off, off, 2, 1, 1.0)
     write_gif(frames, IMAGES / "hero.gif")
 
 
