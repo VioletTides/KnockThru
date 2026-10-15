@@ -4,6 +4,7 @@
 #include "overlay_texture.hpp"
 #include "panel.hpp"
 #include "room_view.hpp"
+#include "sound.hpp"
 #include "style.hpp"
 
 #include <json.hpp>
@@ -642,10 +643,15 @@ int run() {
         });
         return true;
     };
+    const auto play = [&](knockthru::Sound sound) {
+        if (config.sounds) knockthru::play(sound);
+    };
+    const auto play_switch = [&](bool on) { play(on ? knockthru::Sound::SwitchOn : knockthru::Sound::SwitchOff); };
     const auto toggle_style = [&](const std::string& why) {
         try {
             const auto style = knockthru::toggle_style();
             state.opaque = style == knockthru::RoomViewStyle::Opaque;
+            play_switch(style == knockthru::RoomViewStyle::Opaque);
             show(std::string("Style ") + knockthru::to_string(style) + why);
             return true;
         } catch (const std::exception& error) {
@@ -730,18 +736,25 @@ int run() {
                 case PanelCommand::RoomView: toggle_room_view(""); break;
                 case PanelCommand::Style: toggle_style(""); break;
                 case PanelCommand::Pause:
-                    if (save([&] { knockthru::save_paused(!config.paused); }))
+                    if (save([&] { knockthru::save_paused(!config.paused); })) {
+                        play_switch(!config.paused);
                         show(config.paused ? "KnockThru off" : "KnockThru on");
+                    }
                     break;
                 case PanelCommand::BarIcon:
-                    if (save([&] { knockthru::save_classic_bar_icon(!config.classic_bar_icon); }))
+                    if (save([&] { knockthru::save_classic_bar_icon(!config.classic_bar_icon); })) {
+                        play_switch(config.classic_bar_icon);
                         show(config.classic_bar_icon ? "Classic bar icon on" : "Classic bar icon off");
+                    }
                     break;
                 case PanelCommand::Kind: {
                     auto enabled = config.detector.enabled;
                     enabled[static_cast<int>(click.kind)] = !enabled[static_cast<int>(click.kind)];
-                    if (save([&] { knockthru::save_knock_types(enabled); }))
-                        show(kind_name + " knocks " + (config.detector.enabled[static_cast<int>(click.kind)] ? "on" : "off"));
+                    if (save([&] { knockthru::save_knock_types(enabled); })) {
+                        const bool on = config.detector.enabled[static_cast<int>(click.kind)];
+                        play_switch(on);
+                        show(kind_name + " knocks " + (on ? "on" : "off"));
+                    }
                     break;
                 }
                 case PanelCommand::BlockApp: {
@@ -749,11 +762,15 @@ int run() {
                     auto blocked = config.blocked_apps;
                     if (!blocked.erase(state.app_key)) blocked.insert(state.app_key);
                     const auto name = state.app_name.empty() ? state.app_key : state.app_name;
-                    if (save([&] { knockthru::save_blocked_apps(blocked); }))
-                        show(std::string("Knocks ") + (config.blocked_apps.count(state.app_key) ? "off" : "on") + " in " + name);
+                    if (save([&] { knockthru::save_blocked_apps(blocked); })) {
+                        const bool on = !config.blocked_apps.count(state.app_key);
+                        play_switch(on);
+                        show(std::string("Knocks ") + (on ? "on" : "off") + " in " + name);
+                    }
                     break;
                 }
                 case PanelCommand::Calibrate: {
+                    play(knockthru::Sound::Button);
                     calibrator.emplace(click.kind, config.detector, t);
                     detector = knockthru::KnockDetector(calibrator->detector_config());
                     calibration.emplace();
@@ -765,6 +782,7 @@ int run() {
                     break;
                 }
                 case PanelCommand::CancelCalibration:
+                    play(knockthru::Sound::Button);
                     if (calibrator && calibration && calibration->phase == Phase::Recording)
                         log(heard_summary(*calibrator));
                     calibrator.reset();
@@ -774,6 +792,7 @@ int run() {
                     break;
                 case PanelCommand::SaveCalibration:
                     if (!calibrator || !calibration || !calibration->trial_passed.value_or(false)) break;
+                    play(knockthru::Sound::Button);
                     try {
                         const auto saved = calibrator->save();
                         log("Calibrated " + kind_name + " knocks: " + thresholds(saved));
@@ -869,6 +888,7 @@ int run() {
             room_view_job_toggles = false;
             try {
                 const auto result = room_view_job.get();
+                if (toggled) play_switch(result.on);
                 if (state.room_view != result.on && panel) panel->invalidate();
                 state.room_view = result.on;
                 state.room_view_error.clear();

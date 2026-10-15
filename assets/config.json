@@ -2,5 +2,6 @@
   "_about": "Defaults. Put your own settings in ~/.config/knockthru/config.json, which survives updates.",
   "knock_types": ["together", "surface", "headset"],
   "blocked_apps": [],
-  "debug_port": 8080
+  "debug_port": 8080,
+  "sounds": true
 }

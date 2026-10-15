@@ -15,6 +15,7 @@ sources=(
     src/knock_detector.cpp
     src/room_view.cpp
     src/style.cpp
+    src/sound.cpp
     src/config.cpp
     src/calibrator.cpp
     src/canvas.cpp
