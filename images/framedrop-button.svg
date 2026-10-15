@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="46" viewBox="0 0 260 46"><rect x="0.5" y="0.5" width="259" height="45" fill="#080809" stroke="#e6b54a"/><svg x="10" y="8" xmlns="http://www.w3.org/2000/svg" viewBox="24 11 40 40" width="28" height="28" fill="none" aria-hidden="true">
+    <path d="M58 23V48H26V42" stroke="#e6b54a" stroke-width="2.5" stroke-linejoin="miter"/>
+    <path d="M56 16H41" stroke="#c41e3a" stroke-width="2.5"/>
+    <path d="M41 16H26V20" stroke="#cb3c3d" stroke-width="2.5" stroke-linejoin="miter"/>
+    <path d="M26 20V26" stroke="#d25d41" stroke-width="2.5"/>
+    <path d="M26 26V32" stroke="#d97c44" stroke-width="2.5"/>
+    <path d="M26 32V37" stroke="#df9747" stroke-width="2.5"/>
+    <path d="M26 37V42" stroke="#e3a949" stroke-width="2.5"/>
+    <rect x="55" y="13" width="6" height="6" fill="#c41e3a"/>
+  </svg><text x="48" y="28" fill="#e6b54a" font-family="ui-monospace,monospace" font-size="13" font-weight="600" letter-spacing="0.78">INSTALL WITH FRAMEDROP</text></svg>

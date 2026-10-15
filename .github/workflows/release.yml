@@ -1,0 +1,42 @@
+# On a v* tag: run the detector tests, build for the Steam Frame, and attach
+# the ZIP and FrameDrop manifest to a GitHub release.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test the detector
+        run: |
+          cmake -S . -B build
+          cmake --build build --target detector_test --parallel
+          ctest --test-dir build --output-on-failure
+
+      - name: Install Zig 0.16.0
+        run: |
+          curl -sSfL -o zig.tar.xz https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+          echo "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00  zig.tar.xz" | sha256sum -c
+          mkdir zig && tar -xf zig.tar.xz -C zig --strip-components=1
+          echo "$PWD/zig" >> "$GITHUB_PATH"
+
+      - name: Build for the Steam Frame
+        run: KNOCKTHRU_VERSION="${GITHUB_REF_NAME#v}" scripts/build-arm64.sh
+
+      - name: Package
+        run: |
+          node scripts/package.mjs --build-dir build-arm64 --version "${GITHUB_REF_NAME#v}" \
+            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "KnockThru ${GITHUB_REF_NAME}" --generate-notes

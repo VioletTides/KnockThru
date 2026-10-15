@@ -1,0 +1,7 @@
+* text=auto
+*.sh text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.cpp text eol=lf
+*.hpp text eol=lf
+

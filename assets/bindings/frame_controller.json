@@ -1,0 +1,20 @@
+{
+  "action_manifest_version": 1,
+  "alias_info": {},
+  "app_key": "local.knockthru",
+  "bindings": {
+    "/actions/knockthru": {
+      "chords": [],
+      "haptics": [
+        { "output": "/actions/knockthru/out/haptic_left", "path": "/user/hand/left/output/haptic" },
+        { "output": "/actions/knockthru/out/haptic_right", "path": "/user/hand/right/output/haptic" }
+      ],
+      "poses": [],
+      "skeleton": [],
+      "sources": []
+    }
+  },
+  "controller_type": "frame_controller",
+  "description": "Knock feedback on both controllers",
+  "name": "KnockThru default"
+}

@@ -1,0 +1,5 @@
+/build*/
+/dist/
+/.zig-cache/
+*.log
+/compile_commands.json
