@@ -199,8 +199,11 @@ void Canvas::arc(float cx, float cy, float inner, float outer, float from, float
             const float r = std::sqrt(dx * dx + dy * dy);
             float coverage = clamp01(outer - r + 0.5f) * (inner > 0 ? clamp01(r - inner + 0.5f) : 1.0f);
             if (!full) {
+                // Brings the angle into one turn starting at `from`, so arcs that
+                // reach past -pi or pi draw whole.
                 float angle = std::atan2(dy, dx);
                 while (angle < from) angle += 6.2831853f;
+                while (angle >= from + 6.2831853f) angle -= 6.2831853f;
                 const float outside = std::min(angle - from, to - angle);
                 // Round the arc ends by softening a few pixels past each end.
                 coverage *= clamp01(outside * r + 0.5f);
