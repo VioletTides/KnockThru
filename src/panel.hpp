@@ -50,8 +50,9 @@ public:
     // Row 0 is the top. Switching screens happens here and returns nothing.
     std::optional<PanelClick> click(float x, float y);
 
-    // Draws the KnockThru icon to fill a square canvas.
-    static void draw_icon(Canvas& canvas);
+    // Draws the KnockThru icon to fill a square canvas. Without `tile`, it draws the mark alone
+    // in one grey on transparency, as large as fits, for the dashboard bar.
+    static void draw_icon(Canvas& canvas, bool tile = true);
 
 private:
     enum class Screen { Main, Calibrate };

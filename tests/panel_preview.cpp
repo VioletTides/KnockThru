@@ -47,5 +47,7 @@ int main(int argc, char** argv) {
     Canvas icon(256, 256);
     Panel::draw_icon(icon);
     icon.write_png(out / "icon.png");
+    Panel::draw_icon(icon, false);
+    icon.write_png(out / "icon-dashboard.png");
     std::cout << "Wrote panel previews to " << out << "\n";
 }
