@@ -73,7 +73,8 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
                 {"controller_peak", &d.controller_peak}, {"confirmed_peak", &d.confirmed_peak},
                 {"partner_peak", &d.partner_peak}, {"headset_peak", &d.headset_peak}, {"headset_knock_peak", &d.headset_knock_peak},
                 {"max_speed_after", &d.max_speed_after}, {"surface_speed_after", &d.surface_speed_after},
-                {"max_speed_before", &d.max_speed_before}, {"together_distance", &d.together_distance},
+                {"max_speed_before", &d.max_speed_before}, {"surface_speed_before", &d.surface_speed_before},
+                {"together_distance", &d.together_distance},
                 {"same_spot", &d.same_spot}, {"merge_s", &d.merge_s}, {"min_gap_s", &d.min_gap_s}, {"fast_gap_s", &d.fast_gap_s},
                 {"max_gap_s", &d.max_gap_s}, {"quiet_before_s", &d.quiet_before_s}};
             if (!value.is_object()) fail("detector must be an object");
