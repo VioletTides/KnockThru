@@ -13,15 +13,15 @@ Knock twice to see your room without taking off your Steam Frame. Knock three ti
 
 3. Open **Library → Non-Steam** and launch **KnockThru** once.
 
-From now on KnockThru starts with SteamVR and runs in the background.
+From now on KnockThru starts with SteamVR and runs in the background. The first time you open the KnockThru tab in the SteamVR dashboard, a short tour helps you pick your knocks, calibrate them, and try a double and a triple knock.
 
-To pause knocks, turn off **Knocks** in the [dashboard tab](#the-dashboard-tab). To remove KnockThru, run `<install folder>/knockthru --uninstall` over SSH, then delete the install folder. Your settings stay in `~/.config/knockthru` until you delete that folder too.
+To pause knocks, turn off the **KnockThru On** switch at the top of the [dashboard tab](#the-dashboard-tab). To clear your settings and calibration, use **Factory reset** in Settings. To remove KnockThru, run `<install folder>/knockthru --uninstall` over SSH, then delete the install folder. Your settings stay in `~/.config/knockthru` until you delete that folder too.
 
 ## How to knock
 
 Any of these three knocks works. Use the same kind for every knock in a set.
 
-![Three ways to knock: tap the controllers together, tap one controller on a table, or tap the headset. Each one knocks twice, then three times](images/knock-kinds.gif)
+![Three ways to knock: knock the controllers together, knock one controller on a table, or knock on the headset. Each one knocks twice, then three times](images/knock-kinds.gif)
 
 Pause for a moment, then knock at a steady pace. After your last knock, KnockThru waits a moment in case another one follows.
 
@@ -33,6 +33,8 @@ Pause for a moment, then knock at a steady pace. After your last knock, KnockThr
 | Three times | The room switches between see-through and solid | Two buzzes |
 | Four or more times, or mixed kinds | Nothing, so steady clapping does not set it off | Nothing |
 
+You also hear a click. Steam clicks when passthrough turns on or off, and KnockThru clicks when the style switches. To turn off KnockThru's click, use **Sounds** in Settings.
+
 Three buzzes mean something went wrong. See [Something not working?](#something-not-working) below.
 
 ## The dashboard tab
@@ -41,16 +43,26 @@ Open the SteamVR dashboard and pick the **KnockThru** tab to do everything by ha
 
 ![The KnockThru dashboard tab](images/dashboard.png)
 
-- **Passthrough**: turns Room View on or off.
-- **Style**: **Translucent** shows the room through your game. **Opaque** shows only the room.
-- **Knocks**: turns knocking off for a while without quitting the app.
-- **Count these knocks**: picks which of the three knock kinds count.
-- **Knocks in** your game: turns knocks off in just the game you're playing, for games where you hit things on purpose.
-- **Calibrate**: teaches KnockThru how hard you knock. Pick a knock kind, then knock 10 times, about 1 s apart.
+- **Passthrough** and **Style**: switch Room View by hand. **Translucent** shows the room through your game. **Opaque** shows only the room.
+- **KnockThru On**: turns knocking off for a while without quitting the app.
+- **Controllers together**, **Controller on a surface**, **Knock on the headset**: pick which knock kinds count.
+- **Knocks in** your game: turns knocks off in just the game you're playing, for games where you knock things on purpose.
+- **Settings**: Calibrate, Sounds, Classic bar icon, Guided tour, and Factory reset.
+
+## Calibrate
+
+If soft knocks get missed, calibrate that knock kind. Open **Settings** in the KnockThru tab and press **Calibrate**.
+
+![Calibrating a surface knock: pick the kind, read how to knock, knock 10 times while the bars fill, then knock twice to try it and save](images/calibrate.gif)
+
+1. Pick the knock kind to calibrate.
+2. Read how to knock it, then press **Start**.
+3. Wait for the ring, then knock once. Do it 10 times. One buzz means a knock counted.
+4. Knock twice to try the new calibration. If it works, press **Save**.
 
 ## Something not working?
 
-- **Soft knocks don't register.** Open the dashboard tab and press **Calibrate**.
+- **Soft knocks don't register.** [Calibrate](#calibrate) that knock kind.
 - **Three buzzes after a knock.** KnockThru heard you but could not change Room View. The usual cause is that **CEF Remote Debugging** is off. Turn it back on in the Frame's Developer settings. The dashboard tab also shows the reason.
 - **Knocks do nothing in one game.** Check the **Knocks in** switch for that game in the dashboard tab.
 
