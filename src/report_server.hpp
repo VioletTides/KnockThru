@@ -31,7 +31,9 @@ std::string report_page(const std::string& report, const std::string& issue_link
 // ports 1024 to 65535, and the kernel picks the port from that range.
 class ReportServer {
 public:
-    // Throws if there is no network or the socket cannot listen.
+    // `report` is the whole report. The page's copy button gets it shortened to fit
+    // a GitHub issue, and the downloads get it whole. Throws if there is no
+    // network or the socket cannot listen.
     ReportServer(std::string report, std::string issue_link);
     ~ReportServer();
     ReportServer(const ReportServer&) = delete;

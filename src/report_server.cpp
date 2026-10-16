@@ -1,5 +1,7 @@
 #include "report_server.hpp"
 
+#include "report.hpp"
+
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -9,6 +11,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
 #include <fstream>
@@ -48,9 +51,16 @@ std::string default_interface() {
     return "";
 }
 
-void send_all(int fd, const std::string& data) {
+// Sends in waits of at most 200 ms, so a phone that stops reading never holds the
+// server past `stop`, which Done sets, or past 30 s in all.
+void send_all(int fd, const std::atomic<bool>& stop, const std::string& data) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     for (std::size_t sent = 0; sent < data.size();) {
-        const auto n = ::send(fd, data.data() + sent, data.size() - sent, MSG_NOSIGNAL);
+        if (stop || std::chrono::steady_clock::now() > deadline) return;
+        pollfd ready{fd, POLLOUT, 0};
+        if (::poll(&ready, 1, 200) <= 0) continue;
+        const auto n = ::send(fd, data.data() + sent, data.size() - sent, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
         if (n <= 0) return;
         sent += static_cast<std::size_t>(n);
     }
@@ -266,12 +276,16 @@ void ReportServer::loop() {
 }
 
 void ReportServer::answer(int client) {
-    timeval timeout{3, 0};
+    // Short receive waits, so the stop check above runs at least every 200 ms.
+    timeval timeout{0, 200000};
     ::setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
     std::string request;
     char buffer[1024];
+    int waits = 0;
     while (request.find("\r\n") == std::string::npos && request.size() < 4096) {
+        if (stop_) return;
         const auto n = ::recv(client, buffer, sizeof buffer, 0);
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && ++waits < 15) continue; // 3 s for the request line
         if (n <= 0) return;
         request.append(buffer, static_cast<std::size_t>(n));
     }
@@ -289,20 +303,21 @@ void ReportServer::answer(int client) {
     std::error_code error;
     const bool has_recording = !recording.empty() && std::filesystem::is_regular_file(recording, error);
     if (method == "GET" && path == "/" + token_) {
-        const auto page = report_page(report, issue_link_, base + "knockthru-report.txt",
+        // The page's copy goes into a GitHub issue body, so it fits GitHub's limit. The downloads stay whole.
+        const auto page = report_page(fit_report(report), issue_link_, base + "knockthru-report.txt",
             has_recording ? base + "knockthru-report.zip" : "");
-        send_all(client, response("200 OK", "text/html; charset=utf-8", page));
+        send_all(client, stop_, response("200 OK", "text/html; charset=utf-8", page));
     } else if (method == "GET" && path == base + "knockthru-report.txt") {
-        send_all(client, response("200 OK", "text/plain; charset=utf-8", report,
+        send_all(client, stop_, response("200 OK", "text/plain; charset=utf-8", report,
             "Content-Disposition: attachment; filename=\"knockthru-report.txt\"\r\n"));
     } else if (method == "GET" && path == base + "knockthru-report.zip" && has_recording) {
         std::ifstream file(recording, std::ios::binary);
         const std::string data{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
         const auto zip = make_zip({{"knockthru-report.txt", report}, {"knockthru-knocks.csv.gz", data}});
-        send_all(client, response("200 OK", "application/zip", zip,
+        send_all(client, stop_, response("200 OK", "application/zip", zip,
             "Content-Disposition: attachment; filename=\"knockthru-report.zip\"\r\n"));
     } else {
-        send_all(client, response("404 Not Found", "text/plain", "Not found\n"));
+        send_all(client, stop_, response("404 Not Found", "text/plain", "Not found\n"));
     }
 }
 

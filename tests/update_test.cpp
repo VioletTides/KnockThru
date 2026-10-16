@@ -4,13 +4,19 @@
 #include "report_server.hpp"
 #include "update.hpp"
 
+#include <chrono>
+#include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <string>
 
+#include <arpa/inet.h>
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -130,6 +136,17 @@ int main() {
                   read(page).find("newer report") != std::string::npos && read(page).find("id=\"go\"") == std::string::npos,
             "report page leads with the report file when there is a recording");
         const auto zip = root / "knockthru-report.zip", unpacked = root / "unpacked";
+        {
+            // Downloads keep the whole report, while the page's copy fits a GitHub issue.
+            std::string big;
+            for (int i = 0; i < 4000; ++i) big += "log line " + std::to_string(i) + " with padding to make it longer\n";
+            server.set_report(big);
+            const auto whole = root / "whole.txt";
+            check(get(server.url() + "/report/knockthru-report.txt", whole) == 0 && read(whole) == big &&
+                      get(server.url(), page) == 0 && read(page).size() < big.size(),
+                "downloads keep the whole report, and the page's copy is shortened");
+            server.set_report("newer report\n");
+        }
         check(get(server.url() + "/report/knockthru-report.zip", zip) == 0 &&
                   run_program({"unzip", "-q", "-o", zip.string(), "-d", unpacked.string()}) == 0 &&
                   read(unpacked / "knockthru-report.txt") == "newer report\n" &&
@@ -148,6 +165,30 @@ int main() {
                       std::string(error.what()).find("missing") != std::string::npos,
                 std::string("install_release fails for a missing ZIP: ") + error.what());
         }
+    }
+
+    {
+        // A phone that stops reading mid-download must not hold up Done, which destroys the server.
+        auto server = std::make_unique<ReportServer>(std::string(20 * 1024 * 1024, 'x'), "https://example.com");
+        const auto rest = server->url().substr(7);
+        const int port = std::stoi(rest.substr(rest.find(':') + 1));
+        const auto path = rest.substr(rest.find('/')) + "/report/knockthru-report.txt";
+        const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        int small = 4096;
+        ::setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &small, sizeof small);
+        sockaddr_in address{};
+        address.sin_family = AF_INET;
+        address.sin_port = htons(static_cast<std::uint16_t>(port));
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        ::connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof address);
+        const auto request = "GET " + path + " HTTP/1.1\r\n\r\n";
+        ::send(fd, request.data(), request.size(), 0);
+        usleep(500000); // the server is now waiting on a full socket
+        const auto start = std::chrono::steady_clock::now();
+        server.reset();
+        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        ::close(fd);
+        check(seconds < 2, "the report server stops within 2 s while a phone stalls: " + std::to_string(seconds) + " s");
     }
 
     check(run_program({"true"}) == 0 && run_program({"false"}) == 1, "run_program returns exit codes");

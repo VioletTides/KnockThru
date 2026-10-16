@@ -599,9 +599,10 @@ int update() {
 }
 
 int report(int port) {
+    // Background, because a report must not start SteamVR when it is not running.
     std::unique_ptr<VrSession> session;
     try {
-        session = std::make_unique<VrSession>(vr::VRApplication_Utility);
+        session = std::make_unique<VrSession>(vr::VRApplication_Background);
     } catch (const std::exception&) {
     }
     std::string room_view;
@@ -1043,6 +1044,11 @@ int run() {
                     }
                     break;
                 case PanelCommand::CheckUpdate:
+                    // A weekly check already running answers this press too.
+                    if (check_job.valid() && check_is_automatic) {
+                        check_is_automatic = false;
+                        state.update = {knockthru::UpdateView::Status::Checking, "", ""};
+                    }
                     if (check_job.valid() || install_job.valid()) break;
                     check_is_automatic = false;
                     state.update = {knockthru::UpdateView::Status::Checking, "", ""};
@@ -1064,8 +1070,7 @@ int run() {
                     const auto issue = knockthru::issue_url({kVersion, steamvr_version(), room_view_text(), last_error});
                     report_server.reset();
                     try {
-                        report_server = std::make_unique<knockthru::ReportServer>(
-                            knockthru::fit_report(report_text(true, room_view_text())), issue);
+                        report_server = std::make_unique<knockthru::ReportServer>(report_text(true, room_view_text()), issue);
                         state.report_url = report_server->url();
                         state.report_full = true;
                         // A recording made before the card closed belongs to this report too.
@@ -1213,7 +1218,7 @@ int run() {
                 state.recorded = true;
                 log("Knock recording saved to " + recording_path().string());
                 if (report_server) {
-                    report_server->set_report(knockthru::fit_report(report_text(true, room_view_text())));
+                    report_server->set_report(report_text(true, room_view_text()));
                     report_server->set_recording(recording_path());
                 }
             } catch (const std::exception& error) {
@@ -1344,6 +1349,9 @@ int run() {
                 log("Update check: " + release.version + (newer ? " is available" : " is the latest"));
             } catch (const std::exception& error) {
                 if (check_is_automatic) {
+                    // Try again in a day, not a week, since the Wi-Fi may only have been down.
+                    app_state.last_update_check = static_cast<long long>(std::time(nullptr)) - 6 * 24 * 3600;
+                    save_app_state();
                     log(std::string("Weekly update check failed: ") + error.what());
                 } else {
                     state.update = {UpdateStatus::Failed, "", error.what()};
