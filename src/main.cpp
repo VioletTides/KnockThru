@@ -686,6 +686,8 @@ int run() {
 
         if (t >= next_slow_check) {
             next_slow_check = t + 2;
+            // Keeps the click stream open while the panel shows, so a press clicks at once.
+            if (config.sounds && panel && panel->visible()) knockthru::prepare_click();
             // Restyles the bar icon while the dashboard is open, in case the bar page
             // reloaded. If this fails, the icon stays undimmed. The classic icon has no tint.
             if (vr::VROverlay()->IsDashboardVisible() &&
@@ -736,6 +738,7 @@ int run() {
                 switch (click.command) {
                 case PanelCommand::RoomView: toggle_room_view(""); break;
                 case PanelCommand::Style: toggle_style(""); break;
+                case PanelCommand::Navigate: break;
                 case PanelCommand::Pause:
                     if (save([&] { knockthru::save_paused(!config.paused); }))
                         show(config.paused ? "KnockThru off" : "KnockThru on");
@@ -797,6 +800,7 @@ int run() {
                 }
             }
             if (shown) {
+                if (config.sounds) knockthru::prepare_click();
                 read_room_view();
                 try {
                     state.opaque = knockthru::read_style() == knockthru::RoomViewStyle::Opaque;
@@ -809,6 +813,8 @@ int run() {
         for (const auto& sample : poses.take()) detector.push(sample.device, sample.t, sample.position, sample.velocity);
         const auto knock_event = detector.poll(t);
         const auto knocks = detector.take_knocks();
+        // Opens the click stream on the first knock, so it is ready if a triple knock follows.
+        if (config.sounds && !config.paused && !knocks.empty()) knockthru::prepare_click();
 
         if (calibrator && calibration && calibration->phase == Phase::Recording) {
             for (const auto& knock : knocks) calibrator->hear(knock);
