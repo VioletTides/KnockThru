@@ -172,6 +172,8 @@ private:
 
     const Canvas& icon(int size, IconStyle style);
     bool hovered(Rect rect) const;
+    float paragraph(Font& font, const std::string& text, float x, float y, float size, float leading, float width,
+                    int max_lines, Color color);
     void header(const std::string& title);
     void main_screen(const PanelState& state);
     void pick_screen(const PanelState& state);
