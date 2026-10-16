@@ -21,6 +21,7 @@
 #include <csignal>
 #include <cstdio>
 #include <ctime>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -506,10 +507,10 @@ std::string steamvr_version() {
 std::string tail(const fs::path& path, std::size_t count) {
     std::ifstream stream(path);
     if (!stream) return "(missing)\n";
-    std::vector<std::string> lines;
+    std::deque<std::string> lines;
     for (std::string line; std::getline(stream, line);) {
-        lines.push_back(line);
-        if (lines.size() > count) lines.erase(lines.begin());
+        lines.push_back(std::move(line));
+        if (lines.size() > count) lines.pop_front();
     }
     std::string text;
     for (const auto& line : lines) text += line + "\n";
