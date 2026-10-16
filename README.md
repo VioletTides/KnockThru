@@ -13,9 +13,38 @@ Knock twice to see your room without taking off your Steam Frame. Knock three ti
 
 3. Open **Library → Non-Steam** and launch **KnockThru** once.
 
+<details>
+<summary>No PC? Install from the Frame itself</summary>
+
+1. Do step 1 above.
+2. On the Steam bar, open **Konsole**. Developer Mode adds it there.
+3. Run this:
+
+   ```sh
+   curl -fsSL https://github.com/VioletTides/KnockThru/releases/latest/download/install.sh | sh
+   ```
+
+The script downloads the latest release and checks its SHA-256. It unpacks the release to `~/KnockThru`, adds KnockThru to your Steam library, and starts it. Run it again to reinstall. If SteamVR does not answer, go back to Gaming mode and launch KnockThru once from **Library → Non-Steam**.
+
+</details>
+
+<details>
+<summary>Install with Frameloader</summary>
+
+[Frameloader](https://www.frameloader.com) runs on macOS, Windows, and Linux.
+
+1. Do step 1 above.
+2. Pair Frameloader with the Frame, as its README describes.
+3. Drop the Linux ARM64 ZIP from the releases page onto Frameloader.
+4. Change **Library ID** to `KnockThru`, so a later reinstall replaces this copy. Then select **Install to Frame**.
+
+Frameloader starts KnockThru, which registers with SteamVR and turns on autostart.
+
+</details>
+
 From now on KnockThru starts with SteamVR and runs in the background. The first time you open the KnockThru tab in the SteamVR dashboard, a short tour helps you pick your knocks, calibrate them, and try a double and a triple knock.
 
-To pause knocks, turn off the **KnockThru On** switch at the top of the [dashboard tab](#the-dashboard-tab). To clear your settings and calibration, use **Factory reset** in Settings. To remove KnockThru, run `<install folder>/knockthru --uninstall --purge` over SSH, then delete the install folder. `--purge` also deletes your settings and calibration. Leave it out to keep them in `~/.config/knockthru`.
+To pause knocks, turn off the **KnockThru On** switch at the top of the [dashboard tab](#the-dashboard-tab). To clear your settings and calibration, use **Factory reset** in Settings. To remove KnockThru, run `<install folder>/knockthru --uninstall --purge` in Konsole or over SSH, then delete the install folder. `--purge` also deletes your settings and calibration. Leave it out to keep them in `~/.config/knockthru`.
 
 ## How to knock
 
@@ -62,11 +91,15 @@ If soft knocks get missed, calibrate that knock kind. Open **Settings** in the K
 
 ## Updates
 
-KnockThru checks GitHub for a new release once a week. When one is out, a blue dot shows on the **Settings** button. Open Settings and press **Install**. KnockThru downloads the release, checks the download, and restarts on the new version.
+KnockThru checks GitHub for a new release once a day. When one is out, a yellow dot shows on the **Settings** button.
 
-![Installing an update: the dot on the Settings button, Install 0.2.0 in Settings, then KnockThru restarts and Settings shows version 0.2.0](images/update.gif)
+![Installing an update: the yellow dot on the Settings button, Install 0.2.0 fills as it downloads, Restart, then a card says KnockThru updated to version 0.2.0](images/update.gif)
 
-To check right away, press **Check for updates** in Settings. Updating through FrameDrop works too.
+1. Open **Settings** and press **Install**. The button fills as the release downloads and gets checked.
+2. Press **Restart**. KnockThru starts the new version.
+3. A card says which version you have now. Press **OK**.
+
+If the install or the restart fails, a card gives the reason. To check right away, press **Check for updates** in Settings. Updating through FrameDrop works too.
 
 ## Something not working?
 
@@ -95,7 +128,7 @@ If you have no phone, or the Frame is offline, press **Save to headset**. The re
 
 ## For tinkerers
 
-These need SSH access to the Frame.
+These need a terminal on the Frame: Konsole, or SSH from a PC.
 
 <details>
 <summary>Settings file</summary>
@@ -113,14 +146,14 @@ Put your settings in `~/.config/knockthru/config.json`. This file survives updat
 - `blocked_apps`: SteamVR app keys where knocks do nothing. Run `knockthru --current-app` while a game runs to get its key.
 - `debug_port`: the CEF Remote Debugging port. The default is 8080.
 - `classic_bar_icon`: `true` shows the dashboard bar icon in the logo colors. The default `false` shows the logo in grey, and white on hover, like Steam's own icons.
-- `check_updates`: `false` stops the weekly update check. By default, KnockThru asks GitHub for the latest release once a week, a minute after it starts. **Check for updates** in Settings works either way.
+- `check_updates`: `false` stops the daily update check. By default, KnockThru asks GitHub for the latest release once a day, a minute after it starts. **Check for updates** in Settings works either way.
 - `sounds`: `false` silences the click. By default, KnockThru plays SteamVR's dashboard click on a triple knock and on panel buttons. Steam already clicks when a double knock changes passthrough.
 - `tour_done`: `true` once the first-run tour is finished or skipped. Set it to `false` to see the tour the next time you open the KnockThru tab. Settings also has a Replay button.
 
 </details>
 
 <details>
-<summary>Calibrate over SSH</summary>
+<summary>Calibrate from a terminal</summary>
 
 ```sh
 <install folder>/knockthru --calibrate together
@@ -133,7 +166,7 @@ Use `together`, `surface`, or `headset`. Knock 10 times within 90 s. Each knock 
 <details>
 <summary>Commands</summary>
 
-Run these on the Frame over SSH.
+Run these on the Frame, in Konsole or over SSH.
 
 | Command | What it does |
 | --- | --- |

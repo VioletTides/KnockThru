@@ -688,8 +688,20 @@ def report_gif(panel_dir):
     flat = Image.new("RGB", card.size, BACKGROUND)
     flat.paste(card, mask=card)
     qr = tuple(round(v * scale) for v in qr_box(flat))
-    for i in range(report_click, min(done_click + seconds(0.6), len(frames))):
-        frames[i].paste(hide_qr(frames[i].crop(qr)), qr)
+    qr_area = (qr[2] - qr[0]) * (qr[3] - qr[1])
+    # Blur the code only in the frames that show it, wherever the card has risen to. Its white
+    # square is the only large pure white area. Shrinking the frames makes text edges overshoot
+    # past white too, so the mask is eroded first, which keeps only the code's solid white border.
+    erode = 7
+    for frame in frames:
+        mask = Image.fromarray(((np.asarray(frame).min(-1) > 250) * 255).astype(np.uint8))
+        white = np.asarray(mask.filter(ImageFilter.MinFilter(erode))) > 0
+        if white.sum() < 0.05 * qr_area:
+            continue
+        rows, columns = np.nonzero(white.any(1))[0], np.nonzero(white.any(0))[0]
+        grow = erode // 2 + 3
+        box = (int(columns[0]) - grow, int(rows[0]) - grow, int(columns[-1]) + 1 + grow, int(rows[-1]) + 1 + grow)
+        frame.paste(hide_qr(frame.crop(box)), box)
     add_pointer(frames, pointer, clicks, scale)  # before the lenses, so it shows inside them
 
     phone = report_phone(panel_dir)

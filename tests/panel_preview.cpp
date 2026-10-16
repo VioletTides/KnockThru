@@ -284,7 +284,7 @@ void readme_update(const std::filesystem::path& dir) {
     Recorder rec{&panel, dir};
     rec.pointer = rest;
     rec.play(state, 1.2);
-    rec.aim(460, 64); // Settings, with its new-release dot
+    rec.aim(460, 64); // Settings, with its yellow update dot
     rec.play(state, 1.1);
     rec.click();
     rec.play(state, 0.6);
@@ -292,20 +292,32 @@ void readme_update(const std::filesystem::path& dir) {
     rec.play(state, 1.4);
     rec.click();
     state.update.status = UpdateView::Status::Installing;
-    rec.play(state, 2.0);
-    // KnockThru restarts from the new files, and its panel opens on the main screen again.
+    for (int i = 0; i <= 60; ++i) { // the download fills the button over 2.4 s
+        const float p = i / 60.0f;
+        state.update_progress = p * p * (3 - 2 * p);
+        rec.play(state, 0.04);
+    }
+    state.update_progress = 0;
+    state.update.status = UpdateView::Status::Installed;
+    rec.play(state, 1.2);
+    rec.click(); // Restart, where Install was
+    state.update.status = UpdateView::Status::Restarting;
+    rec.play(state, 1.2);
+    // KnockThru restarts from the new files. Its panel opens on the main screen with the update card.
     rec.cuts.push_back(rec.index);
     Panel restarted(KNOCKTHRU_FONTS);
     rec.panel = &restarted;
     state.version = "0.2.0";
-    state.update = {};
+    state.update = {UpdateView::Status::Updated, "0.1.0", ""};
+    state.update_notice = UpdateNotice{false, "You now have version 0.2.0. You had version 0.1.0."};
     rec.play(state, 1.0);
-    rec.aim(460, 64); // Settings again, which now shows the new version
-    rec.play(state, 1.1);
+    rec.aim(832, 466); // OK on the card
+    rec.play(state, 1.8);
     rec.click();
+    state.update_notice.reset();
     rec.play(state, 0.4);
     rec.aim(rest.first, rest.second);
-    rec.play(state, 2.4); // the README script cross-fades the last 0.4 s to the first frame
+    rec.play(state, 1.8); // the README script cross-fades the last 0.4 s to the first frame
     rec.write_marks();
 }
 
