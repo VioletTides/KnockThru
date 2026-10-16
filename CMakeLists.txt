@@ -28,6 +28,9 @@ add_executable(knockthru src/main.cpp src/app.cpp src/steamvr.cpp src/poses.cpp 
 target_include_directories(knockthru SYSTEM PRIVATE third_party/vulkan/include)
 target_link_libraries(knockthru PRIVATE knockthru_core knockthru_ui openvr_loader Threads::Threads ${CMAKE_DL_LIBS})
 target_compile_definitions(knockthru PRIVATE KNOCKTHRU_VERSION="${PROJECT_VERSION}")
+# The host build is never shipped, so it always compiles the test hook and CI catches breaks in it.
+# Releases come from scripts/build-arm64.sh, which leaves the hook out unless KNOCKTHRU_TEST_HOOK=1.
+target_compile_definitions(knockthru PRIVATE KNOCKTHRU_TEST_HOOK)
 target_compile_options(knockthru PRIVATE -Wall -Wextra -Wpedantic)
 add_custom_command(TARGET knockthru POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:knockthru>"

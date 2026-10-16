@@ -6,6 +6,8 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 build="${1:-$root/build-arm64}"
 version="${KNOCKTHRU_VERSION:-1.0.0}"
+# KNOCKTHRU_TEST_HOOK=1 builds in the test hook from src/app.cpp. Releases never set it.
+test_hook="${KNOCKTHRU_TEST_HOOK:-}"
 mkdir -p "$build/bin"
 export ZIG_GLOBAL_CACHE_DIR="$build/zig-global-cache"
 export ZIG_LOCAL_CACHE_DIR="$build/zig-local-cache"
@@ -46,6 +48,7 @@ cd "$root"
 zig c++ -target aarch64-linux-gnu.2.31 -std=c++17 -O2 -s -fvisibility=hidden -Wno-deprecated-declarations \
     -DLINUX -DPOSIX -DLINUXARM64 -DVR_API_PUBLIC -DVRCORE_NO_PLATFORM -DOPENVR_BUILD_STATIC \
     -DKNOCKTHRU_VERSION="\"$version\"" \
+    ${test_hook:+-DKNOCKTHRU_TEST_HOOK} \
     "${includes[@]/#/-I}" "${sources[@]}" -ldl -lpthread -o "$build/bin/knockthru"
 
 cp "$build/bin/knockthru" "$build/bin/knockthru-ctl"
