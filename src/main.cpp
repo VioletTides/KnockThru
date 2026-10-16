@@ -394,6 +394,10 @@ void stop_running_app() {
     ::kill(static_cast<pid_t>(pid), SIGTERM);
     for (int i = 0; i < 50 && fs::exists(fs::path("/proc") / std::to_string(pid)); ++i)
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // SteamVR clears the app's PID a few ms after the process exits. A launch before
+    // that fails with ApplicationAlreadyRunning, as one update on the Frame did.
+    for (int i = 0; i < 30 && vr::VRApplications()->GetApplicationProcessId(kAppKey) == pid; ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 int install() {
@@ -1164,8 +1168,12 @@ int run() {
                     }
                     break;
                 case PanelCommand::BarIcon:
-                    if (save([&] { knockthru::save_classic_bar_icon(!config.classic_bar_icon); }))
+                    if (save([&] { knockthru::save_classic_bar_icon(!config.classic_bar_icon); })) {
                         show(config.classic_bar_icon ? "Classic bar icon on" : "Classic bar icon off");
+                        // The icon image changes this frame. Restyle the bar now, not at the
+                        // next 2 s check, so the old tint never shows over the new icon.
+                        next_slow_check = 0;
+                    }
                     break;
                 case PanelCommand::Kind: {
                     auto enabled = config.detector.enabled;
