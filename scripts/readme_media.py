@@ -282,19 +282,56 @@ def hero(panel_dir):
 
 # Calibrate: the panel's own calibration screens, from the Settings button to the saved banner.
 
+def pointer_dot(image, x, y, shown, press, ring):
+    """Draws SteamVR's laser pointer dot: a white dot in a soft glow. press shrinks it on a click,
+    ring runs 0 to 1 as a click ring spreads out, or is None."""
+    layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    for r, alpha in ((26, 30), (20, 50), (15, 80)):  # glow, faint at the edge
+        draw.ellipse([x - r, y - r, x + r, y + r], fill=(255, 255, 255, round(alpha * shown)))
+    r = 10 * (1 - 0.3 * press)
+    draw.ellipse([x - r - 2, y - r - 2, x + r + 2, y + r + 2], fill=(18, 20, 24, round(120 * shown)))
+    draw.ellipse([x - r, y - r, x + r, y + r], fill=(255, 255, 255, round(255 * shown)))
+    if ring is not None:
+        rr = 14 + 30 * ease_out(ring)
+        draw.ellipse([x - rr, y - rr, x + rr, y + rr], outline=(255, 255, 255, round(200 * (1 - ring) * shown)), width=4)
+    image.alpha_composite(layer)
+
+
 def calibrate(panel_dir):
     width = 640
     frames_dir = panel_dir / "calibrate"
-    cuts = {int(line) for line in (frames_dir / "cuts.txt").read_text().split()}
+    marks = dict(line.split(maxsplit=1) if " " in line else (line, "")
+                 for line in (frames_dir / "marks.txt").read_text().splitlines())
+    cuts = [int(n) for n in marks["cuts"].split()]
+    clicks = [int(n) for n in marks["clicks"].split()]
+    pointer = [None if line == "-" else tuple(map(float, line.split()))
+               for line in (frames_dir / "pointer.txt").read_text().splitlines()]
+
+    def shown(i):
+        """Fades the pointer in over its first 5 frames and out over its last 5."""
+        if pointer[i] is None:
+            return 0.0
+        run_in = next((k for k in range(6) if i - k < 0 or pointer[i - k] is None), 6)
+        run_out = next((k for k in range(6) if i + k >= len(pointer) or pointer[i + k] is None), 6)
+        return ease_in_out(min(run_in, run_out) / 6)
+
     frames = []
-    for path in sorted(frames_dir.glob("*.png")):
-        image = Image.open(path).convert("RGBA").resize((width, round(770 * width / 1200)), Image.LANCZOS)
+    for i, path in enumerate(sorted(frames_dir.glob("*.png"))):
+        image = Image.open(path).convert("RGBA")
+        if pointer[i]:
+            since = [i - c for c in clicks if 0 <= i - c < 8]
+            before = [c - i for c in clicks if 0 < c - i <= 3]
+            press = 1 - since[0] / 8 if since else (1 - before[0] / 4 if before else 0)
+            ring = since[0] / 8 if since else None
+            pointer_dot(image, *pointer[i], shown(i), press, ring)
+        image = image.resize((width, round(770 * width / 1200)), Image.LANCZOS)
         flat = Image.new("RGB", image.size, BACKGROUND)
         flat.paste(image, mask=image)
         frames.append(flat)
     # Where the clock skips ahead, and at the loop back to the start, cross-fade instead of cutting.
     fade = seconds(0.4)
-    for cut in sorted(cuts):
+    for cut in cuts:
         before = frames[cut - 1]
         for k in range(fade):
             frames[cut + k] = Image.blend(before, frames[cut + k], ease_in_out((k + 1) / (fade + 1)))

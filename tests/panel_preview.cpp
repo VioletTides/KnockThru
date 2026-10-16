@@ -134,22 +134,47 @@ void tour(const std::filesystem::path& out, const PanelState& idle) {
 }
 
 // Writes 25 frames a second of one screen, numbered on from earlier calls, and moves the clock on.
+// It also moves a pointer, which hovers what it rests on, and logs where it is for the README
+// script to draw.
 struct Recorder {
+    using Point = std::pair<float, float>;
     Panel& panel;
     std::filesystem::path dir;
     double t = 100;
     int index = 0;
-    std::vector<int> cuts; // frames where the clock jumps, for the README script to cross-fade
+    std::optional<Point> pointer;   // hidden when unset
+    std::optional<Point> from, to;  // a pointer move in progress
+    double move_t = 0;
+    std::vector<int> cuts;          // frames where the clock jumps, to cross-fade
+    std::vector<int> clicks;        // frames where the pointer clicks
+    std::ofstream log{(std::filesystem::create_directories(dir), dir / "pointer.txt")};
 
-    void play(const PanelState& state, double seconds, std::optional<std::pair<float, float>> hover = std::nullopt) {
-        until(state, t + seconds, hover);
-    }
-    void until(const PanelState& state, double end, std::optional<std::pair<float, float>> hover = std::nullopt) {
+    void play(const PanelState& state, double seconds) { until(state, t + seconds); }
+    void until(const PanelState& state, double end) {
         for (; t < end - 1e-6; t += 1 / 25.0) {
+            if (to) {
+                const float p = std::min(1.0f, static_cast<float>((t - move_t) / 0.6));
+                const float e = p < 0.5f ? 4 * p * p * p : 1 - std::pow(-2 * p + 2, 3.0f) / 2;
+                pointer = Point{from->first + (to->first - from->first) * e, from->second + (to->second - from->second) * e};
+                if (p >= 1) to.reset();
+            }
             std::ostringstream file;
             file << std::setw(4) << std::setfill('0') << index++ << ".png";
-            panel.render(state, hover, t).write_png(dir / file.str());
+            panel.render(state, pointer, t).write_png(dir / file.str());
+            if (pointer) log << pointer->first << " " << pointer->second << "\n";
+            else log << "-\n";
         }
+    }
+    // Glides the pointer to (x, y), from where it is or from below the target if hidden.
+    void aim(float x, float y) {
+        from = pointer.value_or(Point{x - 80, y + 160});
+        if (!pointer) pointer = from;
+        to = Point{x, y};
+        move_t = t;
+    }
+    void click() {
+        clicks.push_back(index);
+        panel.click(pointer->first, pointer->second);
     }
     // The first time after the clock where `phase` seconds into a `loop` long animation comes round.
     double next(double loop, double phase) const { return t + std::fmod(phase - std::fmod(t, loop) + 2 * loop, loop); }
@@ -158,7 +183,6 @@ struct Recorder {
 // A surface calibration from the Settings button to the saved banner, as frames in `dir`.
 // Counted knocks land on the contacts of the panel's own knock drawing.
 void readme_calibration(const std::filesystem::path& dir) {
-    std::filesystem::create_directories(dir);
     Panel panel(KNOCKTHRU_FONTS);
     PanelState state;
     state.room_view = false;
@@ -166,14 +190,22 @@ void readme_calibration(const std::filesystem::path& dir) {
     state.app_key = "steam.app.620980";
     state.app_name = "Beat Saber";
     Recorder rec{panel, dir};
-    rec.play(state, 1.0, std::make_pair(460.0f, 60.0f));
-    panel.click(460, 60); // Settings
-    rec.play(state, 1.4, std::make_pair(1050.0f, 184.0f));
-    panel.click(1050, 184); // Calibrate
-    rec.play(state, 2.2, std::make_pair(600.0f, 400.0f));
-    panel.click(600, 400); // the surface card
-    rec.play(state, 2.6, std::make_pair(1040.0f, 652.0f));
-    panel.click(1040, 652); // Start, which the app answers by recording
+    rec.play(state, 0.3);
+    rec.aim(460, 64); // Settings
+    rec.play(state, 1.0);
+    rec.click();
+    rec.play(state, 0.4);
+    rec.aim(1050, 188); // Calibrate
+    rec.play(state, 1.2);
+    rec.click();
+    rec.play(state, 0.5);
+    rec.aim(600, 420); // the surface card
+    rec.play(state, 1.5);
+    rec.click();
+    rec.play(state, 1.2);
+    rec.aim(1040, 656); // Start, which the app answers by recording
+    rec.play(state, 1.0);
+    rec.click();
 
     // Robin's surface calibration on the Frame, 2026-10-15, as in calibration().
     const std::vector<double> peaks{80, 401, 115, 342, 446, 91, 64, 234, 64, 147};
@@ -183,6 +215,8 @@ void readme_calibration(const std::filesystem::path& dir) {
     view.started_t = rec.t - 2.0; // most of the get-ready time skipped
     view.seconds_left = 88;
     state.calibration = view;
+    rec.play(state, 0.3);
+    rec.pointer.reset(); // knocking, not pointing
     const auto knock = [&](std::size_t i) {
         auto& v = *state.calibration;
         rec.until(state, rec.next(2.0, 0.5)); // the record screen knocks once every 2 s
@@ -191,14 +225,16 @@ void readme_calibration(const std::filesystem::path& dir) {
         v.knocked_t = v.counted_t = rec.t;
         v.seconds_left = 90 - static_cast<int>(rec.t - v.started_t);
     };
-    for (std::size_t i = 0; i < 3; ++i) knock(i);
-    rec.play(state, 1.2);
-    // Skip ahead to the eighth knock.
+    knock(0);
+    knock(1);
+    rec.play(state, 1.0);
+    // Skip ahead to just before the tenth knock, which lands as the cross-fade ends.
     rec.cuts.push_back(rec.index);
-    rec.t += 10;
-    for (std::size_t i = 3; i < 8; ++i) state.calibration->peaks.push_back(peaks[i]), state.calibration->speeds.push_back(speeds[i]);
-    state.calibration->knocked_t = state.calibration->counted_t = rec.t - 1.2;
-    for (std::size_t i = 8; i < peaks.size(); ++i) knock(i);
+    rec.t += 14.6;
+    for (std::size_t i = 2; i < 9; ++i) state.calibration->peaks.push_back(peaks[i]), state.calibration->speeds.push_back(speeds[i]);
+    state.calibration->knocked_t = state.calibration->counted_t = rec.t - 1.6;
+    state.calibration->seconds_left = 90 - static_cast<int>(rec.t - state.calibration->started_t);
+    knock(9);
     rec.play(state, 0.9);
 
     state.calibration->phase = CalibrationView::Phase::Trying;
@@ -206,14 +242,22 @@ void readme_calibration(const std::filesystem::path& dir) {
     rec.until(state, rec.next(2.6, 1.2)); // the try screen knocks twice every 2.6 s, then waits 0.4 s
     state.calibration->trial_passed = true;
     state.calibration->trial_t = rec.t;
-    rec.play(state, 1.8, std::make_pair(1010.0f, 692.0f));
-    panel.click(1010, 692); // Save
+    rec.play(state, 0.5);
+    rec.aim(1030, 696); // Save
+    rec.play(state, 1.2);
+    rec.click();
     state.calibration.reset();
     state.calibration_saved = KnockKind::Surface;
-    rec.play(state, 2.6);
+    rec.play(state, 0.8);
+    rec.pointer.reset();
+    rec.play(state, 1.6);
 
-    std::ofstream cuts(dir / "cuts.txt");
-    for (int cut : rec.cuts) cuts << cut << "\n";
+    std::ofstream marks(dir / "marks.txt");
+    marks << "cuts";
+    for (int cut : rec.cuts) marks << " " << cut;
+    marks << "\nclicks";
+    for (int click : rec.clicks) marks << " " << click;
+    marks << "\n";
 }
 
 // Writes the passthrough off, on, and opaque states with no hover highlight.
