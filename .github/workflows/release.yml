@@ -1,5 +1,5 @@
 # On a v* tag: run the detector tests, build for the Steam Frame, and attach
-# the ZIP and FrameDrop manifest to a GitHub release.
+# the ZIP, the FrameDrop manifest, and install.sh to a GitHub release.
 name: release
 
 on:
@@ -35,6 +35,7 @@ jobs:
         run: |
           node scripts/package.mjs --build-dir build-arm64 --version "${GITHUB_REF_NAME#v}" \
             --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
+          cp scripts/install.sh dist/install.sh
 
       - name: Publish the release
         env:

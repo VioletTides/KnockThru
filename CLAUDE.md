@@ -11,6 +11,7 @@ A double knock toggles Steam Frame passthrough (Room View). A triple knock switc
 - `src/update.*`: the GitHub release check, the install that checks the ZIP's SHA-256, and the file swap. `--update` and the Settings header use it.
 - `src/report.*`, `src/report_server.*`: the bug report. The report card's QR code opens a page the headset serves on the local Wi-Fi.
 - `src/main.cpp`: the CLI commands and the resident app (`--run`).
+- `scripts/install.sh`: the installer for people without a PC. Each release attaches it, and the README runs it through `curl | sh`.
 - `tests/data/*.csv.gz`: pose recordings from the Frame. `docs/knock-signal.md` explains each one and how the detector was tuned.
 
 ## Commands
