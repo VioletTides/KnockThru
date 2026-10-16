@@ -84,6 +84,8 @@ private:
     std::vector<std::uint8_t> pixels_;
 
     void blend(int x, int y, Color color, float coverage);
+    // Blends `color` at full coverage over pixels `from` to `to` (exclusive) of row `y`.
+    void fill_span(int y, int from, int to, Color color);
 };
 
 } // namespace knockthru

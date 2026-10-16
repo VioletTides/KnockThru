@@ -138,7 +138,25 @@ void Canvas::rounded_rect(Rect rect, float radius, Color color) {
             if (c >= 1) break;
             blend(right, y, color, c);
         }
-        for (int x = left; x <= right; ++x) blend(x, y, color, 1);
+        fill_span(y, left, right + 1, color);
+    }
+}
+
+void Canvas::fill_span(int y, int from, int to, Color color) {
+    if (y < 0 || y >= height_) return;
+    from = std::max(from, 0);
+    to = std::min(to, width_);
+    if (color.a != 255) {
+        for (int x = from; x < to; ++x) blend(x, y, color, 1);
+        return;
+    }
+    // An opaque color replaces what is under it.
+    auto* p = &pixels_[(static_cast<std::size_t>(y) * width_ + from) * 4];
+    for (int x = from; x < to; ++x, p += 4) {
+        p[0] = color.r;
+        p[1] = color.g;
+        p[2] = color.b;
+        p[3] = 255;
     }
 }
 
