@@ -43,7 +43,7 @@ Put your settings in `~/.config/knockthru/config.json`. This file survives updat
 - `debug_port`: the CEF Remote Debugging port. The default is 8080.
 - `classic_bar_icon`: `true` shows the dashboard bar icon in the logo colors. The default `false` shows the logo in grey, and white on hover, like Steam's own icons.
 - `sounds`: `false` silences the click. By default, KnockThru plays SteamVR's dashboard click on a triple knock and on panel buttons. Steam already clicks when a double knock changes passthrough.
-- `check_updates`: `false` stops the weekly update check. By default, KnockThru asks GitHub for the latest release once a week, a minute after it starts. A new release shows a dot on the Settings button and an Install button in Settings. Check for updates in Settings works either way.
+- `check_updates`: `false` stops the daily update check. By default, KnockThru asks GitHub for the latest release once a day, a minute after it starts. A new release shows a yellow dot on the Settings button and an Install button in Settings. After the install, a Restart button starts the new version, which shows a card with its version number. If the install fails, a card gives the reason. Check for updates in Settings works either way.
 - `tour_done`: `true` once the first-run tour is finished or skipped. Set it to `false` to see the tour the next time you open the KnockThru tab. Settings also has a Replay button.
 
 ## Calibration

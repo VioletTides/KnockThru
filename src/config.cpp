@@ -162,6 +162,7 @@ AppState load_state() {
         state.steamvr_since = file.value("steamvr_since", "");
         state.steamvr_previous = file.value("steamvr_previous", "");
         state.last_update_check = file.value("last_update_check", 0LL);
+        state.knockthru_version = file.value("knockthru_version", "");
     } catch (const std::exception&) {
         // A damaged state file only costs the remembered values.
     }
@@ -171,7 +172,8 @@ AppState load_state() {
 void save_state(const AppState& state) {
     write_json(user_directory() / "state.json",
         {{"steamvr_version", state.steamvr_version}, {"steamvr_since", state.steamvr_since},
-         {"steamvr_previous", state.steamvr_previous}, {"last_update_check", state.last_update_check}});
+         {"steamvr_previous", state.steamvr_previous}, {"last_update_check", state.last_update_check},
+         {"knockthru_version", state.knockthru_version}});
 }
 
 std::string note_steamvr_version(AppState& state, const std::string& version, const std::string& today) {

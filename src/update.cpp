@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cerrno>
 #include <csignal>
 #include <cstdlib>
@@ -134,14 +135,45 @@ int last_status(const fs::path& headers) {
     return status;
 }
 
+// The Content-Length of the last response in a curl header dump, after redirects, or 0.
+// curl writes one for file:// URLs too.
+std::uintmax_t last_length(const fs::path& headers) {
+    std::ifstream stream(headers);
+    std::uintmax_t length = 0;
+    for (std::string line; std::getline(stream, line);) {
+        if (line.rfind("HTTP/", 0) == 0) length = 0;
+        const auto colon = line.find(':');
+        if (colon == std::string::npos) continue;
+        std::string name = line.substr(0, colon);
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+        if (name != "content-length") continue;
+        try {
+            length = std::stoull(line.substr(colon + 1));
+        } catch (const std::exception&) {
+            length = 0;
+        }
+    }
+    return length;
+}
+
 // Downloads `url` to `path` with curl, and turns failures into readable messages.
 // The HTTP status comes from the response headers, because curl's exit code for
 // an HTTP error differs between versions: 22 on Arch Linux's curl, 56 on the Frame's.
+// While curl runs, `progress` follows the file's size against the Content-Length,
+// scaled from 0 to `scale`. Without a Content-Length it stays where it is.
 void download(const std::string& url, const fs::path& path, int seconds, const std::string& missing,
-              const std::atomic<bool>* cancel) {
+              const std::atomic<bool>* cancel, std::atomic<float>* progress = nullptr, float scale = 1) {
     const auto headers = path.string() + ".headers";
+    const auto follow = [&] {
+        if (!progress) return;
+        std::error_code error;
+        const auto length = last_length(headers);
+        const auto size = fs::file_size(path, error);
+        if (length > 0 && !error)
+            *progress = scale * static_cast<float>(std::min(1.0, static_cast<double>(size) / static_cast<double>(length)));
+    };
     const int code = run_program({"curl", "--silent", "--location", "--max-time", std::to_string(seconds),
-                                  "--dump-header", headers, "--output", path.string(), url}, cancel);
+                                  "--dump-header", headers, "--output", path.string(), url}, cancel, follow);
     if (code == -2) throw Canceled("Download canceled");
     const int status = last_status(headers);
     std::error_code ignored;
@@ -206,7 +238,8 @@ std::string sha256(const std::string& data) {
 
 std::string sha256_file(const fs::path& path) { return sha256(read_file(path)); }
 
-int run_program(const std::vector<std::string>& args, const std::atomic<bool>* cancel) {
+int run_program(const std::vector<std::string>& args, const std::atomic<bool>* cancel,
+                const std::function<void()>& on_poll) {
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
@@ -229,6 +262,7 @@ int run_program(const std::vector<std::string>& args, const std::atomic<bool>* c
                 while (::waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
                 return -2;
             }
+            if (on_poll) on_poll();
             ::usleep(50000);
         }
     } else {
@@ -280,12 +314,17 @@ Release fetch_latest_release(const fs::path& work, const std::atomic<bool>* canc
 }
 
 void install_release(const Release& release, const fs::path& install_directory, const fs::path& work,
-                     const std::atomic<bool>* cancel) {
+                     const std::atomic<bool>* cancel, std::atomic<float>* progress) {
+    const auto reach = [&](float value) {
+        if (progress) *progress = value;
+    };
+    reach(0);
     fs::remove_all(work);
     fs::create_directories(work);
     try {
         const auto zip = work / "release.zip";
-        download(release.url, zip, 180, "The release ZIP is missing on GitHub", cancel);
+        download(release.url, zip, 180, "The release ZIP is missing on GitHub", cancel, progress, 0.9f);
+        reach(0.9f);
         if (sha256_file(zip) != release.sha256)
             throw std::runtime_error("The downloaded ZIP does not match its SHA-256. Nothing changed.");
         const auto staging = work / "files";
@@ -294,7 +333,9 @@ void install_release(const Release& release, const fs::path& install_directory, 
         if (code == -2) throw Canceled("Unpack canceled");
         if (code == -1 || code == 127) throw std::runtime_error("unzip is missing on this system");
         if (code != 0) throw std::runtime_error("Cannot unpack the release ZIP, unzip exit code " + std::to_string(code));
+        reach(0.95f);
         replace_files(staging, install_directory);
+        reach(1);
         fs::remove_all(work);
     } catch (...) {
         std::error_code ignored;

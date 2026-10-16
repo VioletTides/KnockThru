@@ -762,11 +762,25 @@ int run() {
             log(std::string("State not saved: ") + error.what());
         }
     };
+    // A state file without knockthru_version comes from an older KnockThru.
+    const bool ran_before = !app_state.steamvr_version.empty();
     {
         const auto before = app_state.steamvr_version;
         const auto previous = knockthru::note_steamvr_version(app_state, steamvr_version(), today());
         if (!previous.empty()) log("SteamVR changed from " + previous + " to " + app_state.steamvr_version);
         if (app_state.steamvr_version != before) save_app_state();
+    }
+    // A newer version than at the last start means an update ran, from Settings or FrameDrop. The panel says so.
+    // `updated_from` is empty when the last version is unknown.
+    std::optional<std::string> updated_from;
+    if (app_state.knockthru_version != kVersion) {
+        if (app_state.knockthru_version.empty() ? ran_before
+                : knockthru::compare_versions(kVersion, app_state.knockthru_version) > 0) {
+            updated_from = app_state.knockthru_version;
+            log("Updated from " + (updated_from->empty() ? "an older version" : *updated_from));
+        }
+        app_state.knockthru_version = kVersion;
+        save_app_state();
     }
 
     const auto pid = static_cast<uint32_t>(getpid());
@@ -839,8 +853,9 @@ int run() {
     // futures below wait for their jobs when destroyed, and the guard after them runs
     // first, because C++ destroys locals in reverse order.
     std::atomic<bool> cancel_downloads{false};
+    std::atomic<float> install_progress{0}; // the install job writes it, from 0 to 1
     std::future<knockthru::Release> check_job;
-    bool check_is_automatic = false; // the weekly check, which never shows errors
+    bool check_is_automatic = false; // the daily check, which never shows errors
     std::future<void> install_job;
     struct CancelOnExit {
         std::atomic<bool>& flag;
@@ -849,6 +864,18 @@ int run() {
     std::optional<knockthru::Release> latest; // the newer release a check found
     const auto update_work = knockthru::user_directory() / "update";
     state.version = kVersion;
+    if (updated_from) {
+        state.update = {knockthru::UpdateView::Status::Updated, *updated_from, ""};
+        const auto had = updated_from->empty() ? "" : " You had version " + *updated_from + ".";
+        state.update_notice = knockthru::UpdateNotice{false, std::string("You now have version ") + kVersion + "." + had};
+    }
+    double restart_started = -1; // when this process asked knockthru-ctl to restart into the new version
+    // The new files stay in place when a restart fails, so Settings keeps its Restart button.
+    const auto restart_failed = [&](const std::string& version) {
+        state.update = {knockthru::UpdateView::Status::Installed, version, ""};
+        state.update_notice = knockthru::UpdateNotice{true, "Version " + version +
+            " is installed, but KnockThru did not restart. Press Restart in Settings to try again, or restart SteamVR."};
+    };
     double next_slow_check = 0;
     double binary_missing_since = -1;
     const auto binary = executable();
@@ -961,15 +988,16 @@ int run() {
             }
             state.app_key = scene_app_key();
             state.app_name = app_name(state.app_key);
-            // The weekly check waits a minute after start, for the Wi-Fi. It fails quietly.
+            // The daily check waits a minute after start, for the Wi-Fi. It fails quietly.
             const auto now_epoch = static_cast<long long>(std::time(nullptr));
             if (config.check_updates && t > 60 && !check_job.valid() && !install_job.valid() &&
-                state.update.status == knockthru::UpdateView::Status::Idle &&
-                now_epoch - app_state.last_update_check >= 7 * 24 * 3600) {
+                (state.update.status == knockthru::UpdateView::Status::Idle ||
+                 state.update.status == knockthru::UpdateView::Status::Updated) &&
+                now_epoch - app_state.last_update_check >= 24 * 3600) {
                 app_state.last_update_check = now_epoch;
                 save_app_state();
                 check_is_automatic = true;
-                log("Weekly update check");
+                log("Daily update check");
                 check_job = std::async(std::launch::async, [update_work, cancel = &cancel_downloads] {
                     return knockthru::fetch_latest_release(update_work, cancel);
                 });
@@ -1052,7 +1080,7 @@ int run() {
                     }
                     break;
                 case PanelCommand::CheckUpdate:
-                    // A weekly check already running answers this press too.
+                    // A daily check already running answers this press too.
                     if (check_job.valid() && check_is_automatic) {
                         check_is_automatic = false;
                         state.update = {knockthru::UpdateView::Status::Checking, "", ""};
@@ -1064,13 +1092,31 @@ int run() {
                         return knockthru::fetch_latest_release(update_work, cancel);
                     });
                     break;
+                case PanelCommand::RestartForUpdate:
+                    if (state.update.status != knockthru::UpdateView::Status::Installed) break;
+                    log("Restarting into KnockThru " + state.update.latest);
+                    try {
+                        // knockthru-ctl --install stops this process and starts the new one.
+                        knockthru::start_detached({(install_directory() / "knockthru-ctl").string(), "--install"});
+                        state.update.status = knockthru::UpdateView::Status::Restarting;
+                        restart_started = t;
+                    } catch (const std::exception& error) {
+                        log(std::string("Restart failed: ") + error.what());
+                        restart_failed(state.update.latest);
+                    }
+                    break;
+                case PanelCommand::DismissUpdateNotice:
+                    state.update_notice.reset();
+                    break;
                 case PanelCommand::InstallUpdate:
                     if (!latest || check_job.valid() || install_job.valid()) break;
                     log("Installing KnockThru " + latest->version + " from " + latest->url);
                     state.update.status = knockthru::UpdateView::Status::Installing;
-                    install_job = std::async(std::launch::async, [release = *latest, update_work, cancel = &cancel_downloads] {
-                        knockthru::install_release(release, install_directory(), update_work, cancel);
-                    });
+                    install_progress = 0;
+                    install_job = std::async(std::launch::async,
+                        [release = *latest, update_work, cancel = &cancel_downloads, progress = &install_progress] {
+                            knockthru::install_release(release, install_directory(), update_work, cancel, progress);
+                        });
                     break;
                 case PanelCommand::ShowReport: {
                     // The QR code opens a page this headset serves, with the full report. Without a
@@ -1357,10 +1403,10 @@ int run() {
                 log("Update check: " + release.version + (newer ? " is available" : " is the latest"));
             } catch (const std::exception& error) {
                 if (check_is_automatic) {
-                    // Try again in a day, not a week, since the Wi-Fi may only have been down.
-                    app_state.last_update_check = static_cast<long long>(std::time(nullptr)) - 6 * 24 * 3600;
+                    // Try again in an hour, not a day, since the Wi-Fi may only have been down.
+                    app_state.last_update_check = static_cast<long long>(std::time(nullptr)) - 23 * 3600;
                     save_app_state();
-                    log(std::string("Weekly update check failed: ") + error.what());
+                    log(std::string("Daily update check failed: ") + error.what());
                 } else {
                     state.update = {UpdateStatus::Failed, "", error.what()};
                     show(std::string("Update check failed: ") + error.what(), true);
@@ -1368,19 +1414,33 @@ int run() {
             }
             if (panel) panel->invalidate();
         }
+        // The Installing button fills as the download runs. Whole percents are enough to redraw for.
+        if (install_job.valid() && std::abs(install_progress - state.update_progress) >= 0.01f) {
+            state.update_progress = install_progress;
+            if (panel) panel->invalidate();
+        }
         if (install_job.valid() && install_job.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            const auto version = latest ? latest->version : "";
             try {
                 install_job.get();
-                // knockthru-ctl --install stops this process and starts the new one. If that
-                // fails, the new files still start with SteamVR next time.
-                log("Installed KnockThru " + latest->version + ". Restarting.");
-                knockthru::start_detached({(install_directory() / "knockthru-ctl").string(), "--install"});
-                state.update = {UpdateStatus::Current, latest->version, ""};
-                show("Installed " + latest->version + ". KnockThru restarts in a moment.");
+                // The Restart button in Settings starts the new version now. Otherwise SteamVR starts it at its next launch.
+                log("Installed KnockThru " + version);
+                state.update = {UpdateStatus::Installed, version, ""};
             } catch (const std::exception& error) {
-                state.update = {UpdateStatus::Failed, latest ? latest->version : "", error.what()};
-                show(std::string("Update not installed: ") + error.what(), true);
+                std::string reason = error.what();
+                if (!reason.empty() && reason.back() != '.') reason += '.';
+                state.update = {UpdateStatus::Failed, version, error.what()};
+                state.update_notice = knockthru::UpdateNotice{true, "Version " + version + " was not installed. " +
+                    reason + " You still have version " + kVersion + "."};
+                log("Update not installed: " + reason);
             }
+            if (panel) panel->invalidate();
+        }
+        // knockthru-ctl stops this process within seconds, so one still running after 30 s missed its restart.
+        if (restart_started >= 0 && t - restart_started > 30) {
+            restart_started = -1;
+            log("Restart after the update did not happen");
+            restart_failed(latest ? latest->version : "");
             if (panel) panel->invalidate();
         }
 
