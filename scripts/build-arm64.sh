@@ -12,6 +12,11 @@ export ZIG_LOCAL_CACHE_DIR="$build/zig-local-cache"
 
 sources=(
     src/main.cpp
+    src/app.cpp
+    src/steamvr.cpp
+    src/poses.cpp
+    src/diagnostics.cpp
+    src/install.cpp
     src/knock_detector.cpp
     src/room_view.cpp
     src/style.cpp
