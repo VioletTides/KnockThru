@@ -567,7 +567,7 @@ void Panel::report_card(const PanelState& state) {
     button(record, record_label, PanelClick{PanelCommand::RecordKnocks}, std::nullopt, false, !recording);
     std::string record_note = "Knocks missed or wrong? Record 20 s of them.";
     if (recording) record_note = "Knock the way that goes wrong. Heard " + std::to_string(state.recording_knocks) + " so far.";
-    else if (state.recorded) record_note = state.report_full ? "Recording added. Your phone offers it as a download."
+    else if (state.recorded) record_note = state.report_full ? "Recording added. Your phone gets it in one report file."
                                                              : "Recording saved as knockthru-knocks.csv.gz.";
     const float record_x = record.x + record.w + 24;
     float ry = record.y + record.h / 2 - 16;

@@ -120,17 +120,21 @@ int main() {
             "report server serves the report file");
         const auto base = server.url().substr(0, server.url().rfind('/'));
         check(get(base + "/0000000000000000", other) == 22, "report server refuses a wrong token");
-        check(read(page).find("knock recording") == std::string::npos, "report page has no recording link without one");
-        check(get(server.url() + "/report/knockthru-knocks.csv.gz", other) == 22, "report server has no recording yet");
+        check(read(page).find("knockthru-report.zip") == std::string::npos, "report page has no report file link without a recording");
+        check(get(server.url() + "/report/knockthru-report.zip", other) == 22, "report server has no report file yet");
         server.set_report("newer report\n");
         const auto recording = root / "knocks.csv.gz";
         write(recording, "gz bytes");
         server.set_recording(recording);
-        check(get(server.url(), page) == 0 && read(page).find("Download the knock recording") != std::string::npos &&
-                  read(page).find("newer report") != std::string::npos,
-            "report page shows a new report and the recording link");
-        check(get(server.url() + "/report/knockthru-knocks.csv.gz", other) == 0 && read(other) == "gz bytes",
-            "report server serves the recording");
+        check(get(server.url(), page) == 0 && read(page).find("Download the report file") != std::string::npos &&
+                  read(page).find("newer report") != std::string::npos && read(page).find("id=\"go\"") == std::string::npos,
+            "report page leads with the report file when there is a recording");
+        const auto zip = root / "knockthru-report.zip", unpacked = root / "unpacked";
+        check(get(server.url() + "/report/knockthru-report.zip", zip) == 0 &&
+                  run_program({"unzip", "-q", "-o", zip.string(), "-d", unpacked.string()}) == 0 &&
+                  read(unpacked / "knockthru-report.txt") == "newer report\n" &&
+                  read(unpacked / "knockthru-knocks.csv.gz") == "gz bytes",
+            "the report file is a ZIP that unzip opens, with the report and the recording");
     }
 
     {

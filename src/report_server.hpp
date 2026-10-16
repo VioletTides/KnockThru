@@ -5,6 +5,8 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 namespace knockthru {
 
@@ -12,12 +14,16 @@ namespace knockthru {
 // 192.168.2.222. Empty without a network.
 std::string local_address();
 
-// The phone page: the report in a box, and one button that copies it and
-// opens `issue_link`, the prefilled GitHub form. `download` is the path of
-// the report as a file. `recording` is the path of the knock recording, or
-// empty for none. `issue_link` must be URL-encoded, so it has no quotes.
+// A ZIP archive of named files, stored without compression.
+std::string make_zip(const std::vector<std::pair<std::string, std::string>>& files);
+
+// The phone page. Without a knock recording, one button copies the report and
+// opens `issue_link`, the prefilled GitHub form, and `download` is the report
+// as a text file. With one, `bundle` is a ZIP of the report and the recording,
+// and the page asks for it to be attached. `issue_link` must be URL-encoded,
+// so it has no quotes.
 std::string report_page(const std::string& report, const std::string& issue_link, const std::string& download,
-                        const std::string& recording = "");
+                        const std::string& bundle = "");
 
 // Serves one report to phones on the same network, so a QR code can carry a
 // short link instead of the report. Paths need a random token, and the server
