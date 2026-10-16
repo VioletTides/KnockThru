@@ -10,6 +10,7 @@
 #include <iterator>
 #include <string>
 
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -86,6 +87,16 @@ int main() {
     check(issue_url({"0.1.0", "2.18.2", "on", "Style not changed"}).find("&last-error=Style%20not%20changed") !=
               std::string::npos,
         "issue_url adds the last error");
+    {
+        std::string big = "KnockThru: 0.1.0\n";
+        for (int i = 0; i < 2000; ++i) big += "2026-10-15 21:50:36  log line " + std::to_string(i) + " with some padding text\n";
+        const auto fitted = fit_report(big, 20000);
+        check(fit_report("short\n") == "short\n", "fit_report keeps a short report");
+        check(fitted.size() <= 20000, "fit_report stays under the limit: " + std::to_string(fitted.size()));
+        check(fitted.rfind("KnockThru: 0.1.0\n", 0) == 0 && fitted.find("log line 1999 with") != std::string::npos &&
+                  fitted.find("characters of older log lines cut") != std::string::npos,
+            "fit_report keeps the start and the newest lines, and marks the cut");
+    }
     const auto long_url = issue_url({"0.1.0", "2.18.2", std::string(300, 'x'), ""});
     check(long_url.find(std::string(100, 'x')) != std::string::npos &&
               long_url.find(std::string(101, 'x')) == std::string::npos,
@@ -113,6 +124,23 @@ int main() {
 
     check(run_program({"true"}) == 0 && run_program({"false"}) == 1, "run_program returns exit codes");
     check(run_program({"knockthru-no-such-program"}) == -1, "run_program returns -1 for a missing program");
+    {
+        // start_detached runs the program in a new session without the caller's descriptors.
+        fs::create_directories(root);
+        const auto out = root / "detached.txt";
+        // Fd 50, because ls itself opens a low descriptor to read /proc/self/fd. Not close-on-exec.
+        const int opened = ::open((root / "held").c_str(), O_CREAT | O_WRONLY, 0644);
+        const int held = ::dup2(opened, 50);
+        ::close(opened);
+        start_detached({"/bin/sh", "-c", "ls /proc/self/fd > '" + out.string() + "'; ps -o sid= -p $$ >> '" +
+                                             out.string() + "'"});
+        for (int i = 0; i < 50 && read(out).find('\n') == std::string::npos; ++i) usleep(20000);
+        usleep(100000);
+        const auto listing = read(out);
+        check(listing.find(std::to_string(held) + "\n") == std::string::npos,
+            "start_detached closes inherited descriptors");
+        ::close(held);
+    }
 
     // The file swap: new files land, extra files stay, modes carry over.
     const auto staging = root / "staging", install = root / "install";

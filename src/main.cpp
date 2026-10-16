@@ -972,7 +972,8 @@ int run() {
                     const auto issue = knockthru::issue_url({kVersion, steamvr_version(), room_view_text(), last_error});
                     report_server.reset();
                     try {
-                        report_server = std::make_unique<knockthru::ReportServer>(report_text(true, room_view_text()), issue);
+                        report_server = std::make_unique<knockthru::ReportServer>(
+                            knockthru::fit_report(report_text(true, room_view_text())), issue);
                         state.report_url = report_server->url();
                         state.report_full = true;
                         log("Serving the bug report at " + state.report_url);

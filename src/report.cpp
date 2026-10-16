@@ -33,4 +33,16 @@ std::string issue_url(const IssueFields& fields) {
            (fields.error.empty() ? "" : field("last-error", fields.error));
 }
 
+std::string fit_report(const std::string& report, std::size_t limit) {
+    if (report.size() <= limit) return report;
+    const std::size_t head = limit / 8;
+    const std::string mark = "\n[... " + std::to_string(report.size() - limit) + " characters of older log lines cut ...]\n";
+    // Both cuts land on line breaks, so no log line is split.
+    std::size_t head_end = report.rfind('\n', head);
+    if (head_end == std::string::npos) head_end = head;
+    std::size_t tail_start = report.find('\n', report.size() - (limit - head_end - mark.size()));
+    if (tail_start == std::string::npos) tail_start = report.size() - (limit - head_end - mark.size());
+    return report.substr(0, head_end) + mark + report.substr(tail_start + 1);
+}
+
 } // namespace knockthru

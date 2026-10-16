@@ -19,4 +19,9 @@ std::string url_encode(const std::string& text);
 // through a headset lens.
 std::string issue_url(const IssueFields& fields);
 
+// Shortens a report to at most `limit` characters for a GitHub issue body,
+// which GitHub caps at 65,536. Keeps the start, with the versions and
+// settings, and the end, with the newest log lines, and marks the cut.
+std::string fit_report(const std::string& report, std::size_t limit = 60000);
+
 } // namespace knockthru

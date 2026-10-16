@@ -201,20 +201,25 @@ int run_program(const std::vector<std::string>& args) {
 }
 
 void start_detached(const std::vector<std::string>& args) {
-    posix_spawnattr_t attributes;
-    posix_spawnattr_init(&attributes);
-    posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETSID);
-    posix_spawn_file_actions_t actions;
-    posix_spawn_file_actions_init(&actions);
-    posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
-    posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
-    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    // fork instead of posix_spawn, so the child can close every descriptor it
+    // inherited, such as the caller's SteamVR connection, before it runs.
     auto argv = argv_of(args);
-    pid_t pid = 0;
-    const int error = posix_spawn(&pid, argv[0], &actions, &attributes, argv.data(), environ);
-    posix_spawn_file_actions_destroy(&actions);
-    posix_spawnattr_destroy(&attributes);
-    if (error != 0) throw std::runtime_error("Cannot start " + args[0]);
+    const long max_fd = std::max(::sysconf(_SC_OPEN_MAX), 1024L);
+    const pid_t pid = ::fork();
+    if (pid < 0) throw std::runtime_error("Cannot start " + args[0]);
+    if (pid == 0) {
+        // Only async-signal-safe calls from here, because the parent has threads.
+        ::setsid();
+        const int null = ::open("/dev/null", O_RDWR);
+        if (null >= 0) {
+            ::dup2(null, STDIN_FILENO);
+            ::dup2(null, STDOUT_FILENO);
+            ::dup2(null, STDERR_FILENO);
+        }
+        for (long fd = 3; fd < max_fd; ++fd) ::close(static_cast<int>(fd));
+        ::execv(argv[0], argv.data());
+        ::_exit(127);
+    }
     // The child runs on after this process exits. Its exit status is never read.
 }
 
