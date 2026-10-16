@@ -18,6 +18,7 @@ struct AppConfig {
     bool paused = false; // knocks do nothing while paused
     bool classic_bar_icon = false; // the dashboard bar icon in the logo colors, without Steam's tint
     bool sounds = true; // SteamVR's click on a triple knock and on panel buttons
+    bool tour_done = false; // the first-run tour finished or skipped
 };
 
 // One knock kind's calibration.
@@ -51,6 +52,12 @@ void save_paused(bool paused);
 void save_classic_bar_icon(bool classic);
 void save_knock_types(const std::array<bool, 3>& enabled);
 void save_blocked_apps(const std::set<std::string>& apps);
+void save_sounds(bool sounds);
+void save_tour_done(bool done);
+
+// Factory reset: deletes the user config.json and calibration.json. Keeps
+// application.log and the SteamVR registration files.
+void reset_user_settings();
 
 Calibration load_calibration();
 void save_calibration(const Calibration& calibration);

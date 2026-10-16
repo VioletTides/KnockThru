@@ -31,6 +31,16 @@ struct CalibrationView {
     double trial_t = -1;
 };
 
+// The first-run tour, filled in by the app. The knock steps really switch
+// passthrough and style, and tick off when they hear their knock.
+struct TourView {
+    enum class Step { Welcome, Kinds, Calibrate, Double, Triple, Done };
+    Step step = Step::Welcome;
+    std::array<bool, 3> calibrated{}; // per KnockKind, calibrated before or during this tour
+    double double_t = -1; // when the double knock step heard a double knock
+    double triple_t = -1; // when the triple knock step heard a triple knock
+};
+
 // Everything the dashboard panel shows. The app fills it in, the panel draws it.
 // Times are seconds on the app clock, the same clock render() gets.
 struct PanelState {
@@ -40,10 +50,12 @@ struct PanelState {
     bool busy = false;               // a Room View change is in progress
     bool paused = false;
     bool classic_bar_icon = false;   // the bar icon in the logo colors
+    bool sounds = true;              // SteamVR's click on a triple knock and on panel buttons
     std::array<bool, 3> enabled{true, true, true}; // per KnockKind
     std::string app_key, app_name;   // the running game, empty when none
     bool app_blocked = false;
     std::optional<CalibrationView> calibration;
+    std::optional<TourView> tour;
     std::optional<KnockKind> calibration_saved; // the kind the last calibration just saved
     std::string message;
     bool message_is_error = false;
@@ -61,6 +73,10 @@ enum class PanelCommand {
     CancelCalibration,
     SaveCalibration,
     Navigate,           // a button that only changes the screen, such as Back
+    Sounds,
+    StartTour, TourNext, TourBack,
+    TourSkip,           // ends the tour from any step, including Done
+    FactoryReset,
 };
 
 struct PanelClick {
@@ -69,8 +85,9 @@ struct PanelClick {
 };
 
 // The KnockThru dashboard panel, drawn into an RGBA image. It has a main
-// screen, a settings screen, and a calibration walkthrough in four steps:
-// pick a kind, learn the knock, record, and try it.
+// screen, a settings screen with a factory reset confirm, a calibration
+// walkthrough in four steps (pick a kind, learn the knock, record, and try
+// it), and the first-run tour in six.
 class Panel {
 public:
     static constexpr int kWidth = 1200, kHeight = 770;
@@ -94,9 +111,9 @@ public:
     static void draw_icon(Canvas& canvas, IconStyle style = IconStyle::Tile);
 
 private:
-    enum class Screen { Main, Settings, Pick, Learn };
-    // What is on screen, for transitions: a screen, or a calibration phase.
-    enum class View { Main, Settings, Pick, Learn, Record, Try };
+    enum class Screen { Main, Settings, Reset, Pick, Learn };
+    // What is on screen, for transitions: a screen, a calibration phase, or the tour.
+    enum class View { Main, Settings, Reset, Pick, Learn, Record, Try, Tour };
     struct Target {
         Rect rect;
         std::optional<PanelClick> click = {};
@@ -110,11 +127,13 @@ private:
     KnockKind learn_kind_ = KnockKind::Together;
     bool saved_dismissed_ = false;
     bool was_calibrating_ = false;
+    bool was_touring_ = false;
     std::vector<Target> targets_;
     std::optional<std::pair<float, float>> hover_;
     double now_ = 0;
     bool animating_ = false;
     std::optional<View> view_;
+    std::optional<TourView::Step> tour_step_; // the tour step on screen, so each step rises in
     double view_t_ = 0;
 
     bool hovered(Rect rect) const;
@@ -124,7 +143,12 @@ private:
     void learn_screen(const PanelState& state);
     void record_screen(const PanelState& state, const CalibrationView& view);
     void try_screen(const PanelState& state, const CalibrationView& view);
-    void steps(int current);
+    void tour_screen(const PanelState& state, const TourView& tour);
+    void tour_knock_step(const PanelState& state, const TourView& tour);
+    void tour_buttons(bool first, bool last, bool complete);
+    void reset_confirm();
+    void steps(int current, int total);
+    void check_mark(float cx, float cy, float radius, float pop);
     void knock_scene(KnockKind kind, Rect box, float t, int knocks);
     void settings_screen(const PanelState& state);
     void knocks_row(Rect rect, const PanelState& state);
@@ -132,8 +156,10 @@ private:
     void style_control(Rect rect, const PanelState& state);
     void switch_row(Rect rect, std::optional<PanelClick> click, bool on, const std::string& title,
                     const std::string& detail, bool enabled, bool divider);
+    void button_row(Rect rect, const std::string& title, const std::string& detail, const std::string& label,
+                    std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger, bool divider = true);
     void button(Rect rect, const std::string& label, std::optional<PanelClick> click, std::optional<Screen> go_to,
-                bool primary = false, bool enabled = true);
+                bool primary = false, bool enabled = true, bool danger = false);
     void switch_control(float right, float cy, bool on, bool enabled, float scale);
     void message(const PanelState& state, float y);
 };
