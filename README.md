@@ -59,7 +59,7 @@ Pause for a moment, then knock at a steady pace. After your last knock, KnockThr
 | You knock | What happens | You feel |
 | --- | --- | --- |
 | Twice | Passthrough turns on or off | One buzz |
-| Three times | The style switches between translucent and opaque | Two buzzes |
+| Three times | The style switches between translucent and opaque. If passthrough is off, it stays off and opens in the new style next time | Two buzzes |
 | Four or more times, or mixed kinds | Nothing | Nothing |
 
 You also hear a click. Steam clicks when passthrough turns on or off, and KnockThru clicks when the style switches. To turn off KnockThru's click, use **Sounds** in Settings.
