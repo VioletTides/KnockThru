@@ -283,19 +283,32 @@ def hero(panel_dir):
 # Calibrate: the panel's own calibration screens, from the Settings button to the saved banner.
 
 def pointer_dot(image, x, y, shown, press, ring):
-    """Draws SteamVR's laser pointer dot: a white dot in a soft glow. press shrinks it on a click,
-    ring runs 0 to 1 as a click ring spreads out, or is None."""
-    layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-    for r, alpha in ((26, 30), (20, 50), (15, 80)):  # glow, faint at the edge
-        draw.ellipse([x - r, y - r, x + r, y + r], fill=(255, 255, 255, round(alpha * shown)))
-    r = 10 * (1 - 0.3 * press)
-    draw.ellipse([x - r - 2, y - r - 2, x + r + 2, y + r + 2], fill=(18, 20, 24, round(120 * shown)))
-    draw.ellipse([x - r, y - r, x + r, y + r], fill=(255, 255, 255, round(255 * shown)))
+    """Draws SteamVR's dashboard pointer: a light blue dot, lighter at the top, in a dark ring.
+    The colors and proportions match /opt/steamvr/resources/overlay_pointer_circle.png on the
+    Frame. press shrinks the dot on a click. ring runs 0 to 1 as a click ring spreads, or is None."""
+    scale = 4  # drawn large, then shrunk, for smooth edges
+    size = 40 * scale
+    dot = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(dot)
+    c = size / 2
     if ring is not None:
-        rr = 14 + 30 * ease_out(ring)
-        draw.ellipse([x - rr, y - rr, x + rr, y + rr], outline=(255, 255, 255, round(200 * (1 - ring) * shown)), width=4)
-    image.alpha_composite(layer)
+        rr = (17 + 16 * ease_out(ring)) * scale
+        draw.ellipse([c - rr, c - rr, c + rr, c + rr], outline=(109, 186, 216, round(180 * (1 - ring))),
+                     width=3 * scale)
+    outer = 14 * (1 - 0.15 * press) * scale
+    inner = outer * 18 / 27.5
+    draw.ellipse([c - outer, c - outer, c + outer, c + outer], fill=(41, 45, 50, 237))
+    top, bottom = (119, 197, 227), (100, 177, 207)
+    gradient = Image.new("RGBA", (size, size))
+    gradient.putdata([(*mix(bottom, ease_in_out((row / size - 0.4) / 0.3), top), 255)
+                      for row in range(size) for _ in range(size)])
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).ellipse([c - inner, c - inner, c + inner, c + inner], fill=255)
+    dot.paste(gradient, mask=mask)
+    dot = dot.resize((40, 40), Image.LANCZOS)
+    if shown < 1:
+        dot.putalpha(dot.getchannel("A").point(lambda a: round(a * shown)))
+    image.alpha_composite(dot, (round(x - 20), round(y - 20)))
 
 
 def calibrate(panel_dir):
