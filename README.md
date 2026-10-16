@@ -93,7 +93,7 @@ If soft knocks get missed, calibrate that knock kind. Open **Settings** in the K
 
 KnockThru checks GitHub for a new release once a day. When one is out, a yellow dot shows on the **Settings** button.
 
-![Installing an update: the yellow dot on the Settings button, Install 0.2.0 fills as it downloads, Restart, then a card says KnockThru updated to version 0.2.0](images/update.gif)
+![Installing an update: the yellow dot on the Settings button, Install 1.1.0 fills as it downloads, Restart, then a card says KnockThru updated to version 1.1.0](images/update.gif)
 
 1. Open **Settings** and press **Install**. The button fills as the release downloads and gets checked.
 2. Press **Restart**. KnockThru starts the new version.
@@ -191,7 +191,7 @@ The log is `~/.config/knockthru/application.log`.
 Copy the Linux ARM64 ZIP from the releases page to the Frame, then run:
 
 ```sh
-unzip -oq knockthru-0.1.0-linux-arm64.zip -d ~/KnockThru
+unzip -oq knockthru-1.0.0-linux-arm64.zip -d ~/KnockThru
 ~/KnockThru/knockthru --install
 ```
 
@@ -212,7 +212,7 @@ Steam Frame build (needs Zig 0.16.0) and release ZIP (needs Node.js):
 
 ```sh
 scripts/build-arm64.sh
-node scripts/package.mjs --build-dir build-arm64 --version 0.1.0
+node scripts/package.mjs --build-dir build-arm64 --version 1.0.0
 ```
 
 README images (needs Pillow, numpy, ffmpeg, and Chromium, after the host build):

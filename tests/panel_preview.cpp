@@ -289,8 +289,8 @@ void readme_update(const std::filesystem::path& dir) {
     state.opaque = false;
     state.app_key = "steam.app.620980";
     state.app_name = "Beat Saber";
-    state.version = "0.1.0";
-    state.update = {UpdateView::Status::Available, "0.2.0", ""};
+    state.version = "1.0.0";
+    state.update = {UpdateView::Status::Available, "1.1.0", ""};
     const Recorder::Point rest{300, 730};
     Recorder rec{&panel, dir};
     rec.pointer = rest;
@@ -299,7 +299,7 @@ void readme_update(const std::filesystem::path& dir) {
     rec.play(state, 1.1);
     rec.click();
     rec.play(state, 0.6);
-    rec.aim(1035, 68); // Install 0.2.0
+    rec.aim(1035, 68); // Install 1.1.0
     rec.play(state, 1.4);
     rec.click();
     state.update.status = UpdateView::Status::Installing;
@@ -318,9 +318,9 @@ void readme_update(const std::filesystem::path& dir) {
     rec.cuts.push_back(rec.index);
     Panel restarted(KNOCKTHRU_FONTS);
     rec.panel = &restarted;
-    state.version = "0.2.0";
-    state.update = {UpdateView::Status::Updated, "0.1.0", ""};
-    state.update_notice = UpdateNotice{false, "You now have version 0.2.0. You had version 0.1.0."};
+    state.version = "1.1.0";
+    state.update = {UpdateView::Status::Updated, "1.0.0", ""};
+    state.update_notice = UpdateNotice{false, "You now have version 1.1.0. You had version 1.0.0."};
     rec.play(state, 1.0);
     rec.aim(832, 466); // OK on the card
     rec.play(state, 1.8);

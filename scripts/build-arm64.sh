@@ -5,7 +5,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 build="${1:-$root/build-arm64}"
-version="${KNOCKTHRU_VERSION:-0.1.0}"
+version="${KNOCKTHRU_VERSION:-1.0.0}"
 mkdir -p "$build/bin"
 export ZIG_GLOBAL_CACHE_DIR="$build/zig-global-cache"
 export ZIG_LOCAL_CACHE_DIR="$build/zig-local-cache"
