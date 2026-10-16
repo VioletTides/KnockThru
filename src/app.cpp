@@ -28,10 +28,13 @@
 #include <ctime>
 #include <deque>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <future>
+#include <map>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -71,6 +74,11 @@ public:
     // the panel just opened.
     std::vector<PanelClick> poll(bool& shown) {
         std::vector<PanelClick> clicks;
+#ifdef KNOCKTHRU_TEST_HOOK
+        clicks.swap(test_clicks_);
+        if (test_shown_) shown = true;
+        test_shown_ = false;
+#endif
         vr::VREvent_t event{};
         while (vr::VROverlay()->PollNextOverlayEvent(main_, &event, sizeof event)) {
             // OpenVR puts the mouse origin at the bottom left.
@@ -91,6 +99,20 @@ public:
     }
 
     void invalidate() { dirty_ = true; }
+
+#ifdef KNOCKTHRU_TEST_HOOK
+    // Stand-ins for the dashboard and the laser pointer. The next poll() reports them.
+    void test_open() { visible_ = dirty_ = test_shown_ = true; }
+    void test_close() { visible_ = false; }
+    void test_click(float x, float y) {
+        if (const auto click = panel_.click(x, y)) test_clicks_.push_back(*click);
+        dirty_ = true;
+    }
+    void test_press(PanelClick click) { test_clicks_.push_back(click); }
+    bool test_snapshot(const PanelState& state, double now, const fs::path& path) {
+        return panel_.render(state, hover_, now).write_png(path);
+    }
+#endif
 
     // Sets the dashboard bar icon: the mark in the logo colors, or in white for Steam's tint.
     void set_bar_icon(bool classic) {
@@ -137,6 +159,10 @@ private:
     std::optional<bool> bar_icon_classic_;
     std::vector<std::uint8_t> uploaded_;
     std::unique_ptr<OverlayTexture> texture_;
+#ifdef KNOCKTHRU_TEST_HOOK
+    bool test_shown_ = false;
+    std::vector<PanelClick> test_clicks_;
+#endif
 };
 
 // A Room View read or change running on another thread, because the debug
@@ -197,6 +223,10 @@ private:
     void handle_knocks(double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event);
     void collect_jobs(double t);
     void draw_panel(double t);
+#ifdef KNOCKTHRU_TEST_HOOK
+    void run_test_commands(double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event);
+    void run_test_command(const std::string& line, double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event);
+#endif
 
     void note_versions();
     void load_haptics();
@@ -257,10 +287,20 @@ private:
     std::optional<KnockRecording> recording_; // while the report card records knocks
     std::future<void> recording_job_;         // writes a finished recording
     std::unique_ptr<ReportServer> report_server_; // while the report card shows
+#ifdef KNOCKTHRU_TEST_HOOK
+    fs::path test_commands_;      // the command file
+    std::uintmax_t test_read_ = 0; // bytes of it already run
+#endif
 };
 
 App::App() {
     note_versions();
+#ifdef KNOCKTHRU_TEST_HOOK
+    test_commands_ = user_directory() / "test-commands";
+    std::ofstream(test_commands_, std::ios::app).close();
+    test_read_ = fs::file_size(test_commands_); // a restart never repeats old commands
+    log("Test hook reads " + test_commands_.string());
+#endif
 
     const auto pid = static_cast<uint32_t>(getpid());
     std::array<char, vr::k_unMaxApplicationKeyLength> key{};
@@ -362,8 +402,11 @@ void App::run() {
             detector_.push(sample.device, sample.t, sample.position, sample.velocity);
             if (recording_) recording_->samples.push_back(sample);
         }
-        const auto knock_event = detector_.poll(t);
-        const auto knocks = detector_.take_knocks();
+        auto knock_event = detector_.poll(t);
+        auto knocks = detector_.take_knocks();
+#ifdef KNOCKTHRU_TEST_HOOK
+        run_test_commands(t, knocks, knock_event);
+#endif
         if (recording_) record_knocks(t, knocks, knock_event);
         handle_knocks(t, knocks, knock_event);
         collect_jobs(t);
@@ -832,6 +875,95 @@ void App::draw_panel(double t) {
     state_.calibration = calibration_;
     panel_->draw(state_, t);
 }
+
+#ifdef KNOCKTHRU_TEST_HOOK
+// Development builds only (KNOCKTHRU_TEST_HOOK). Runs each line appended to
+// ~/.config/knockthru/test-commands, so a script can drive the app over SSH:
+//   open | close             the dashboard opens or closes the panel
+//   click X Y                the laser pointer clicks panel pixel (X, Y), from the top left
+//   press COMMAND [KIND]     a panel button by its PanelCommand name, such as CheckUpdate
+//   knock KIND PEAK APPROACH one knock, with its spike in m/s^2 and approach speed in m/s
+//   action KIND COUNT        a double (2) or triple (3) knock
+//   snapshot PATH            saves the panel as a PNG
+// Reopens the file for each read, because glibc keeps a stream at end of file
+// once it got there, so an open stream never sees lines added later.
+void App::run_test_commands(double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event) {
+    std::error_code error;
+    const auto size = fs::file_size(test_commands_, error);
+    if (error || size <= test_read_) return;
+    std::ifstream file(test_commands_, std::ios::binary);
+    file.seekg(static_cast<std::streamoff>(test_read_));
+    std::string text(size - test_read_, '\0');
+    file.read(text.data(), static_cast<std::streamsize>(text.size()));
+    const auto end = text.rfind('\n'); // a line still being written waits for the next loop
+    if (end == std::string::npos) return;
+    test_read_ += end + 1;
+    std::istringstream lines(text.substr(0, end));
+    for (std::string line; std::getline(lines, line);)
+        if (!line.empty()) run_test_command(line, t, knocks, event);
+}
+
+void App::run_test_command(const std::string& line, double t, std::deque<Knock>& knocks,
+                           std::optional<KnockEvent>& event) {
+    static const std::map<std::string, PanelCommand> commands{{"RoomView", PanelCommand::RoomView},
+        {"Style", PanelCommand::Style}, {"Pause", PanelCommand::Pause}, {"Kind", PanelCommand::Kind},
+        {"BlockApp", PanelCommand::BlockApp}, {"BarIcon", PanelCommand::BarIcon}, {"Calibrate", PanelCommand::Calibrate},
+        {"CancelCalibration", PanelCommand::CancelCalibration}, {"SaveCalibration", PanelCommand::SaveCalibration},
+        {"Sounds", PanelCommand::Sounds}, {"StartTour", PanelCommand::StartTour}, {"TourNext", PanelCommand::TourNext},
+        {"TourBack", PanelCommand::TourBack}, {"TourSkip", PanelCommand::TourSkip},
+        {"FactoryReset", PanelCommand::FactoryReset}, {"CheckUpdate", PanelCommand::CheckUpdate},
+        {"InstallUpdate", PanelCommand::InstallUpdate}, {"RestartForUpdate", PanelCommand::RestartForUpdate},
+        {"DismissUpdateNotice", PanelCommand::DismissUpdateNotice}, {"ShowReport", PanelCommand::ShowReport},
+        {"CloseReport", PanelCommand::CloseReport}, {"SaveReport", PanelCommand::SaveReport},
+        {"RecordKnocks", PanelCommand::RecordKnocks}};
+    log("Test: " + line);
+    std::istringstream in(line);
+    std::string verb, name;
+    in >> verb;
+    const auto kind_of = [&](const std::string& text) {
+        const auto kind = parse_knock_kind(text);
+        if (!kind) throw std::runtime_error("unknown knock kind " + text);
+        return *kind;
+    };
+    try {
+        if (!panel_ && verb != "knock" && verb != "action") throw std::runtime_error("the panel did not load");
+        if (verb == "open") {
+            panel_->test_open();
+        } else if (verb == "close") {
+            panel_->test_close();
+        } else if (verb == "click") {
+            float x = 0, y = 0;
+            if (!(in >> x >> y)) throw std::runtime_error("click needs X and Y");
+            panel_->test_click(x, y);
+        } else if (verb == "press") {
+            in >> name;
+            const auto command = commands.find(name);
+            if (command == commands.end()) throw std::runtime_error("unknown command " + name);
+            PanelClick click{command->second};
+            if (std::string kind; in >> kind) click.kind = kind_of(kind);
+            panel_->test_press(click);
+        } else if (verb == "knock") {
+            double peak = 0, approach = 0;
+            if (!(in >> name >> peak >> approach)) throw std::runtime_error("knock needs KIND PEAK APPROACH");
+            const auto kind = kind_of(name);
+            const int source = kind == KnockKind::Together ? -1 : kind == KnockKind::Headset ? 0 : 2;
+            knocks.push_back(Knock{t, kind, source, {0, 0, 0}, peak, 0, approach});
+        } else if (verb == "action") {
+            int count = 0;
+            if (!(in >> name >> count) || (count != 2 && count != 3)) throw std::runtime_error("action needs KIND 2 or 3");
+            event = KnockEvent{t, kind_of(name), count};
+        } else if (verb == "snapshot") {
+            std::string path;
+            std::getline(in >> std::ws, path);
+            if (!panel_->test_snapshot(state_, t, path)) throw std::runtime_error("cannot write " + path);
+        } else {
+            throw std::runtime_error("unknown test command");
+        }
+    } catch (const std::exception& error) {
+        log(std::string("Test failed: ") + error.what());
+    }
+}
+#endif
 
 void App::save_app_state() {
     try {
