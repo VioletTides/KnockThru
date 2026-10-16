@@ -84,18 +84,27 @@ std::string report_page(const std::string& report, const std::string& issue_link
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KnockThru bug report</title>
 <style>
-body{margin:0;padding:24px 16px;background:#121418;color:#eceef1;font:18px/1.5 system-ui,sans-serif}
+/* The panel's colors. The button blue is darker than the panel accent, so white text passes WCAG AA. */
+:root{--bg:#121418;--surface:#1c1f25;--line:#2e323a;--text:#eceef1;--dim:#969ca8;--accent:#2a78c8;--link:#50a0f0}
+@media (prefers-color-scheme: light){
+ :root{--bg:#f4f5f7;--surface:#ffffff;--line:#d5d9e0;--text:#16181c;--dim:#545b68;--link:#1f66b0}
+}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--text);font:18px/1.5 system-ui,sans-serif}
+main{max-width:560px;margin:0 auto}
 h1{font-size:26px;margin:0 0 8px}
-p{margin:0 0 16px;color:#969ca8}
-button,a.button{display:block;width:100%;box-sizing:border-box;padding:18px;border:0;border-radius:16px;
- background:#3a91e8;color:#fff;font:600 20px system-ui,sans-serif;text-align:center;text-decoration:none}
+p{margin:0 0 16px;color:var(--dim)}
+button{display:block;width:100%;box-sizing:border-box;padding:18px;border:0;border-radius:16px;
+ background:var(--accent);color:#f5f7fa;font:600 20px system-ui,sans-serif;cursor:pointer}
+button:active{transform:scale(0.98)}
+button:focus-visible,a:focus-visible{outline:3px solid var(--link);outline-offset:3px}
 ol{padding-left:24px;margin:20px 0}
 li{margin:0 0 8px}
-a{color:#50a0f0}
-textarea{width:100%;box-sizing:border-box;height:220px;margin-top:8px;background:#1c1f25;color:#eceef1;
- border:1px solid #2e323a;border-radius:12px;padding:12px;font:13px/1.4 ui-monospace,monospace}
-details{margin-top:24px;color:#969ca8}
-</style></head><body>
+a{color:var(--link)}
+textarea{width:100%;box-sizing:border-box;height:220px;margin-top:8px;background:var(--surface);color:var(--text);
+ border:1px solid var(--line);border-radius:12px;padding:12px;font:13px/1.4 ui-monospace,monospace}
+details{margin-top:24px;color:var(--dim)}
+@media (prefers-reduced-motion: reduce){button:active{transform:none}}
+</style></head><body><main>
 <h1>KnockThru bug report</h1>
 <p>This page comes from your Frame. Nothing has been sent yet.</p>
 <button id="go">Copy report and open GitHub</button>
@@ -105,7 +114,7 @@ details{margin-top:24px;color:#969ca8}
 <li>Say what went wrong, then paste into the <b>Report</b> box.</li>
 <li>Press <b>Create</b>.</li>
 </ol>
-<p id="status"></p>
+<p id="status" role="status"></p>
 <p>Copy did not work? <a href=")HTML" + html_escape(download) + R"HTML(" download>Download the report</a> and attach it instead, or
 <a href=")HTML" + html_escape(issue_link) + R"HTML(">open GitHub</a> without it.</p>
 <details><summary>See the report</summary><textarea id="report" readonly>)HTML" +
@@ -135,7 +144,7 @@ document.getElementById("go").addEventListener("click", async () => {
   if (copied) setTimeout(() => { window.location.href = link; }, 600);
 });
 </script>
-</body></html>
+</main></body></html>
 )HTML";
 }
 

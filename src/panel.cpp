@@ -508,13 +508,13 @@ void Panel::update_control(const PanelState& state) {
     case Status::Checking: label = "Checking"; enabled = false; break;
     case Status::Current: status = "Version " + state.version + " is the latest"; break;
     case Status::Available:
-        status = "Version " + state.version + ", " + update.latest + " is ready";
+        status = "You have version " + state.version;
         label = "Install " + update.latest;
         primary = true;
         click = PanelClick{PanelCommand::InstallUpdate};
         break;
     case Status::Installing: label = "Installing"; enabled = false; break;
-    case Status::Failed: status = "Update failed"; label = "Try again"; break;
+    case Status::Failed: status = update.latest.empty() ? "Check failed" : "Install failed"; label = "Try again"; break;
     }
     canvas_.text(regular_, status, rect.x - 24, y + h / 2, 26, update.status == Status::Failed ? kError : kDim, Align::Right);
     button(rect, label, click, std::nullopt, primary, enabled);
@@ -545,7 +545,7 @@ void Panel::report_card(const PanelState& state) {
         y += 40 * lines.size() + 36;
     }
     const std::string hint = state.report_full ? "Your phone needs the same Wi-Fi as the Frame. Nothing is sent until you press Create on GitHub."
-                                               : "Nothing is sent until you press Create. The Frame is offline, so only the versions go along.";
+                                               : "Nothing is sent until you press Create. The Frame is offline, so the link carries only the versions.";
     for (const auto& line : canvas_.wrap(regular_, hint, 26, text_w, 3)) {
         canvas_.text(regular_, line, x, y, 26, kDim);
         y += 36;

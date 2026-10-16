@@ -68,7 +68,7 @@ Run these on the Frame over SSH.
 | `--update` | Install the latest GitHub release over this one and restart |
 | `--report` | Write `~/knockthru-report.txt` with versions, settings, and logs. Attach it to an issue |
 
-To report a problem from the headset, open Settings and select Report. Scan the QR code with your phone held up to a lens. It opens a GitHub issue with your KnockThru and SteamVR versions filled in.
+To report a problem from the headset, open Settings and select Report. Hold your phone up to a lens and scan the QR code. Your phone opens a page from the Frame, on the same Wi-Fi, with the full report. Its button copies the report and opens a GitHub issue with your KnockThru and SteamVR versions filled in. If the Frame is offline, the QR code opens the GitHub issue directly, without the report.
 | `--toggle`, `--style` | Turn Room View on or off, or switch its style, once |
 | `--detect` | Print knocks live without acting on them |
 
