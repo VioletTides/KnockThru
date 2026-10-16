@@ -138,7 +138,7 @@ void tour(const std::filesystem::path& out, const PanelState& idle) {
 // script to draw.
 struct Recorder {
     using Point = std::pair<float, float>;
-    Panel& panel;
+    Panel* panel;
     std::filesystem::path dir;
     double t = 100;
     int index = 0;
@@ -162,7 +162,7 @@ struct Recorder {
             }
             std::ostringstream file;
             file << std::setw(4) << std::setfill('0') << index++ << ".png";
-            panel.render(state, pointer, t).write_png(dir / file.str());
+            panel->render(state, pointer, t).write_png(dir / file.str());
             log << pointer->first << " " << pointer->second << "\n";
         }
     }
@@ -177,7 +177,15 @@ struct Recorder {
     }
     void click() {
         clicks.push_back(index);
-        panel.click(pointer->first, pointer->second);
+        panel->click(pointer->first, pointer->second);
+    }
+    void write_marks() const {
+        std::ofstream marks(dir / "marks.txt");
+        marks << "cuts";
+        for (int cut : cuts) marks << " " << cut;
+        marks << "\nclicks";
+        for (int click : clicks) marks << " " << click;
+        marks << "\n";
     }
     // The first time after the clock where `phase` seconds into a `loop` long animation comes round.
     double next(double loop, double phase) const { return t + std::fmod(phase - std::fmod(t, loop) + 2 * loop, loop); }
@@ -192,9 +200,10 @@ void readme_calibration(const std::filesystem::path& dir) {
     state.opaque = false;
     state.app_key = "steam.app.620980";
     state.app_name = "Beat Saber";
+    state.version = "0.2.0";
     // A spot that hovers nothing on the main screen or under the Saved banner.
     const Recorder::Point rest{300, 730};
-    Recorder rec{panel, dir};
+    Recorder rec{&panel, dir};
     rec.pointer = rest;
     rec.play(state, 0.5);
     rec.aim(460, 64); // Settings
@@ -257,12 +266,46 @@ void readme_calibration(const std::filesystem::path& dir) {
     rec.aim(rest.first, rest.second); // back where the loop starts
     rec.play(state, 1.6); // the README script cross-fades the last 0.4 s to the first frame
 
-    std::ofstream marks(dir / "marks.txt");
-    marks << "cuts";
-    for (int cut : rec.cuts) marks << " " << cut;
-    marks << "\nclicks";
-    for (int click : rec.clicks) marks << " " << click;
-    marks << "\n";
+    rec.write_marks();
+}
+
+// Installing an update from the dot on the Settings button to the restarted app, as frames in `dir`.
+void readme_update(const std::filesystem::path& dir) {
+    Panel panel(KNOCKTHRU_FONTS);
+    PanelState state;
+    state.room_view = false;
+    state.opaque = false;
+    state.app_key = "steam.app.620980";
+    state.app_name = "Beat Saber";
+    state.version = "0.1.0";
+    state.update = {UpdateView::Status::Available, "0.2.0", ""};
+    const Recorder::Point rest{300, 730};
+    Recorder rec{&panel, dir};
+    rec.pointer = rest;
+    rec.play(state, 1.2);
+    rec.aim(460, 64); // Settings, with its new-release dot
+    rec.play(state, 1.1);
+    rec.click();
+    rec.play(state, 0.6);
+    rec.aim(1035, 68); // Install 0.2.0
+    rec.play(state, 1.4);
+    rec.click();
+    state.update.status = UpdateView::Status::Installing;
+    rec.play(state, 2.0);
+    // KnockThru restarts from the new files, and its panel opens on the main screen again.
+    rec.cuts.push_back(rec.index);
+    Panel restarted(KNOCKTHRU_FONTS);
+    rec.panel = &restarted;
+    state.version = "0.2.0";
+    state.update = {};
+    rec.play(state, 1.0);
+    rec.aim(460, 64); // Settings again, which now shows the new version
+    rec.play(state, 1.1);
+    rec.click();
+    rec.play(state, 0.4);
+    rec.aim(rest.first, rest.second);
+    rec.play(state, 2.4); // the README script cross-fades the last 0.4 s to the first frame
+    rec.write_marks();
 }
 
 // Writes the passthrough off, on, and opaque states with no hover highlight.
@@ -278,7 +321,21 @@ int readme(const std::filesystem::path& out) {
     shot(panel, state, 20, out / "readme-on.png");
     state.opaque = true;
     shot(panel, state, 30, out / "readme-opaque.png");
+    // The report card, opened from Settings. The README script dims its sample QR code.
+    Panel report_panel(KNOCKTHRU_FONTS);
+    PanelState report = state;
+    report.opaque = false;
+    report.room_view = false;
+    report.version = "0.2.0";
+    report.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
+    report.report_full = true;
+    report_panel.render(report, std::nullopt, 40);
+    report_panel.click(460, 60); // Settings
+    report_panel.render(report, std::nullopt, 41);
+    report_panel.click(1050, 542); // Report on the Something wrong? row
+    shot(report_panel, report, 43, out / "readme-report.png");
     readme_calibration(out / "calibrate");
+    readme_update(out / "update");
     std::cout << "Wrote README panel states to " << out << "\n";
     return 0;
 }

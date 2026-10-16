@@ -15,7 +15,7 @@ Knock twice to see your room without taking off your Steam Frame. Knock three ti
 
 From now on KnockThru starts with SteamVR and runs in the background. The first time you open the KnockThru tab in the SteamVR dashboard, a short tour helps you pick your knocks, calibrate them, and try a double and a triple knock.
 
-To pause knocks, turn off the **KnockThru On** switch at the top of the [dashboard tab](#the-dashboard-tab). To clear your settings and calibration, use **Factory reset** in Settings. To remove KnockThru, run `<install folder>/knockthru --uninstall` over SSH, then delete the install folder. Your settings stay in `~/.config/knockthru` until you delete that folder too.
+To pause knocks, turn off the **KnockThru On** switch at the top of the [dashboard tab](#the-dashboard-tab). To clear your settings and calibration, use **Factory reset** in Settings. To remove KnockThru, run `<install folder>/knockthru --uninstall --purge` over SSH, then delete the install folder. `--purge` also deletes your settings and calibration. Leave it out to keep them in `~/.config/knockthru`.
 
 ## How to knock
 
@@ -47,7 +47,7 @@ Open the SteamVR dashboard and pick the **KnockThru** tab to do everything by ha
 - **KnockThru On**: turns knocking off for a while without quitting the app.
 - **Controllers together**, **Controller on a surface**, **Knock on the headset**: pick which knock kinds count.
 - **Knocks in** your game: turns knocks off in just the game you're playing, for games where you knock things on purpose.
-- **Settings**: Calibrate, Sounds, Classic bar icon, Guided tour, and Factory reset.
+- **Settings**: updates, Calibrate, Sounds, Classic bar icon, Guided tour, Report, and Factory reset.
 
 ## Calibrate
 
@@ -60,13 +60,38 @@ If soft knocks get missed, calibrate that knock kind. Open **Settings** in the K
 3. Wait for the ring, then knock once. Do it 10 times. One buzz means a knock counted.
 4. Knock twice to try the new calibration. If it works, press **Save**.
 
+## Updates
+
+KnockThru checks GitHub for a new release once a week. When one is out, a blue dot shows on the **Settings** button. Open Settings and press **Install**. KnockThru downloads the release, checks the download, and restarts on the new version.
+
+![Installing an update: the dot on the Settings button, Install 0.2.0 in Settings, then KnockThru restarts and Settings shows version 0.2.0](images/update.gif)
+
+To check right away, press **Check for updates** in Settings. Updating through FrameDrop works too.
+
 ## Something not working?
 
 - **Soft knocks don't register.** [Calibrate](#calibrate) that knock kind.
 - **Three buzzes after a knock.** KnockThru heard you but could not change Room View. The usual cause is that **CEF Remote Debugging** is off. Turn it back on in the Frame's Developer settings. The dashboard tab also shows the reason.
 - **Knocks do nothing in one game.** Check the **Knocks in** switch for that game in the dashboard tab.
+- **Passthrough says "A Steam update moved the Room View button".** KnockThru presses that button through Steam's own dashboard, so a Steam update can break it. Install the KnockThru [update](#updates) that fixes it. If none is out yet, report it.
+- **Anything else.** [Report it](#report-a-problem) from the headset.
 
-KnockThru presses the Room View button through Steam's own dashboard. A Steam update can break that until KnockThru gets an update too.
+## Report a problem
+
+You can send a bug report from the headset with your phone. You need a GitHub account.
+
+![The Report a problem card: three steps, a QR code to scan with your phone, Record knocks, and Save to headset](images/report.png)
+
+1. Open **Settings** in the KnockThru tab and press **Report**.
+2. Hold your phone up to a lens and scan the QR code. Your phone must be on the same Wi-Fi as the Frame.
+3. On your phone, tap **Copy report and open GitHub**.
+4. Paste the report, say what went wrong, and tap **Create**.
+
+The new issue already has your KnockThru and SteamVR versions filled in.
+
+If knocks get missed or do the wrong thing, press **Record knocks** first. Then knock the way that goes wrong for 20 s. Your phone then gets one file, `knockthru-report.zip`, with the report and the recording, to attach to the issue.
+
+If you have no phone, or the Frame is offline, press **Save to headset**. The report goes to `knockthru-report.txt` in your home folder, for you to attach to an issue.
 
 ## For tinkerers
 
@@ -88,6 +113,7 @@ Put your settings in `~/.config/knockthru/config.json`. This file survives updat
 - `blocked_apps`: SteamVR app keys where knocks do nothing. Run `knockthru --current-app` while a game runs to get its key.
 - `debug_port`: the CEF Remote Debugging port. The default is 8080.
 - `classic_bar_icon`: `true` shows the dashboard bar icon in the logo colors. The default `false` shows the logo in grey, and white on hover, like Steam's own icons.
+- `check_updates`: `false` stops the weekly update check. By default, KnockThru asks GitHub for the latest release once a week, a minute after it starts. **Check for updates** in Settings works either way.
 - `sounds`: `false` silences the click. By default, KnockThru plays SteamVR's dashboard click on a triple knock and on panel buttons. Steam already clicks when a double knock changes passthrough.
 - `tour_done`: `true` once the first-run tour is finished or skipped. Set it to `false` to see the tour the next time you open the KnockThru tab. Settings also has a Replay button.
 
@@ -113,7 +139,10 @@ Run these on the Frame over SSH.
 | --- | --- |
 | `knockthru` or `--install` | Register with SteamVR, turn on autostart, and start |
 | `--uninstall` | Stop and remove from SteamVR. Keeps `~/.config/knockthru` |
+| `--uninstall --purge` | Also delete `~/.config/knockthru`, SteamVR's autostart file for KnockThru, and the report files in your home folder |
 | `--status` | Show registration, the running process, and Room View state |
+| `--update` | Install the latest GitHub release over this one and restart |
+| `--report` | Write `~/knockthru-report.txt` with versions, settings, and logs, to attach to an issue |
 | `--toggle`, `--style` | Turn Room View on or off, or switch its style, once |
 | `--detect` | Print knocks live without acting on them |
 
@@ -161,6 +190,12 @@ The controller and headset sprites in `images/cad/` come from Valve's CAD files.
 
 ```sh
 python3 scripts/cad_sprites.py <CAD folder>
+```
+
+To replay the knock recording from a bug report, unzip the report and run this:
+
+```sh
+build/bin/detector_test knockthru-knocks.csv.gz
 ```
 
 `docs/knock-signal.md` explains how knock detection works and how it was tuned.

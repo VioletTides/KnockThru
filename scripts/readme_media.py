@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 IMAGES = ROOT / "images"
@@ -280,7 +280,8 @@ def hero(panel_dir):
     write_gif(frames, IMAGES / "hero.gif")
 
 
-# Calibrate: the panel's own calibration screens, from the Settings button to the saved banner.
+# Walkthroughs: the panel's own screens with a pointer. Calibrate goes from the Settings button
+# to the saved banner. Update goes from the new-release dot to the restarted app.
 
 def pointer_dot(image, x, y, press, ring, scale=1.0):
     """Draws SteamVR's dashboard pointer: a light blue dot, lighter at the top, in a dark ring.
@@ -312,10 +313,10 @@ def pointer_dot(image, x, y, press, ring, scale=1.0):
     image.alpha_composite(dot, (round(x - out / 2), round(y - out / 2)))
 
 
-def calibrate(panel_dir):
+def walkthrough(frames_dir, name):
+    """Turns a panel_preview frame sequence with a pointer log into images/NAME.gif."""
     width = 640
     scale = width / 1200
-    frames_dir = panel_dir / "calibrate"
     marks = dict(line.split(maxsplit=1) if " " in line else (line, "")
                  for line in (frames_dir / "marks.txt").read_text().splitlines())
     cuts = [int(n) for n in marks["cuts"].split()]
@@ -356,7 +357,28 @@ def calibrate(panel_dir):
         image = frame.convert("RGBA")
         pointer_dot(image, x * scale, y * scale, press, ring, scale)
         frames[i] = image.convert("RGB")
-    write_gif(frames, IMAGES / "calibrate.gif")
+    write_gif(frames, IMAGES / f"{name}.gif")
+
+# Report card: a still of the panel's report card, with its sample QR code dimmed so nobody scans it.
+
+def report_card(panel_dir):
+    image = Image.open(panel_dir / "readme-report.png").convert("RGBA")
+    flat = Image.new("RGB", image.size, BACKGROUND)
+    flat.paste(image, mask=image)
+    # The QR code sits on the only large white square in the panel.
+    white = flat.point(lambda v: 255 if v > 250 else 0).convert("L").point(lambda v: 255 if v == 255 else 0)
+    left, top, right, bottom = white.getbbox()
+    box = (left, top, right, bottom)
+    card = flat.getpixel((left - 30, top + 10))
+    blurred = flat.crop(box).filter(ImageFilter.GaussianBlur(5))  # too soft for a phone to read
+    flat.paste(Image.blend(blurred, Image.new("RGB", (right - left, bottom - top), card), 0.75), box)
+    draw = ImageDraw.Draw(flat)
+    draw.text(((left + right) / 2, (top + bottom) / 2), "Example", font=font(34, bold=True), fill=TEXT, anchor="mm")
+    width = 800
+    flat = flat.resize((width, round(flat.height * width / flat.width)), Image.LANCZOS)
+    flat.save(IMAGES / "report.png")
+    print("Wrote images/report.png")
+
 
 # Knock kinds: three small loops side by side, on the shared timeline.
 
@@ -498,7 +520,9 @@ def main():
         shutil.copy(Path(tmp) / "readme-off.png", IMAGES / "dashboard.png")
         print("Wrote images/dashboard.png")
         hero(Path(tmp))
-        calibrate(Path(tmp))
+        walkthrough(Path(tmp) / "calibrate", "calibrate")
+        walkthrough(Path(tmp) / "update", "update")
+        report_card(Path(tmp))
     knock_kinds()
     timing()
 
