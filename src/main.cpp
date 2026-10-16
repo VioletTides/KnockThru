@@ -156,9 +156,9 @@ constexpr const char* kCsvHeader = "t_s,device,valid,px,py,pz,vx,vy,vz,wx,wy,wz\
 class Clock {
 public:
     double now() const { return std::chrono::duration<double>(std::chrono::steady_clock::now() - start_).count(); }
-    // Sleeps until the next 1 ms tick.
-    void tick() {
-        next_ += std::chrono::milliseconds(1);
+    // Sleeps until the next tick, `step` after the last one.
+    void tick(std::chrono::milliseconds step = std::chrono::milliseconds(1)) {
+        next_ += step;
         std::this_thread::sleep_until(next_);
     }
 
@@ -1478,7 +1478,9 @@ int run() {
             panel->draw(state, t);
         }
         haptics.update(t);
-        clock.tick();
+        // Knocks are judged 50 ms late anyway, so a hidden panel lets the loop wake every 5 ms.
+        // The pose thread still samples every millisecond.
+        clock.tick(std::chrono::milliseconds(panel && panel->visible() ? 1 : 5));
     }
     log("KnockThru stopped");
     return 0;
