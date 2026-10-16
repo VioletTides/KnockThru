@@ -1159,7 +1159,7 @@ int run() {
                 log("Update check: " + release.version + (newer ? " is available" : " is the latest"));
             } catch (const std::exception& error) {
                 state.update = {UpdateStatus::Failed, "", error.what()};
-                log(std::string("Update check failed: ") + error.what());
+                show(std::string("Update check failed: ") + error.what(), true);
             }
             if (panel) panel->invalidate();
         }
@@ -1171,7 +1171,7 @@ int run() {
                 knockthru::start_detached({(install_directory() / "knockthru-ctl").string(), "--install"});
             } catch (const std::exception& error) {
                 state.update = {UpdateStatus::Failed, latest ? latest->version : "", error.what()};
-                log(std::string("Update not installed: ") + error.what());
+                show(std::string("Update not installed: ") + error.what(), true);
             }
             if (panel) panel->invalidate();
         }

@@ -169,6 +169,19 @@ int main(int argc, char** argv) {
     settings_panel.render(idle, std::make_pair(600.0f, 200.0f)).write_png(out / "panel-settings.png");
     idle.classic_bar_icon = true;
     settings_panel.render(idle).write_png(out / "panel-settings-color.png");
+    PanelState update = idle;
+    update.version = "0.1.0";
+    settings_panel.render(update).write_png(out / "panel-settings-update-idle.png");
+    update.update = {UpdateView::Status::Checking, "", ""};
+    settings_panel.render(update).write_png(out / "panel-settings-update-checking.png");
+    update.update = {UpdateView::Status::Available, "0.2.0", ""};
+    settings_panel.render(update, std::make_pair(1000.0f, 68.0f)).write_png(out / "panel-settings-update-available.png");
+    update.update = {UpdateView::Status::Current, "0.1.0", ""};
+    settings_panel.render(update).write_png(out / "panel-settings-update-current.png");
+    update.update = {UpdateView::Status::Failed, "", "Cannot reach GitHub. Check the Wi-Fi connection."};
+    update.message = "Update check failed: Cannot reach GitHub. Check the Wi-Fi connection.";
+    update.message_is_error = true;
+    settings_panel.render(update).write_png(out / "panel-settings-update-failed.png");
     settings_panel.click(1050, 632); // Reset on the factory reset row
     settings_panel.render(idle, std::make_pair(800.0f, 500.0f)).write_png(out / "panel-reset-confirm.png");
     idle.classic_bar_icon = false;

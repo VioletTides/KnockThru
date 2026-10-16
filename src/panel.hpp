@@ -165,6 +165,7 @@ private:
     void check_mark(float cx, float cy, float radius, float pop);
     void knock_scene(KnockKind kind, Rect box, float t, int knocks);
     void settings_screen(const PanelState& state);
+    void update_control(const PanelState& state);
     void knocks_row(Rect rect, const PanelState& state);
     void passthrough_tile(Rect rect, const PanelState& state);
     void style_control(Rect rect, const PanelState& state);

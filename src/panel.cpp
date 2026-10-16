@@ -470,8 +470,9 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
 void Panel::settings_screen(const PanelState& state) {
     button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Main);
     canvas_.text(bold_, "Settings", kMargin + 172, 68, 38, kText);
-    const float top = 128, w = kWidth - 2 * kMargin, row = 112;
-    canvas_.rounded_rect({kMargin, top, w, 5 * row}, kRadius, kSurface);
+    update_control(state);
+    const float top = 128, w = kWidth - 2 * kMargin, row = 92;
+    canvas_.rounded_rect({kMargin, top, w, 6 * row}, kRadius, kSurface);
     button_row({kMargin, top, w, row}, "Knocks getting missed?", "KnockThru learns how hard you knock", "Calibrate",
         std::nullopt, Screen::Pick, false, false);
     switch_row({kMargin, top + row, w, row}, PanelClick{PanelCommand::Sounds}, state.sounds, "Sounds",
@@ -480,12 +481,40 @@ void Panel::settings_screen(const PanelState& state) {
         "Classic bar icon", "Show the logo colors in the dashboard bar", true, true);
     Canvas icon(64, 64);
     draw_icon(icon, state.classic_bar_icon ? IconStyle::BarColor : IconStyle::BarWhite);
-    canvas_.draw(icon, static_cast<int>(kMargin + w - 24 - 80 - 40 - 64), static_cast<int>(top + 2 * row + 24));
+    canvas_.draw(icon, static_cast<int>(kMargin + w - 24 - 80 - 40 - 64), static_cast<int>(top + 2 * row + (row - 64) / 2));
     button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "Learn the knocks again", "Replay",
         PanelClick{PanelCommand::StartTour}, std::nullopt, false);
-    button_row({kMargin, top + 4 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset", std::nullopt,
+    button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Make a report to send to the developer", "Report",
+        PanelClick{PanelCommand::SaveReport}, std::nullopt, false);
+    button_row({kMargin, top + 5 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset", std::nullopt,
         Screen::Reset, true);
-    if (state.message_is_error) message(state, top + 5 * row + 50);
+    if (state.message_is_error) message(state, top + 6 * row + 40);
+}
+
+// The version and the update button, at the top right of Settings.
+void Panel::update_control(const PanelState& state) {
+    using Status = UpdateView::Status;
+    const auto& update = state.update;
+    const float right = kWidth - kMargin, w = 250, h = 64, y = 36;
+    const Rect rect{right - w, y, w, h};
+    std::string status = "Version " + state.version, label = "Check for updates";
+    bool primary = false, enabled = true;
+    std::optional<PanelClick> click = PanelClick{PanelCommand::CheckUpdate};
+    switch (update.status) {
+    case Status::Idle: break;
+    case Status::Checking: label = "Checking"; enabled = false; break;
+    case Status::Current: status = "Version " + state.version + " is the latest"; break;
+    case Status::Available:
+        status = "Version " + state.version + ", " + update.latest + " is ready";
+        label = "Install " + update.latest;
+        primary = true;
+        click = PanelClick{PanelCommand::InstallUpdate};
+        break;
+    case Status::Installing: label = "Installing"; enabled = false; break;
+    case Status::Failed: status = "Update failed"; label = "Try again"; break;
+    }
+    canvas_.text(regular_, status, rect.x - 24, y + h / 2, 26, update.status == Status::Failed ? kError : kDim, Align::Right);
+    button(rect, label, click, std::nullopt, primary, enabled);
 }
 
 // A confirm card over the screen below it. Only its two buttons respond.
