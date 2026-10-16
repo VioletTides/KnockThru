@@ -2,7 +2,7 @@
 
 Knock twice to see your room without taking off your Steam Frame. Knock three times to switch between seeing the room through your game and seeing only the room.
 
-![Knocking twice turns passthrough on in the KnockThru panel, and knocking three times switches it to opaque](images/hero.gif)
+![In the KnockThru panel, knocking twice turns passthrough on, knocking three times switches it to opaque and back, and knocking twice again turns it off](images/hero.gif)
 
 ## Install
 
@@ -42,7 +42,7 @@ Frameloader starts KnockThru, which registers with SteamVR and turns on autostar
 
 </details>
 
-From now on KnockThru starts with SteamVR and runs in the background. The first time you open the KnockThru tab in the SteamVR dashboard, a short tour helps you pick your knocks, calibrate them, and try a double and a triple knock.
+From now on KnockThru starts with SteamVR and runs in the background. The first time you open the KnockThru tab in the SteamVR dashboard, a short tour starts. It helps you pick your knocks, calibrate them, and try a double and a triple knock.
 
 To pause knocks, turn off the **KnockThru On** switch at the top of the [dashboard tab](#the-dashboard-tab). To clear your settings and calibration, use **Factory reset** in Settings. To remove KnockThru, run `<install folder>/knockthru --uninstall --purge` in Konsole or over SSH, then delete the install folder. `--purge` also deletes your settings and calibration. Leave it out to keep them in `~/.config/knockthru`.
 
@@ -148,6 +148,8 @@ Put your settings in `~/.config/knockthru/config.json`. This file survives updat
 - `classic_bar_icon`: `true` shows the dashboard bar icon in the logo colors. The default `false` shows the logo in grey, and white on hover, like Steam's own icons.
 - `check_updates`: `false` stops the daily update check. By default, KnockThru asks GitHub for the latest release once a day, a minute after it starts. **Check for updates** in Settings works either way.
 - `sounds`: `false` silences the click. By default, KnockThru plays SteamVR's dashboard click on a triple knock and on panel buttons. Steam already clicks when a double knock changes passthrough.
+- `paused`: `true` while the **KnockThru On** switch is off. Knocks do nothing then.
+- `detector`: overrides for the knock detector's settings, such as `confirmed_peak` or `max_gap_s`. The comments in `src/knock_detector.hpp` describe each one. Calibration sets the peaks for you.
 - `tour_done`: `true` once the first-run tour is finished or skipped. Set it to `false` to see the tour the next time you open the KnockThru tab. Settings also has a Replay button.
 
 </details>
@@ -219,7 +221,7 @@ README images (needs Pillow, numpy, ffmpeg, and Chromium, after the host build):
 python3 scripts/readme_media.py
 ```
 
-The controller and headset sprites in `images/cad/` come from Valve's CAD files. To render them again, download the STEP files from [Valve's Steam Frame repository](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) into one folder, then run this (needs cadquery and opencv-python, and takes about 12 minutes):
+The controller and headset sprites in `images/cad/` come from Valve's CAD files. To render them again, download the STEP files from [Valve's Steam Frame repository](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) into one folder. Then run this, which needs cadquery and opencv-python and takes about 12 minutes:
 
 ```sh
 python3 scripts/cad_sprites.py <CAD folder>
