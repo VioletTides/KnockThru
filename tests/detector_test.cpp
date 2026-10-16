@@ -231,6 +231,11 @@ void replay_tests() {
     auto leg = replay("leg");
     check(leg["surfacex2"] + leg["surfacex3"] >= 14 && total(leg) == leg["surfacex2"] + leg["surfacex3"],
         "leg: at least 14 surface actions, nothing else");
+    // About 40 doubles knocked on a leg, a few seconds apart, mostly with the
+    // right hand. At same_spot 0.03, 20 counted.
+    auto leg_doubles = replay("leg-doubles");
+    check(leg_doubles["surfacex2"] >= 23 && total(leg_doubles) == leg_doubles["surfacex2"],
+        "leg-doubles: at least 23 surface doubles, nothing else");
     check(total(replay("play")) == 0, "play: no actions");
     check(total(replay("noise")) == 0, "noise: no actions");
     // The controllers bumping while the wearer fit the strap on each one, in Into the Radius 2.
