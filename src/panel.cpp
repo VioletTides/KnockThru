@@ -92,6 +92,17 @@ Panel::Panel(const std::filesystem::path& fonts)
     background_.rounded_rect({0, 0, kWidth, kHeight}, 28, kBackground);
 }
 
+// Drawing the icon from its outlines is slow, so each size and style is drawn once and kept.
+const Canvas& Panel::icon(int size, IconStyle style) {
+    const auto key = std::make_pair(size, style);
+    auto found = icons_.find(key);
+    if (found == icons_.end()) {
+        found = icons_.emplace(key, Canvas(size, size)).first;
+        draw_icon(found->second, style);
+    }
+    return found->second;
+}
+
 bool Panel::hovered(Rect rect) const { return hover_ && rect.contains(hover_->first, hover_->second); }
 
 void Panel::switch_control(float right, float cy, bool on, bool enabled, float scale) {
@@ -119,9 +130,7 @@ void Panel::button(Rect rect, const std::string& label, std::optional<PanelClick
 }
 
 void Panel::header(const std::string& title) {
-    Canvas icon(56, 56);
-    draw_icon(icon);
-    canvas_.draw(icon, static_cast<int>(kMargin), 40);
+    canvas_.draw(icon(56, IconStyle::Tile), static_cast<int>(kMargin), 40);
     canvas_.text(bold_, title, kMargin + 76, 68, 38, kText);
 }
 
@@ -487,9 +496,7 @@ void Panel::settings_screen(const PanelState& state) {
         "Click on a triple knock and on buttons", true, true);
     switch_row({kMargin, top + 2 * row, w, row}, PanelClick{PanelCommand::BarIcon}, state.classic_bar_icon,
         "Classic bar icon", "Show the logo colors in the dashboard bar", true, true);
-    Canvas icon(64, 64);
-    draw_icon(icon, state.classic_bar_icon ? IconStyle::BarColor : IconStyle::BarWhite);
-    canvas_.draw(icon, static_cast<int>(kMargin + w - 24 - 80 - 40 - 64), static_cast<int>(top + 2 * row + (row - 64) / 2));
+    canvas_.draw(icon(64, state.classic_bar_icon ? IconStyle::BarColor : IconStyle::BarWhite), static_cast<int>(kMargin + w - 24 - 80 - 40 - 64), static_cast<int>(top + 2 * row + (row - 64) / 2));
     button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "Learn the knocks again", "Replay",
         PanelClick{PanelCommand::StartTour}, std::nullopt, false);
     button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
@@ -805,9 +812,7 @@ void Panel::tour_screen(const PanelState& state, const TourView& tour) {
     const float cx = kWidth / 2.0f;
     switch (tour.step) {
     case Step::Welcome: {
-        Canvas icon(152, 152);
-        draw_icon(icon);
-        canvas_.draw(icon, (kWidth - 152) / 2, 150);
+        canvas_.draw(icon(152, IconStyle::Tile), (kWidth - 152) / 2, 150);
         canvas_.text(bold_, "Welcome to KnockThru", cx, 370, 48, kText, Align::Center);
         canvas_.text(regular_, "Knock to switch passthrough, without the side button.", cx, 440, 30, kDim, Align::Center);
         canvas_.text(regular_, "This tour takes a few minutes.", cx, 484, 30, kDim, Align::Center);

@@ -4,6 +4,7 @@
 #include "knock_detector.hpp"
 
 #include <array>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -168,7 +169,9 @@ private:
     std::optional<View> view_;
     std::optional<TourView::Step> tour_step_; // the tour step on screen, so each step rises in
     double view_t_ = 0;
+    std::map<std::pair<int, IconStyle>, Canvas> icons_; // drawn icons by size and style
 
+    const Canvas& icon(int size, IconStyle style);
     bool hovered(Rect rect) const;
     void header(const std::string& title);
     void main_screen(const PanelState& state);
