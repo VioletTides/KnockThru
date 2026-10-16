@@ -120,6 +120,9 @@ void tour(const std::filesystem::path& out, const PanelState& idle) {
     state.tour->triple_t = 69;
     state.opaque = true;
     shot(panel, state, 70, out / "tour-5-triple-heard.png");
+    state.room_view = false;
+    shot(panel, state, 70, out / "tour-5-triple-heard-off.png");
+    state.room_view = true;
     state.tour->step = TourView::Step::Done;
     shot(panel, state, 80, out / "tour-6-done.png");
     state.tour->step = TourView::Step::Triple;

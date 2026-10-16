@@ -780,8 +780,10 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
         check_mark(cx, cy, 34, anim::ease_out_back(static_cast<float>(now_ - heard_t) / 0.3f));
         std::string title, detail;
         if (triple) {
-            title = !state.opaque ? "Style switched" : *state.opaque ? "Room View is opaque" : "Room View is translucent";
-            detail = "Knock three times again to switch back.";
+            title = !state.opaque ? "Style switched" : *state.opaque ? "Style is opaque" : "Style is translucent";
+            // A triple knock while passthrough is off sets the style it opens in.
+            detail = state.room_view == false ? "Passthrough is off. It opens in this style."
+                                              : "Knock three times again to switch back.";
         } else {
             const bool on = state.room_view.value_or(false);
             title = state.busy ? "Switching" : on ? "Passthrough is on" : "Passthrough is off";
