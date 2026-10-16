@@ -31,5 +31,5 @@ body:
     id: report
     attributes:
       label: Report
-      description: Paste the report that the page from your Frame copied. Or attach knockthru-report.txt, or run `knockthru --report` over SSH to make one.
+      description: Paste the report your phone copied, or attach knockthru-report.txt from the Frame.
       render: text

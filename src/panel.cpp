@@ -522,20 +522,22 @@ void Panel::update_control(const PanelState& state) {
 
 // The report card over Settings. A phone held to a lens scans the QR code and
 // opens a page the headset serves, which copies the full report and opens the
-// GitHub form. Without a network, the code opens the form directly. Save report
-// file writes the report to the headset, for when the developer asks for it.
+// GitHub form. Without a network, the code opens the form directly, and Save to
+// headset writes the report to a file for the person to attach.
 void Panel::report_card(const PanelState& state) {
     targets_.clear();
     canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
     const Rect card{80, 60, kWidth - 160, 650};
     canvas_.rounded_rect(card, kRadius, kSurface);
     const float box = 380, x = card.x + 48, text_w = card.w - 96 - box - 40;
-    canvas_.text(bold_, "Send a bug report", x, card.y + 72, 38, kText);
+    canvas_.text(bold_, "Report a problem", x, card.y + 72, 38, kText);
 
-    const char* last = state.report_full ? "Follow the steps on your phone."
-                                         : "Sign in to GitHub, say what went wrong, and press Create.";
-    const std::array<const char*, 3> steps{"Open the camera on your phone.", "Hold the phone up to a lens and scan the code.",
-                                           last};
+    const auto steps = state.report_full
+        ? std::array<const char*, 3>{"Scan this code with your phone.", "Tap Copy report and open GitHub.",
+                                     "Paste, say what went wrong, and tap Create."}
+        : std::array<const char*, 3>{"Scan this code with your phone.",
+                                     "Sign in to GitHub and say what went wrong.",
+                                     "Attach the saved report, then tap Create."};
     float y = card.y + 150;
     for (int i = 0; i < 3; ++i) {
         canvas_.circle(x + 22, y, 22, kAccent);
@@ -544,8 +546,8 @@ void Panel::report_card(const PanelState& state) {
         for (std::size_t k = 0; k < lines.size(); ++k) canvas_.text(regular_, lines[k], x + 64, y + k * 40, 28, kText);
         y += 40 * lines.size() + 36;
     }
-    const std::string hint = state.report_full ? "Your phone needs the same Wi-Fi as the Frame. Nothing is sent until you press Create on GitHub."
-                                               : "Nothing is sent until you press Create. The Frame is offline, so the link carries only the versions.";
+    const std::string hint = state.report_full ? "Hold the phone up to a lens. It must be on the same Wi-Fi as the Frame."
+                                               : "Hold the phone up to a lens. The Frame is offline, so save the report below to attach it.";
     for (const auto& line : canvas_.wrap(regular_, hint, 26, text_w, 3)) {
         canvas_.text(regular_, line, x, y, 26, kDim);
         y += 36;
@@ -573,18 +575,22 @@ void Panel::report_card(const PanelState& state) {
         }
     }
 
-    // The file holds the full log, for when the developer asks. Saving never sends it.
+    // Without a phone, the file is the way to get the full report into an issue.
     const float by = card.y + card.h - 48 - 72;
     const bool saved = !state.report_saved.empty();
-    std::string note = "Save report file keeps a full copy on the headset. It does not send anything.";
-    if (saved) note = "Saved as knockthru-report.txt in the Frame's home folder. Send it if the developer asks.";
+    // Offline, the hint above already points here.
+    std::string note = state.report_full ? "No phone? Save the report, then attach it to an issue." : "";
+    if (saved) note = "Saved as knockthru-report.txt in your home folder.";
     if (!state.report_error.empty()) note = "Not saved: " + state.report_error;
-    float ny = by - 40 - 36 * (canvas_.wrap(regular_, note, 26, card.w - 96, 2).size() - 1);
-    for (const auto& line : canvas_.wrap(regular_, note, 26, card.w - 96, 2)) {
-        canvas_.text(regular_, line, x, ny, 26, state.report_error.empty() ? kDim : kError);
-        ny += 36;
+    // The note sits between the two buttons, next to the one it explains.
+    const float note_x = x + 300 + 28, note_w = card.x + card.w - 48 - 240 - 28 - note_x;
+    const auto note_lines = note.empty() ? std::vector<std::string>{} : canvas_.wrap(regular_, note, 24, note_w, 2);
+    float ny = by + 36 - 16 * (static_cast<float>(note_lines.size()) - 1);
+    for (const auto& line : note_lines) {
+        canvas_.text(regular_, line, note_x, ny, 24, state.report_error.empty() ? kDim : kError);
+        ny += 32;
     }
-    button({x, by, 300, 72}, saved ? "Saved" : "Save report file", PanelClick{PanelCommand::SaveReport}, std::nullopt,
+    button({x, by, 300, 72}, saved ? "Saved" : "Save to headset", PanelClick{PanelCommand::SaveReport}, std::nullopt,
         false, !saved);
     button({card.x + card.w - 48 - 240, by, 240, 72}, "Done", PanelClick{PanelCommand::CloseReport}, Screen::Settings, true);
 }

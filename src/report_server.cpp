@@ -106,17 +106,15 @@ details{margin-top:24px;color:var(--dim)}
 @media (prefers-reduced-motion: reduce){button:active{transform:none}}
 </style></head><body><main>
 <h1>KnockThru bug report</h1>
-<p>This page comes from your Frame. Nothing has been sent yet.</p>
+<p>Sent from your Frame. GitHub gets nothing until you tap Create.</p>
 <button id="go">Copy report and open GitHub</button>
-<ol>
-<li>Press the button above.</li>
-<li>On GitHub, sign in if it asks.</li>
-<li>Say what went wrong, then paste into the <b>Report</b> box.</li>
-<li>Press <b>Create</b>.</li>
-</ol>
 <p id="status" role="status"></p>
-<p>Copy did not work? <a href=")HTML" + html_escape(download) + R"HTML(" download>Download the report</a> and attach it instead, or
-<a href=")HTML" + html_escape(issue_link) + R"HTML(">open GitHub</a> without it.</p>
+<ol>
+<li>Sign in to GitHub if it asks.</li>
+<li>Paste into the <b>Report</b> box.</li>
+<li>Say what went wrong, then tap <b>Create</b>.</li>
+</ol>
+<p>Copy didn't work? <a href=")HTML" + html_escape(download) + R"HTML(" download>Download the report</a> and attach it instead.</p>
 <details><summary>See the report</summary><textarea id="report" readonly>)HTML" +
            html_escape(report) + R"HTML(</textarea></details>
 <script>
@@ -140,7 +138,7 @@ document.getElementById("go").addEventListener("click", async () => {
     box.blur();
   }
   document.getElementById("status").textContent = copied
-    ? "Copied. Opening GitHub..." : "Could not copy. Use Download the report below.";
+    ? "Copied. Opening GitHub..." : "Could not copy. Download the report below instead.";
   if (copied) setTimeout(() => { window.location.href = link; }, 600);
 });
 </script>
