@@ -233,8 +233,6 @@ To replay the knock recording from a bug report, unzip the report and run this:
 build/bin/detector_test knockthru-knocks.csv.gz
 ```
 
-`docs/knock-signal.md` explains how knock detection works and how it was tuned.
-
 </details>
 
 ## Credits

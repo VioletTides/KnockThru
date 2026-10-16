@@ -1,5 +1,5 @@
 // Detector tests: synthetic sequences, then replays of the Steam Frame
-// recordings in tests/data/ (see docs/knock-signal.md).
+// recordings in tests/data/.
 #include "calibrator.hpp"
 #include "config.hpp"
 #include "knock_detector.hpp"
