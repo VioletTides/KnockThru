@@ -44,19 +44,53 @@ def font(size, bold=False):
     return ImageFont.truetype(str(FONTS / name), size)
 
 
+CORNER = 18  # rounded GIF corners, in pixels, so each GIF reads as a card on light and dark pages
+
+
 def write_gif(frames, path, step=1):
-    """Writes RGB frames to a looping GIF with a palette made for them. step 2 keeps every
-    other frame, at half the frame rate, for a long GIF."""
+    """Writes RGB frames to a looping GIF with transparent rounded corners. step 2 keeps every
+    other frame, at half the frame rate, for a long GIF.
+
+    ffmpeg picks the palette, which looks better than Pillow's. ffmpeg stores whole frames once
+    the frames have transparency, though, so Pillow writes the final GIF: it keeps ffmpeg's colors
+    exactly, makes the corners transparent, and marks what did not change as transparent too."""
+    frames = frames[::step]
     with tempfile.TemporaryDirectory() as tmp:
-        for i, frame in enumerate(frames[::step]):
+        for i, frame in enumerate(frames):
             frame.save(f"{tmp}/{i:04d}.png")
+        opaque = Path(tmp) / "opaque.gif"
         subprocess.run(
             ["ffmpeg", "-loglevel", "error", "-y", "-framerate", str(FPS / step), "-i", f"{tmp}/%04d.png",
-             "-filter_complex", "split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none",
-             "-loop", "0", str(path)],
+             "-filter_complex", "split[a][b];[a]palettegen=max_colors=127[p];[b][p]paletteuse=dither=none",
+             str(opaque)],
             check=True)
+        decoded = Image.open(opaque)
+        colored = []
+        for i in range(decoded.n_frames):
+            decoded.seek(i)
+            colored.append(np.asarray(decoded.convert("RGB")))
+    key = lambda pixels: (pixels[..., 0].astype(np.int64) << 16) | (pixels[..., 1].astype(np.int64) << 8) | pixels[..., 2]
+    colors = np.unique(np.concatenate([np.unique(key(f)) for f in colored]))  # at most 127, so 255 stays free
+    palette = [int(v) for c in colors for v in ((c >> 16) & 255, (c >> 8) & 255, c & 255)]
+    palette += [0] * (768 - len(palette))
+    corners = Image.new("L", frames[0].size, 0)
+    ImageDraw.Draw(corners).rounded_rectangle([0, 0, frames[0].width - 1, frames[0].height - 1], CORNER, fill=255)
+    outside = np.asarray(corners) < 128
+    out = []
+    previous = None
+    for pixels in colored:
+        index = np.searchsorted(colors, key(pixels)).astype(np.uint8)
+        if previous is not None:
+            # Unchanged pixels go transparent, which shows the frame below, so they compress to nothing.
+            index[(index == previous) & ~outside] = 255
+        index[outside] = 255
+        previous = np.searchsorted(colors, key(pixels)).astype(np.uint8)
+        image = Image.fromarray(index, "P")
+        image.putpalette(palette)
+        out.append(image)
+    out[0].save(path, save_all=True, append_images=out[1:], duration=round(1000 * step / FPS), loop=0,
+                transparency=255, disposal=1, optimize=False)
     print(f"Wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB)")
-
 
 def seconds(s):
     return round(s * FPS)
@@ -262,11 +296,11 @@ def hero(panel_dir):
 
     off = ("off", "You're in VR", "Passthrough is off.")
     knock_on = ("off", "Knock twice", "Knock your controllers together.")
-    on = ("on", "Your room appears", "Passthrough on, see-through style.")
+    on = ("on", "Your room appears", "Passthrough on, translucent style.")
     knock_style = ("on", "Knock three times", "Switch the style.")
     opaque = ("opaque", "Only the room", "Opaque style hides the game.")
     knock_back = ("opaque", "Knock three times", "Switch back.")
-    see_through = ("on", "See-through again", "Passthrough on, see-through style.")
+    see_through = ("on", "Translucent again", "Passthrough on, translucent style.")
     knock_off = ("on", "Knock twice", "Back to the game.")
 
     def knock_scene(before, state, after, count, buzzes, hold):
@@ -363,7 +397,7 @@ def loop_fade(frames):
 
 def walkthrough(frames_dir, name):
     """Turns a panel_preview frame sequence with a pointer log into images/NAME.gif."""
-    width = 640
+    width = 800  # the same panel size as the hero
     cuts, clicks, pointer, frames = load_walkthrough(frames_dir, width)
     # Where the clock skips ahead, cross-fade instead of cutting.
     fade = seconds(0.4)
@@ -784,7 +818,7 @@ def report_gif(panel_dir):
 def knock_kinds():
     cell, height, header = 340, 300, 56
     label, title = font(22, bold=True), font(24, bold=True)
-    titles = {2: "Knock twice: Room View turns on or off", 3: "Knock three times: the style switches"}
+    titles = {2: "Knock twice: passthrough turns on or off", 3: "Knock three times: the style switches"}
     frames = []
     for i in range(seconds(LOOP)):
         count, t, length = pass_at(i / FPS)
@@ -834,7 +868,7 @@ def timing():
     left, right, axis_y = 60, width - 60, 130
     span = 2.0  # seconds shown on the strip; the playhead moves in real time
     bold, small = font(22, bold=True), font(18)
-    words = {2: ("third", "Room View on", "both controllers buzz"),
+    words = {2: ("third", "Passthrough on", "both controllers buzz"),
              3: ("fourth", "Style switches", "both controllers buzz twice")}
 
     def x_at(t):

@@ -1,12 +1,12 @@
 # <img src="images/logo-wordmark.svg" alt="KnockThru" width="400">
 
-Knock twice to see your room without taking off your Steam Frame. Knock three times to switch between seeing the room through your game and seeing only the room.
+Knock twice to turn on passthrough and see your room without taking off your Steam Frame. Knock three times to switch between seeing the room through your game and seeing only the room.
 
 ![In the KnockThru panel, knocking twice turns passthrough on, knocking three times switches it to opaque and back, and knocking twice again turns it off](images/hero.gif)
 
 ## Install
 
-1. On the Frame, turn on **Developer Mode**. Then turn on **CEF Remote Debugging** in the Developer settings. KnockThru needs it to press the Room View button for you.
+1. On the Frame, turn on **Developer Mode**. Then turn on **CEF Remote Debugging** in the Developer settings. KnockThru needs it to press Steam's passthrough button, Room View, for you.
 2. Click this button:
 
    [![Install with FrameDrop](images/framedrop-button.svg)](https://framedropvr.com/install?manifest=https%3A%2F%2Fgithub.com%2FVioletTides%2FKnockThru%2Freleases%2Flatest%2Fdownload%2Fknockthru.framedrop.json)
@@ -54,13 +54,13 @@ Any of these three knocks works. Use the same kind for every knock in a set.
 
 Pause for a moment, then knock at a steady pace. After your last knock, KnockThru waits a moment in case another one follows.
 
-![Timeline: two knocks, a wait of about 0.4 seconds, then Room View turns on and both controllers buzz. Then three knocks, the same wait, and the style switches with two buzzes](images/timing.gif)
+![Timeline: two knocks, a wait of about 0.4 seconds, then passthrough turns on and both controllers buzz. Then three knocks, the same wait, and the style switches with two buzzes](images/timing.gif)
 
 | You knock | What happens | You feel |
 | --- | --- | --- |
-| Twice | Passthrough (Room View) turns on or off | One buzz |
-| Three times | The room switches between see-through and solid | Two buzzes |
-| Four or more times, or mixed kinds | Nothing, so steady clapping does not set it off | Nothing |
+| Twice | Passthrough turns on or off | One buzz |
+| Three times | The style switches between translucent and opaque | Two buzzes |
+| Four or more times, or mixed kinds | Nothing | Nothing |
 
 You also hear a click. Steam clicks when passthrough turns on or off, and KnockThru clicks when the style switches. To turn off KnockThru's click, use **Sounds** in Settings.
 
@@ -72,10 +72,10 @@ Open the SteamVR dashboard and pick the **KnockThru** tab to do everything by ha
 
 ![The KnockThru dashboard tab](images/dashboard.png)
 
-- **Passthrough** and **Style**: switch Room View by hand. **Translucent** shows the room through your game. **Opaque** shows only the room.
+- **Passthrough** and **Style**: switch passthrough and its style by hand. **Translucent** shows the room through your game. **Opaque** shows only the room.
 - **KnockThru On**: turns knocking off for a while without quitting the app.
 - **Controllers together**, **Controller on a surface**, **Knock on the headset**: pick which knock kinds count.
-- **Knocks in** your game: turns knocks off in just the game you're playing, for games where you knock things on purpose.
+- **Knocks in** your game: turns knocks off only in the game you're playing, for games where you knock things on purpose.
 - **Settings**: updates, Calibrate, Sounds, Classic bar icon, Guided tour, Report, and Factory reset.
 
 ## Calibrate
@@ -104,7 +104,7 @@ If the install or the restart fails, a card gives the reason. To check right awa
 ## Something not working?
 
 - **Soft knocks don't register.** [Calibrate](#calibrate) that knock kind.
-- **Three buzzes after a knock.** KnockThru heard you but could not change Room View. The usual cause is that **CEF Remote Debugging** is off. Turn it back on in the Frame's Developer settings. The dashboard tab also shows the reason.
+- **Three buzzes after a knock.** KnockThru heard you but could not change passthrough. One cause is that **CEF Remote Debugging** is off. Turn it back on in the Frame's Developer settings. The dashboard tab also shows the reason.
 - **Knocks do nothing in one game.** Check the **Knocks in** switch for that game in the dashboard tab.
 - **Passthrough says "A Steam update moved the Room View button".** KnockThru presses that button through Steam's own dashboard, so a Steam update can break it. Install the KnockThru [update](#updates) that fixes it. If none is out yet, report it.
 - **Anything else.** [Report it](#report-a-problem) from the headset.
@@ -175,10 +175,10 @@ Run these on the Frame, in Konsole or over SSH.
 | `knockthru` or `--install` | Register with SteamVR, turn on autostart, and start |
 | `--uninstall` | Stop and remove from SteamVR. Keeps `~/.config/knockthru` |
 | `--uninstall --purge` | Also delete `~/.config/knockthru`, SteamVR's autostart file for KnockThru, and the report files in your home folder |
-| `--status` | Show registration, the running process, and Room View state |
+| `--status` | Show registration, the running process, and passthrough state |
 | `--update` | Install the latest GitHub release over this one and restart |
 | `--report` | Write `~/knockthru-report.txt` with versions, settings, and logs, to attach to an issue |
-| `--toggle`, `--style` | Turn Room View on or off, or switch its style, once |
+| `--toggle`, `--style` | Turn passthrough on or off, or switch its style, once |
 | `--detect` | Print knocks live without acting on them |
 
 The log is `~/.config/knockthru/application.log`.
