@@ -118,8 +118,11 @@ public:
             indices_[2] = system->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_RightHand);
             next_refresh_ = now + std::chrono::seconds(1);
         }
-        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(
-            vr::TrackingUniverseStanding, 0, poses_.data(), static_cast<uint32_t>(poses_.size()));
+        // Fetches only up to the highest device index in use, not all 64.
+        std::uint32_t count = 0;
+        for (const auto index : indices_)
+            if (index < vr::k_unMaxTrackedDeviceCount) count = std::max(count, index + 1);
+        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0, poses_.data(), count);
         static constexpr std::array<Device, 3> devices{Device::Hmd, Device::Left, Device::Right};
         static constexpr std::array<const char*, 3> names{"hmd", "left", "right"};
         for (std::size_t i = 0; i < 3; ++i) {
