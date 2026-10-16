@@ -1168,8 +1168,12 @@ int run() {
                     }
                     break;
                 case PanelCommand::BarIcon:
-                    if (save([&] { knockthru::save_classic_bar_icon(!config.classic_bar_icon); }))
+                    if (save([&] { knockthru::save_classic_bar_icon(!config.classic_bar_icon); })) {
                         show(config.classic_bar_icon ? "Classic bar icon on" : "Classic bar icon off");
+                        // The icon image changes this frame. Restyle the bar now, not at the
+                        // next 2 s check, so the old tint never shows over the new icon.
+                        next_slow_check = 0;
+                    }
                     break;
                 case PanelCommand::Kind: {
                     auto enabled = config.detector.enabled;
