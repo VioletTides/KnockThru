@@ -5,6 +5,8 @@
 #include "logo_shapes.hpp"
 #include "sprite_shapes.hpp"
 
+#include <qrcodegen.hpp>
+
 #include <algorithm>
 #include <cmath>
 
@@ -484,8 +486,8 @@ void Panel::settings_screen(const PanelState& state) {
     canvas_.draw(icon, static_cast<int>(kMargin + w - 24 - 80 - 40 - 64), static_cast<int>(top + 2 * row + (row - 64) / 2));
     button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "Learn the knocks again", "Replay",
         PanelClick{PanelCommand::StartTour}, std::nullopt, false);
-    button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Make a report to send to the developer", "Report",
-        PanelClick{PanelCommand::SaveReport}, std::nullopt, false);
+    button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
+        PanelClick{PanelCommand::SaveReport}, Screen::Report, false);
     button_row({kMargin, top + 5 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset", std::nullopt,
         Screen::Reset, true);
     if (state.message_is_error) message(state, top + 6 * row + 40);
@@ -515,6 +517,53 @@ void Panel::update_control(const PanelState& state) {
     }
     canvas_.text(regular_, status, rect.x - 24, y + h / 2, 26, update.status == Status::Failed ? kError : kDim, Align::Right);
     button(rect, label, click, std::nullopt, primary, enabled);
+}
+
+// The report card over Settings: a QR code that opens a GitHub issue on a phone held to a lens.
+void Panel::report_card(const PanelState& state) {
+    targets_.clear();
+    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
+    const Rect card{120, 110, kWidth - 240, 550};
+    canvas_.rounded_rect(card, kRadius, kSurface);
+    const float text_w = 500;
+    canvas_.text(bold_, "Send a report", card.x + 48, card.y + 72, 38, kText);
+    float y = card.y + 140;
+    for (const auto& line : canvas_.wrap(regular_,
+             "Hold your phone up to a lens and scan this code. It opens a GitHub issue with your versions filled in.",
+             28, text_w, 4)) {
+        canvas_.text(regular_, line, card.x + 48, y, 28, kText);
+        y += 40;
+    }
+    y += 16;
+    for (const auto& line : canvas_.wrap(regular_, "Say what went wrong, then press Create. Nothing is sent until you do.",
+             26, text_w, 3)) {
+        canvas_.text(regular_, line, card.x + 48, y, 26, kDim);
+        y += 36;
+    }
+
+    // The code on white with a 4-module quiet zone, in whole pixels per module.
+    const float box = 360;
+    const Rect white{card.x + card.w - 48 - box, card.y + 48, box, box};
+    canvas_.rounded_rect(white, 12, {255, 255, 255});
+    if (!state.report_url.empty()) {
+        const auto qr = qrcodegen::QrCode::encodeText(state.report_url.c_str(), qrcodegen::QrCode::Ecc::MEDIUM);
+        const int size = qr.getSize(), module = static_cast<int>(box) / (size + 8);
+        const float origin_x = std::floor(white.x + (box - module * size) / 2);
+        const float origin_y = std::floor(white.y + (box - module * size) / 2);
+        // Each run of dark modules in a row is one rectangle, so no seams show between them.
+        // Radius 0.5 fills solid. Radius 0 gives every pixel half coverage in rounded_rect.
+        for (int my = 0; my < size; ++my) {
+            for (int mx = 0; mx < size;) {
+                if (!qr.getModule(mx, my)) { ++mx; continue; }
+                int end = mx;
+                while (end < size && qr.getModule(end, my)) ++end;
+                canvas_.rounded_rect({origin_x + mx * module, origin_y + my * module,
+                    static_cast<float>((end - mx) * module), static_cast<float>(module)}, 0.5f, {0, 0, 0});
+                mx = end;
+            }
+        }
+    }
+    button({card.x + 48, card.y + card.h - 48 - 72, 240, 72}, "Done", std::nullopt, Screen::Settings, true);
 }
 
 // A confirm card over the screen below it. Only its two buttons respond.
@@ -711,7 +760,7 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
     const bool tour_on_screen = state.tour && screen_ != Screen::Learn;
 
     View view = screen_ == Screen::Main ? View::Main : screen_ == Screen::Settings ? View::Settings
-        : screen_ == Screen::Reset ? View::Reset : screen_ == Screen::Pick ? View::Pick : View::Learn;
+        : screen_ == Screen::Reset ? View::Reset : screen_ == Screen::Report ? View::Report : screen_ == Screen::Pick ? View::Pick : View::Learn;
     std::optional<TourView::Step> tour_step;
     if (calibration) {
         using Phase = CalibrationView::Phase;
@@ -734,6 +783,9 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
         confirm_card("Reset KnockThru?",
             "This deletes your settings, blocked games, and calibration. The tour starts again afterward.", "Cancel",
             Screen::Settings, "Reset", PanelClick{PanelCommand::FactoryReset}, true);
+    } else if (screen_ == Screen::Report) {
+        settings_screen(state);
+        report_card(state);
     } else if (screen_ == Screen::Pick) {
         pick_screen(state);
     } else {
@@ -742,7 +794,8 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
 
     // A new view rises into place. The first render has nothing to move from.
     // The reset confirm appears over Settings in place, so only the other views rise.
-    const bool overlay = (view == View::Reset && view_ == View::Settings) || (view == View::Settings && view_ == View::Reset);
+    const auto over_settings = [](std::optional<View> v) { return v == View::Reset || v == View::Report; };
+    const bool overlay = (over_settings(view) && view_ == View::Settings) || (view == View::Settings && over_settings(view_));
     if ((view_ && *view_ != view && !overlay) || (tour_step && tour_step_ && *tour_step_ != *tour_step)) view_t_ = now;
     view_ = view;
     tour_step_ = tour_step;

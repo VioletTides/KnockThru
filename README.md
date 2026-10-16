@@ -67,6 +67,8 @@ Run these on the Frame over SSH.
 | `--status` | Show registration, the running process, and Room View state |
 | `--update` | Install the latest GitHub release over this one and restart |
 | `--report` | Write `~/knockthru-report.txt` with versions, settings, and logs. Attach it to an issue |
+
+To report a problem from the headset, open Settings and select Report. Scan the QR code with your phone held up to a lens. It opens a GitHub issue with your KnockThru and SteamVR versions filled in.
 | `--toggle`, `--style` | Turn Room View on or off, or switch its style, once |
 | `--detect` | Print knocks live without acting on them |
 

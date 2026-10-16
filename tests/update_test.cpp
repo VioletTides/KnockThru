@@ -1,5 +1,6 @@
-// Update tests: version order, manifest parsing, SHA-256, and the file swap,
+// Update tests: version order, manifest parsing, SHA-256, the file swap, and the issue link,
 // in a scratch directory. The install test reads a local ZIP through curl's file:// support.
+#include "report.hpp"
 #include "update.hpp"
 
 #include <filesystem>
@@ -76,6 +77,15 @@ int main() {
     check(sha256("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq") ==
               "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
         "SHA-256 across a block boundary");
+
+    check(url_encode("a b/é") == "a%20b%2F%C3%A9", "url_encode escapes spaces, slashes, and UTF-8");
+    check(issue_url({"0.1.0", "2.18.2", "on"}) ==
+              "https://github.com/VioletTides/KnockThru/issues/new?template=bug.yml&version=0.1.0&steamvr=2.18.2&passthrough=on",
+        "issue_url fills the bug form");
+    const auto long_url = issue_url({"0.1.0", "2.18.2", std::string(300, 'x')});
+    check(long_url.find(std::string(100, 'x')) != std::string::npos &&
+              long_url.find(std::string(101, 'x')) == std::string::npos,
+        "issue_url cuts long fields to 100 characters");
 
     check(run_program({"true"}) == 0 && run_program({"false"}) == 1, "run_program returns exit codes");
     check(run_program({"knockthru-no-such-program"}) == -1, "run_program returns -1 for a missing program");

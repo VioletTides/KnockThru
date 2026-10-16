@@ -182,6 +182,15 @@ int main(int argc, char** argv) {
     update.message = "Update check failed: Cannot reach GitHub. Check the Wi-Fi connection.";
     update.message_is_error = true;
     settings_panel.render(update).write_png(out / "panel-settings-update-failed.png");
+    update.update = {};
+    update.message.clear();
+    update.message_is_error = false;
+    update.report_url = "https://github.com/VioletTides/KnockThru/issues/new?template=bug.yml&version=0.1.0"
+                        "&steamvr=2.18.2&passthrough=on";
+    settings_panel.click(1050, 542); // Report on the Something wrong? row
+    settings_panel.render(update, std::nullopt, 0);
+    settings_panel.render(update).write_png(out / "panel-report.png");
+    settings_panel.click(288, 588); // Done
     settings_panel.click(1050, 632); // Reset on the factory reset row
     settings_panel.render(idle, std::make_pair(800.0f, 500.0f)).write_png(out / "panel-reset-confirm.png");
     idle.classic_bar_icon = false;

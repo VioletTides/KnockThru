@@ -1,0 +1,30 @@
+# The KnockThru panel's Report button opens this form through a QR code, with
+# version, steamvr, and passthrough filled in from the link.
+name: Something wrong
+description: Report a problem with KnockThru
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What went wrong?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: KnockThru version
+  - type: input
+    id: steamvr
+    attributes:
+      label: SteamVR version
+  - type: input
+    id: passthrough
+    attributes:
+      label: Passthrough status
+  - type: textarea
+    id: report
+    attributes:
+      label: Report file (optional)
+      description: If you can, attach knockthru-report.txt from the Frame's home folder, or run `knockthru --report` over SSH to make one.

@@ -68,6 +68,7 @@ struct PanelState {
     std::optional<KnockKind> calibration_saved; // the kind the last calibration just saved
     std::string version;             // this KnockThru's version
     UpdateView update;
+    std::string report_url;          // the GitHub issue link the report card shows as a QR code
     std::string message;
     bool message_is_error = false;
 };
@@ -124,9 +125,9 @@ public:
     static void draw_icon(Canvas& canvas, IconStyle style = IconStyle::Tile);
 
 private:
-    enum class Screen { Main, Settings, Reset, Pick, Learn, SkipTour };
+    enum class Screen { Main, Settings, Reset, Report, Pick, Learn, SkipTour };
     // What is on screen, for transitions: a screen, a calibration phase, or the tour.
-    enum class View { Main, Settings, Reset, Pick, Learn, Record, Try, Tour };
+    enum class View { Main, Settings, Reset, Report, Pick, Learn, Record, Try, Tour };
     struct Target {
         Rect rect;
         std::optional<PanelClick> click = {};
@@ -166,6 +167,7 @@ private:
     void knock_scene(KnockKind kind, Rect box, float t, int knocks);
     void settings_screen(const PanelState& state);
     void update_control(const PanelState& state);
+    void report_card(const PanelState& state);
     void knocks_row(Rect rect, const PanelState& state);
     void passthrough_tile(Rect rect, const PanelState& state);
     void style_control(Rect rect, const PanelState& state);

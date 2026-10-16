@@ -71,6 +71,14 @@ domain or MIT terms. The MIT notice is reproduced below for binary distributions
   [assets/fonts/OFL.txt](assets/fonts/OFL.txt).
 - `NotoSans-SemiBold.ttf` and `NotoSans-Regular.ttf` draw the dashboard panel text.
 
+## QR Code generator library
+
+- Source: [nayuki/QR-Code-generator](https://github.com/nayuki/QR-Code-generator/tree/3c6d0b3cefb4e049dc337e82237c9644399716a8), C++ version
+- Pinned commit: `3c6d0b3cefb4e049dc337e82237c9644399716a8`
+- Copyright (c) Project Nayuki.
+- License: MIT. The notice is at the top of each file in `third_party/qrcodegen/`.
+- Draws the QR code on the panel's report card.
+
 ## stb_truetype and stb_image_write
 
 - Source: [nothings/stb](https://github.com/nothings/stb), stb_truetype v1.26 and stb_image_write v1.16

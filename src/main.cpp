@@ -6,6 +6,7 @@
 #include "room_view.hpp"
 #include "sound.hpp"
 #include "style.hpp"
+#include "report.hpp"
 #include "update.hpp"
 
 #include <json.hpp>
@@ -954,12 +955,14 @@ int run() {
                     });
                     break;
                 case PanelCommand::SaveReport: {
+                    // The card shows a QR code for a GitHub issue. The full report stays on the headset.
                     const std::string room_view = !state.room_view_error.empty() ? state.room_view_error
                         : !state.room_view ? "not read yet" : *state.room_view ? "on" : "off";
+                    state.report_url = knockthru::issue_url({kVersion, steamvr_version(), room_view});
                     try {
-                        show("Bug report saved to " + write_report(true, room_view).string());
+                        log("Bug report saved to " + write_report(true, room_view).string());
                     } catch (const std::exception& error) {
-                        show(std::string("Bug report not saved: ") + error.what(), true);
+                        log(std::string("Bug report not saved: ") + error.what());
                     }
                     break;
                 }
