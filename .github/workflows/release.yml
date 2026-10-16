@@ -1,4 +1,4 @@
-# On a v* tag: run the detector tests, build for the Steam Frame, and attach
+# On a v* tag: run the host tests, build for the Steam Frame, and attach
 # the ZIP, the FrameDrop manifest, and install.sh to a GitHub release.
 name: release
 
@@ -15,10 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Test the detector
+      - name: Build and test
         run: |
           cmake -S . -B build
-          cmake --build build --target detector_test --parallel
+          cmake --build build --parallel
           ctest --test-dir build --output-on-failure
 
       - name: Install Zig 0.16.0
