@@ -487,7 +487,7 @@ void Panel::settings_screen(const PanelState& state) {
     button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "Learn the knocks again", "Replay",
         PanelClick{PanelCommand::StartTour}, std::nullopt, false);
     button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
-        PanelClick{PanelCommand::SaveReport}, Screen::Report, false);
+        PanelClick{PanelCommand::ShowReport}, Screen::Report, false);
     button_row({kMargin, top + 5 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset", std::nullopt,
         Screen::Reset, true);
     if (state.message_is_error) message(state, top + 6 * row + 40);
@@ -519,30 +519,30 @@ void Panel::update_control(const PanelState& state) {
     button(rect, label, click, std::nullopt, primary, enabled);
 }
 
-// The report card over Settings: a QR code that opens a GitHub issue on a phone held to a lens.
+// The report card over Settings. Three numbered steps send a GitHub issue through
+// a QR code that a phone scans through a lens. Save report file writes the full
+// report to the headset, for the developer to ask for.
 void Panel::report_card(const PanelState& state) {
     targets_.clear();
     canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
-    const Rect card{120, 110, kWidth - 240, 550};
+    const Rect card{80, 60, kWidth - 160, 650};
     canvas_.rounded_rect(card, kRadius, kSurface);
-    const float text_w = 500;
-    canvas_.text(bold_, "Send a report", card.x + 48, card.y + 72, 38, kText);
-    float y = card.y + 140;
-    for (const auto& line : canvas_.wrap(regular_,
-             "Hold your phone up to a lens and scan this code. It opens a GitHub issue with your versions filled in.",
-             28, text_w, 4)) {
-        canvas_.text(regular_, line, card.x + 48, y, 28, kText);
-        y += 40;
+    const float box = 380, x = card.x + 48, text_w = card.w - 96 - box - 40;
+    canvas_.text(bold_, "Send a bug report", x, card.y + 72, 38, kText);
+
+    constexpr const char* kSteps[3] = {"Open the camera on your phone.", "Hold the phone up to a lens and scan the code.",
+                                       "Sign in to GitHub, say what went wrong, and press Create."};
+    float y = card.y + 150;
+    for (int i = 0; i < 3; ++i) {
+        canvas_.circle(x + 22, y, 22, kAccent);
+        canvas_.text(bold_, std::to_string(i + 1), x + 22, y, 26, kText, Align::Center);
+        const auto lines = canvas_.wrap(regular_, kSteps[i], 28, text_w - 64, 2);
+        for (std::size_t k = 0; k < lines.size(); ++k) canvas_.text(regular_, lines[k], x + 64, y + k * 40, 28, kText);
+        y += 40 * lines.size() + 36;
     }
-    y += 16;
-    for (const auto& line : canvas_.wrap(regular_, "Say what went wrong, then press Create. Nothing is sent until you do.",
-             26, text_w, 3)) {
-        canvas_.text(regular_, line, card.x + 48, y, 26, kDim);
-        y += 36;
-    }
+    canvas_.text(regular_, "Nothing is sent until you press Create.", x, y, 26, kDim);
 
     // The code on white with a 4-module quiet zone, in whole pixels per module.
-    const float box = 360;
     const Rect white{card.x + card.w - 48 - box, card.y + 48, box, box};
     canvas_.rounded_rect(white, 12, {255, 255, 255});
     if (!state.report_url.empty()) {
@@ -563,7 +563,21 @@ void Panel::report_card(const PanelState& state) {
             }
         }
     }
-    button({card.x + 48, card.y + card.h - 48 - 72, 240, 72}, "Done", std::nullopt, Screen::Settings, true);
+
+    // The file holds the full log, for when the developer asks. Saving never sends it.
+    const float by = card.y + card.h - 48 - 72;
+    const bool saved = !state.report_saved.empty();
+    std::string note = "Save report file keeps a full copy on the headset. It does not send anything.";
+    if (saved) note = "Saved as knockthru-report.txt in the Frame's home folder. Send it if the developer asks.";
+    if (!state.report_error.empty()) note = "Not saved: " + state.report_error;
+    float ny = by - 40 - 36 * (canvas_.wrap(regular_, note, 26, card.w - 96, 2).size() - 1);
+    for (const auto& line : canvas_.wrap(regular_, note, 26, card.w - 96, 2)) {
+        canvas_.text(regular_, line, x, ny, 26, state.report_error.empty() ? kDim : kError);
+        ny += 36;
+    }
+    button({x, by, 300, 72}, saved ? "Saved" : "Save report file", PanelClick{PanelCommand::SaveReport}, std::nullopt,
+        false, !saved);
+    button({card.x + card.w - 48 - 240, by, 240, 72}, "Done", std::nullopt, Screen::Settings, true);
 }
 
 // A confirm card over the screen below it. Only its two buttons respond.

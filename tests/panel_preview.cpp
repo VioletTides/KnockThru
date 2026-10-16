@@ -190,7 +190,10 @@ int main(int argc, char** argv) {
     settings_panel.click(1050, 542); // Report on the Something wrong? row
     settings_panel.render(update, std::nullopt, 0);
     settings_panel.render(update).write_png(out / "panel-report.png");
-    settings_panel.click(288, 588); // Done
+    update.report_saved = "/home/steamos/knockthru-report.txt";
+    settings_panel.render(update).write_png(out / "panel-report-saved.png");
+    update.report_saved.clear();
+    settings_panel.click(900, 638); // Done
     settings_panel.click(1050, 632); // Reset on the factory reset row
     settings_panel.render(idle, std::make_pair(800.0f, 500.0f)).write_png(out / "panel-reset-confirm.png");
     idle.classic_bar_icon = false;

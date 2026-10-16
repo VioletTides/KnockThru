@@ -763,8 +763,14 @@ int run() {
     double binary_missing_since = -1;
     const auto binary = executable();
 
+    std::string last_error; // for the report link
+    const auto room_view_text = [&]() -> std::string {
+        return !state.room_view_error.empty() ? state.room_view_error
+            : !state.room_view ? "not read yet" : *state.room_view ? "on" : "off";
+    };
     const auto show = [&](const std::string& message, bool error = false) {
         log(message);
+        if (error) last_error = message;
         state.message = message;
         state.message_is_error = error;
         state.calibration_saved.reset();
@@ -954,18 +960,22 @@ int run() {
                         knockthru::install_release(release, install_directory(), update_work);
                     });
                     break;
-                case PanelCommand::SaveReport: {
-                    // The card shows a QR code for a GitHub issue. The full report stays on the headset.
-                    const std::string room_view = !state.room_view_error.empty() ? state.room_view_error
-                        : !state.room_view ? "not read yet" : *state.room_view ? "on" : "off";
-                    state.report_url = knockthru::issue_url({kVersion, steamvr_version(), room_view});
+                case PanelCommand::ShowReport:
+                    state.report_url = knockthru::issue_url({kVersion, steamvr_version(), room_view_text(),
+                        last_error});
+                    state.report_saved.clear();
+                    state.report_error.clear();
+                    break;
+                case PanelCommand::SaveReport:
                     try {
-                        log("Bug report saved to " + write_report(true, room_view).string());
+                        state.report_saved = write_report(true, room_view_text()).string();
+                        state.report_error.clear();
+                        log("Bug report saved to " + state.report_saved);
                     } catch (const std::exception& error) {
+                        state.report_error = error.what();
                         log(std::string("Bug report not saved: ") + error.what());
                     }
                     break;
-                }
                 case PanelCommand::BarIcon:
                     if (save([&] { knockthru::save_classic_bar_icon(!config.classic_bar_icon); }))
                         show(config.classic_bar_icon ? "Classic bar icon on" : "Classic bar icon off");

@@ -8,6 +8,7 @@ namespace knockthru {
 // .github/ISSUE_TEMPLATE/bug.yml.
 struct IssueFields {
     std::string version, steamvr, passthrough;
+    std::string error; // the last error KnockThru showed, empty for none
 };
 
 // Percent-encodes everything except letters, digits, and -._~.

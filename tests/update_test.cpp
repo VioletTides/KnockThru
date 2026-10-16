@@ -79,10 +79,13 @@ int main() {
         "SHA-256 across a block boundary");
 
     check(url_encode("a b/é") == "a%20b%2F%C3%A9", "url_encode escapes spaces, slashes, and UTF-8");
-    check(issue_url({"0.1.0", "2.18.2", "on"}) ==
+    check(issue_url({"0.1.0", "2.18.2", "on", ""}) ==
               "https://github.com/VioletTides/KnockThru/issues/new?template=bug.yml&version=0.1.0&steamvr=2.18.2&passthrough=on",
         "issue_url fills the bug form");
-    const auto long_url = issue_url({"0.1.0", "2.18.2", std::string(300, 'x')});
+    check(issue_url({"0.1.0", "2.18.2", "on", "Style not changed"}).find("&last-error=Style%20not%20changed") !=
+              std::string::npos,
+        "issue_url adds the last error");
+    const auto long_url = issue_url({"0.1.0", "2.18.2", std::string(300, 'x'), ""});
     check(long_url.find(std::string(100, 'x')) != std::string::npos &&
               long_url.find(std::string(101, 'x')) == std::string::npos,
         "issue_url cuts long fields to 100 characters");

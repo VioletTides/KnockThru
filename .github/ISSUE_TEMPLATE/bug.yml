@@ -1,5 +1,5 @@
 # The KnockThru panel's Report button opens this form through a QR code, with
-# version, steamvr, and passthrough filled in from the link.
+# version, steamvr, passthrough, and last-error filled in from the link.
 name: Something wrong
 description: Report a problem with KnockThru
 labels: [bug]
@@ -23,6 +23,10 @@ body:
     id: passthrough
     attributes:
       label: Passthrough status
+  - type: input
+    id: last-error
+    attributes:
+      label: Last error KnockThru showed
   - type: textarea
     id: report
     attributes:

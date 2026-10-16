@@ -29,7 +29,8 @@ std::string issue_url(const IssueFields& fields) {
         return std::string("&") + id + "=" + url_encode(value.substr(0, end));
     };
     return "https://github.com/VioletTides/KnockThru/issues/new?template=bug.yml" + field("version", fields.version) +
-           field("steamvr", fields.steamvr) + field("passthrough", fields.passthrough);
+           field("steamvr", fields.steamvr) + field("passthrough", fields.passthrough) +
+           (fields.error.empty() ? "" : field("last-error", fields.error));
 }
 
 } // namespace knockthru
