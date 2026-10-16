@@ -416,14 +416,26 @@ void unregister() {
     fs::remove(icon_path(), error);
 }
 
+// The bug report files go in the home folder, where Desktop Mode's file manager opens.
+fs::path report_path() {
+    const auto home = std::getenv("HOME");
+    return fs::path(home && *home ? home : "/tmp") / "knockthru-report.txt";
+}
+
+fs::path recording_path() {
+    const auto home = std::getenv("HOME");
+    return fs::path(home && *home ? home : "/tmp") / "knockthru-knocks.csv.gz";
+}
+
 // SteamVR's own per-app file, which holds the autostart flag.
 fs::path steamvr_app_config() {
     return knockthru::user_directory().parent_path() / "openvr" / "config" / "vrappconfig" /
            (std::string(kAppKey) + ".vrappconfig");
 }
 
-// With `purge`, also deletes ~/.config/knockthru and SteamVR's file for the app.
-// The install folder stays, because FrameDrop or the person who unpacked it owns it.
+// With `purge`, also deletes ~/.config/knockthru, SteamVR's file for the app, and the
+// report files in the home folder. The install folder stays, because FrameDrop or the
+// person who unpacked it owns it.
 int uninstall(bool purge) {
     VrSession session(vr::VRApplication_Utility);
     stop_running_app();
@@ -435,8 +447,10 @@ int uninstall(bool purge) {
     }
     fs::remove_all(knockthru::user_directory());
     fs::remove(steamvr_app_config());
+    fs::remove(report_path());
+    fs::remove(recording_path());
     std::cout << "KnockThru stopped and removed from SteamVR. Deleted " << knockthru::user_directory().string()
-              << " and " << steamvr_app_config().string() << ".\n";
+              << ", " << steamvr_app_config().string() << ", and the report files in your home folder.\n";
     return 0;
 }
 
@@ -477,11 +491,6 @@ std::string os_name() {
     return name;
 }
 
-fs::path recording_path() {
-    const auto home = std::getenv("HOME");
-    return fs::path(home && *home ? home : "/tmp") / "knockthru-knocks.csv.gz";
-}
-
 // 20 s of headset and controller motion, in the tests/data CSV format, for a knock bug report.
 struct KnockRecording {
     static constexpr double kSeconds = 20;
@@ -514,11 +523,6 @@ void write_recording(const KnockRecording& recording) {
     summary << "Recorded " << recording.samples.size() << " samples over " << KnockRecording::kSeconds << " s. Heard "
             << recording.heard.size() << " knocks and actions:\n";
     for (const auto& line : recording.heard) summary << line << "\n";
-}
-
-fs::path report_path() {
-    const auto home = std::getenv("HOME");
-    return fs::path(home && *home ? home : "/tmp") / "knockthru-report.txt";
 }
 
 // A bug report for a GitHub issue: versions, SteamVR state, settings, and the
@@ -1064,6 +1068,10 @@ int run() {
                             knockthru::fit_report(report_text(true, room_view_text())), issue);
                         state.report_url = report_server->url();
                         state.report_full = true;
+                        // A recording made before the card closed belongs to this report too.
+                        std::error_code missing;
+                        if (state.recorded && fs::exists(recording_path(), missing))
+                            report_server->set_recording(recording_path());
                         log("Serving the bug report at " + state.report_url);
                     } catch (const std::exception& error) {
                         state.report_url = issue;
@@ -1347,9 +1355,12 @@ int run() {
         if (install_job.valid() && install_job.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             try {
                 install_job.get();
-                // knockthru-ctl --install stops this process and starts the new one.
+                // knockthru-ctl --install stops this process and starts the new one. If that
+                // fails, the new files still start with SteamVR next time.
                 log("Installed KnockThru " + latest->version + ". Restarting.");
                 knockthru::start_detached({(install_directory() / "knockthru-ctl").string(), "--install"});
+                state.update = {UpdateStatus::Current, latest->version, ""};
+                show("Installed " + latest->version + ". KnockThru restarts in a moment.");
             } catch (const std::exception& error) {
                 state.update = {UpdateStatus::Failed, latest ? latest->version : "", error.what()};
                 show(std::string("Update not installed: ") + error.what(), true);

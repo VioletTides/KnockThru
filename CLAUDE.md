@@ -8,6 +8,8 @@ A double knock toggles Steam Frame passthrough (Room View). A triple knock switc
 - `src/room_view.*`: clicks the Room View button through Steam's CEF debug port (8080 on the Frame).
 - `src/style.*`: switches the SteamVR setting `camera.roomViewStyle` (3 is translucent, 4 is opaque).
 - `src/config.*`: loads `assets/config.json`, then `~/.config/knockthru/config.json`, then `calibration.json`.
+- `src/update.*`: the GitHub release check, the SHA-256 checked install, and the file swap behind `--update` and the Settings header.
+- `src/report.*`, `src/report_server.*`: the bug report. The report card's QR code opens a page the headset serves on the local Wi-Fi.
 - `src/main.cpp`: the CLI commands and the resident app (`--run`).
 - `tests/data/*.csv.gz`: pose recordings from the Frame. `docs/knock-signal.md` explains each one and how the detector was tuned.
 
