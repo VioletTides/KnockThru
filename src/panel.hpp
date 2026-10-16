@@ -43,10 +43,16 @@ struct TourView {
 
 // The update check in Settings, filled in by the app.
 struct UpdateView {
-    enum class Status { Idle, Checking, Current, Available, Installing, Failed };
+    enum class Status { Idle, Checking, Current, Available, Installing, Installed, Restarting, Updated, Failed };
     Status status = Status::Idle;
-    std::string latest; // the newest release, once a check found one
+    std::string latest; // the newest release, once a check found one. For Updated, the version before.
     std::string error;  // why the check or the install failed
+};
+
+// The card that reports an update. The new process shows success after its restart, and the old one shows a failure.
+struct UpdateNotice {
+    bool failed = false;
+    std::string text;
 };
 
 // Everything the dashboard panel shows. The app fills it in, the panel draws it.
@@ -68,6 +74,8 @@ struct PanelState {
     std::optional<KnockKind> calibration_saved; // the kind the last calibration just saved
     std::string version;             // this KnockThru's version
     UpdateView update;
+    float update_progress = 0;       // 0 to 1 while an update installs
+    std::optional<UpdateNotice> update_notice; // shown over every screen until OK
     std::string report_url;          // the GitHub issue link the report card shows as a QR code
     bool report_full = false;        // report_url is the headset's page with the full report
     std::string report_saved;        // where Save report file wrote the report, empty before
@@ -96,6 +104,8 @@ enum class PanelCommand {
     TourSkip,           // ends the tour from any step, including Done
     FactoryReset,
     CheckUpdate, InstallUpdate,
+    RestartForUpdate,   // restarts KnockThru into the installed update
+    DismissUpdateNotice,
     ShowReport,         // starts the report page for the report card's QR code
     CloseReport,
     SaveReport,         // writes the full report to the home folder
@@ -177,6 +187,9 @@ private:
     void settings_screen(const PanelState& state);
     void update_control(const PanelState& state);
     void report_card(const PanelState& state);
+    void update_card(const UpdateNotice& notice);
+    void alert_mark(float cx, float cy, float scale, Color color);
+    void progress_button(Rect rect, const std::string& label, float progress);
     void knocks_row(Rect rect, const PanelState& state);
     void passthrough_tile(Rect rect, const PanelState& state);
     void style_control(Rect rect, const PanelState& state);

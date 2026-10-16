@@ -182,6 +182,29 @@ int main(int argc, char** argv) {
     settings_panel.render(update, std::make_pair(1000.0f, 68.0f)).write_png(out / "panel-settings-update-available.png");
     update.update = {UpdateView::Status::Current, "0.1.0", ""};
     settings_panel.render(update).write_png(out / "panel-settings-update-current.png");
+    update.update = {UpdateView::Status::Installing, "0.2.0", ""};
+    update.update_progress = 0.45f;
+    settings_panel.render(update).write_png(out / "panel-settings-update-installing.png");
+    update.update_progress = 0;
+    update.update = {UpdateView::Status::Installed, "0.2.0", ""};
+    settings_panel.render(update).write_png(out / "panel-settings-update-installed.png");
+    update.update = {UpdateView::Status::Restarting, "0.2.0", ""};
+    settings_panel.render(update).write_png(out / "panel-settings-update-restarting.png");
+    update.version = "0.2.0";
+    update.update = {UpdateView::Status::Updated, "0.1.0", ""};
+    settings_panel.render(update).write_png(out / "panel-settings-update-updated.png");
+    {
+        PanelState updated = idle;
+        updated.version = "0.2.0";
+        updated.update = {UpdateView::Status::Updated, "0.1.0", ""};
+        updated.update_notice = UpdateNotice{false, "You now have version 0.2.0. You had version 0.1.0."};
+        Panel main_panel(KNOCKTHRU_FONTS);
+        main_panel.render(updated).write_png(out / "panel-updated.png");
+        updated.update_notice = UpdateNotice{true, "Version 0.2.0 was not installed. The downloaded ZIP does not match "
+            "its SHA-256. Nothing changed. You still have version 0.1.0."};
+        main_panel.render(updated).write_png(out / "panel-update-failed.png");
+    }
+    update.version = "0.1.0";
     update.update = {UpdateView::Status::Failed, "", "Cannot reach GitHub. Check the Wi-Fi connection."};
     update.message = "Update check failed: Cannot reach GitHub. Check the Wi-Fi connection.";
     update.message_is_error = true;

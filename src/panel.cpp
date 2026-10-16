@@ -25,6 +25,8 @@ constexpr Color kDim{150, 156, 168};
 constexpr Color kFaint{96, 102, 114};
 constexpr Color kAccent{58, 145, 232};
 constexpr Color kAccentHover{80, 160, 240};
+// Steam's alert yellow, from the mark on its Settings icon when a system update is ready.
+constexpr Color kUpdate{255, 200, 44};
 constexpr Color kKnobOff{196, 200, 208};
 constexpr Color kError{240, 110, 100};
 constexpr Color kErrorHover{248, 132, 122};
@@ -212,10 +214,11 @@ void Panel::main_screen(const PanelState& state) {
     header("KnockThru");
     const Rect settings{kMargin + 500 - 160, 36, 160, 64};
     button(settings, "Settings", std::nullopt, Screen::Settings);
-    // A dot on Settings when an update is ready, ringed in the background color so it reads on any fill.
-    if (state.update.status == UpdateView::Status::Available) {
+    // A dot on Settings while an update waits for its install or its restart, ringed in the background color
+    // so it reads on any fill.
+    if (state.update.status == UpdateView::Status::Available || state.update.status == UpdateView::Status::Installed) {
         canvas_.circle(settings.x + settings.w - 6, settings.y + 6, 13, kBackground);
-        canvas_.circle(settings.x + settings.w - 6, settings.y + 6, 9, kAccent);
+        canvas_.circle(settings.x + settings.w - 6, settings.y + 6, 9, kUpdate);
     }
     const float left_w = 500;
     passthrough_tile({kMargin, 128, left_w, 340}, state);
@@ -516,14 +519,55 @@ void Panel::update_control(const PanelState& state) {
     case Status::Available:
         status = "You have version " + state.version;
         label = "Install " + update.latest;
-        primary = true;
         click = PanelClick{PanelCommand::InstallUpdate};
         break;
-    case Status::Installing: label = "Installing"; enabled = false; break;
+    case Status::Installing: label = "Installing " + std::to_string(std::lround(state.update_progress * 100)) + "%"; break;
+    case Status::Installed:
+        status = "Version " + update.latest + " is installed";
+        label = "Restart";
+        primary = true; // the filled bar turns into the blue Restart button
+        click = PanelClick{PanelCommand::RestartForUpdate};
+        break;
+    case Status::Restarting: status = "Version " + update.latest + " is installed"; label = "Restarting"; enabled = false; break;
+    case Status::Updated: status = "Updated to version " + state.version; break;
     case Status::Failed: status = update.latest.empty() ? "Check failed" : "Install failed"; label = "Try again"; break;
     }
     canvas_.text(regular_, status, rect.x - 24, y + h / 2, 26, update.status == Status::Failed ? kError : kDim, Align::Right);
-    button(rect, label, click, std::nullopt, primary, enabled);
+    // The alert mark ties the yellow dot on the Settings button to this row. It is as tall as the text's capitals.
+    if (update.status == Status::Available || update.status == Status::Installed)
+        alert_mark(rect.x - 24 - canvas_.measure(regular_, status, 26) - 14, y + h / 2, 1.05f, kUpdate);
+    if (update.status == Status::Installing) progress_button(rect, label, state.update_progress);
+    else button(rect, label, click, std::nullopt, primary, enabled);
+}
+
+// A button that fills from the left with a blue tint as `progress` goes from 0 to 1. It takes no clicks.
+void Panel::progress_button(Rect rect, const std::string& label, float progress) {
+    canvas_.rounded_rect(rect, kRadius, kRaised);
+    // The button's outline with every point right of the fill's edge pulled back to it. The outline
+    // is convex, so this is the button shape cut off at the edge.
+    const float edge = rect.x + rect.w * std::clamp(progress, 0.0f, 1.0f);
+    if (edge > rect.x) {
+        std::vector<Point> outline;
+        const std::array<std::array<float, 3>, 4> corners{{{rect.x + rect.w - kRadius, rect.y + kRadius, -anim::kPi / 2},
+            {rect.x + rect.w - kRadius, rect.y + rect.h - kRadius, 0}, {rect.x + kRadius, rect.y + rect.h - kRadius, anim::kPi / 2},
+            {rect.x + kRadius, rect.y + kRadius, anim::kPi}}};
+        for (const auto& [cx, cy, start] : corners)
+            for (int i = 0; i <= 8; ++i) {
+                const float a = start + anim::kPi / 2 * static_cast<float>(i) / 8;
+                outline.push_back({std::min(cx + kRadius * std::cos(a), edge), cy + kRadius * std::sin(a)});
+            }
+        canvas_.polygon({outline}, Color{kAccent.r, kAccent.g, kAccent.b, 110});
+    }
+    canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, 28, kText, Align::Center);
+}
+
+// Steam's alert mark from its Settings icon, a tapered bar over a dot, centered on (cx, cy).
+// At scale 1 it is about 17 px tall.
+void Panel::alert_mark(float cx, float cy, float s, Color color) {
+    const float top = cy - 8.37f * s;
+    canvas_.polygon({{{cx - 3.37f * s, top}, {cx + 3.37f * s, top}, {cx + 2.22f * s, top + 8 * s}, {cx - 2.22f * s, top + 8 * s}}},
+        color);
+    canvas_.circle(cx, top + 13.87f * s, 2.87f * s, color);
 }
 
 // The report card over Settings. A phone held to a lens scans the QR code and
@@ -634,6 +678,34 @@ void Panel::confirm_card(const std::string& title, const std::string& text, cons
     const float by = card.y + card.h - 48 - 72;
     button({card.x + 48, by, 240, 72}, cancel, std::nullopt, cancel_to);
     button({card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, Screen::Main, true, true, danger);
+}
+
+// The update result over the screen below it. Only OK responds.
+void Panel::update_card(const UpdateNotice& notice) {
+    targets_.clear();
+    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
+    // The card grows with the text, from one to three lines.
+    const float w = kWidth - 440;
+    const auto lines = canvas_.wrap(regular_, notice.text, 28, w - 96, 3);
+    const float h = 290 + 40 * static_cast<float>(lines.size());
+    const Rect card{220, (kHeight - h) / 2, w, h};
+    canvas_.rounded_rect(card, kRadius, kSurface);
+    const float cx = card.x + 48 + 30, cy = card.y + 78;
+    if (notice.failed) {
+        canvas_.circle(cx, cy, 30, kError);
+        alert_mark(cx, cy, 1.6f, kOnError);
+    } else {
+        check_mark(cx, cy, 30, 1);
+    }
+    canvas_.text(bold_, notice.failed ? "Update failed" : "KnockThru updated", cx + 52, cy, 38, kText);
+    float y = card.y + 156;
+    for (const auto& line : lines) {
+        canvas_.text(regular_, line, card.x + 48, y, 28, kText);
+        y += 40;
+    }
+    const float by = card.y + card.h - 48 - 72;
+    button({card.x + card.w - 48 - 200, by, 200, 72}, "OK", PanelClick{PanelCommand::DismissUpdateNotice}, std::nullopt,
+        true);
 }
 
 // Back and Next along the bottom, with Skip. The first step has Skip and Start, the last Back and Done.
@@ -843,6 +915,7 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
     } else {
         learn_screen(state);
     }
+    if (state.update_notice && !calibration && !tour_on_screen) update_card(*state.update_notice);
 
     // A new view rises into place. The first render has nothing to move from.
     // The reset confirm appears over Settings in place, so only the other views rise.

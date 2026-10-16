@@ -300,8 +300,11 @@ int main() {
         check(throws([&] { install_release(bad, install, root / "work"); }), "install_release rejects a SHA-256 mismatch");
         check(read(install / "knockthru") == "new binary", "a mismatched ZIP changes nothing");
         check(!fs::exists(root / "work"), "install_release deletes its download after a failure");
-        install_release(local, install, root / "work");
+        std::atomic<bool> never{false};
+        std::atomic<float> progress{-1};
+        install_release(local, install, root / "work", &never, &progress);
         check(read(install / "knockthru") == "newer binary", "install_release installs a matching ZIP");
+        check(progress == 1, "install_release reports progress up to 1");
         check(!fs::exists(root / "work"), "install_release deletes its download");
     }
 

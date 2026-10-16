@@ -19,7 +19,7 @@ struct AppConfig {
     bool classic_bar_icon = false; // the dashboard bar icon in the logo colors, without Steam's tint
     bool sounds = true; // SteamVR's click on a triple knock and on panel buttons
     bool tour_done = false; // the first-run tour finished or skipped
-    bool check_updates = true; // look for a new release on GitHub once a week
+    bool check_updates = true; // look for a new release on GitHub once a day
 };
 
 // What KnockThru remembers between runs that is not a setting, in
@@ -29,6 +29,7 @@ struct AppState {
     std::string steamvr_since;    // the date KnockThru first saw that version, YYYY-MM-DD
     std::string steamvr_previous; // the version before it, empty if none
     long long last_update_check = 0; // Unix time of the last automatic update check
+    std::string knockthru_version; // the KnockThru version at the last start
 };
 
 // One knock kind's calibration.
