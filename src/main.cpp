@@ -23,6 +23,7 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <functional>
 #include <atomic>
 #include <future>
@@ -382,29 +383,41 @@ void register_app() {
     check_app(vr::VRApplications()->AddApplicationManifest(manifest_path().u8string().c_str(), false), "Register with SteamVR");
 }
 
-// Stops a running KnockThru, after checking that the process is this program.
-// After an update renames a new file over the old one, the running process's
-// exe link reads "knockthru (deleted)".
+// Stops every running resident KnockThru: a process of this user whose program
+// is named knockthru and whose arguments include --run. After an update renames
+// a new file over the old one, the running process's exe link reads
+// "knockthru (deleted)". It reads /proc instead of asking SteamVR, which files
+// knockthru-ctl under KnockThru's app key when STEAMVR_APPKEY leaks into it.
 void stop_running_app() {
-    const auto pid = vr::VRApplications()->GetApplicationProcessId(kAppKey);
-    if (!pid || pid == static_cast<uint32_t>(getpid())) return;
+    std::vector<pid_t> stopped;
     std::error_code error;
-    const auto exe = fs::read_symlink(fs::path("/proc") / std::to_string(pid) / "exe", error);
-    if (error || (exe.filename() != "knockthru" && exe.filename() != "knockthru (deleted)")) return;
-    ::kill(static_cast<pid_t>(pid), SIGTERM);
-    for (int i = 0; i < 50 && fs::exists(fs::path("/proc") / std::to_string(pid)); ++i)
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    // SteamVR clears the app's PID a few ms after the process exits. A launch before
-    // that fails with ApplicationAlreadyRunning, as one update on the Frame did.
-    for (int i = 0; i < 30 && vr::VRApplications()->GetApplicationProcessId(kAppKey) == pid; ++i)
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    for (const auto& entry : fs::directory_iterator("/proc", error)) {
+        const auto name = entry.path().filename().string();
+        if (name.find_first_not_of("0123456789") != std::string::npos) continue;
+        const auto pid = static_cast<pid_t>(std::stol(name));
+        if (pid == getpid()) continue;
+        std::error_code ignored;
+        const auto exe = fs::read_symlink(entry.path() / "exe", ignored);
+        if (ignored || (exe.filename() != "knockthru" && exe.filename() != "knockthru (deleted)")) continue;
+        std::ifstream file(entry.path() / "cmdline", std::ios::binary);
+        std::string args((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        if (args.find(std::string("--run") + '\0') == std::string::npos) continue;
+        if (::kill(pid, SIGTERM) == 0) stopped.push_back(pid);
+    }
+    for (const auto pid : stopped)
+        for (int i = 0; i < 50 && fs::exists(fs::path("/proc") / std::to_string(pid)); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 int install() {
+    stop_running_app(); // restart so an update takes effect
     VrSession session(vr::VRApplication_Utility);
     register_app();
     check_app(vr::VRApplications()->SetApplicationAutoLaunch(kAppKey, true), "Turn on SteamVR autostart");
-    stop_running_app(); // restart so an update takes effect
+    // SteamVR clears the old app's PID a few ms after the process exits. A launch
+    // before that fails with ApplicationAlreadyRunning.
+    for (int i = 0; i < 30 && vr::VRApplications()->GetApplicationProcessId(kAppKey) != 0; ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     check_app(vr::VRApplications()->LaunchDashboardOverlay(kAppKey), "Start KnockThru");
     std::cout << "KnockThru is running and starts with SteamVR. Double knock to toggle passthrough.\n";
     return 0;
@@ -1548,6 +1561,12 @@ int main(int argc, char** argv) {
         }
 
         if (command == "--run") return run();
+        // SteamVR starts the resident app with STEAMVR_APPKEY set to KnockThru's key.
+        // A command the app starts, like Restart in Settings, inherits it, and SteamVR
+        // would then take the command for KnockThru itself.
+        ::unsetenv("STEAMVR_APPKEY");
+        // Restart in Settings runs --install with no terminal, so its errors go to the log.
+        if (command == "--install" || command == "--update") open_log();
         if (command == "--install") return install();
         if (purge && command != "--uninstall") throw std::runtime_error("--purge only works with --uninstall");
         if (command == "--uninstall") return uninstall(purge);
