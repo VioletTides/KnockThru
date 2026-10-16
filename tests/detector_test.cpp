@@ -1,5 +1,6 @@
 // Detector tests: synthetic sequences, then replays of the Steam Frame
 // recordings in tests/data/.
+#include "check.hpp"
 #include "calibrator.hpp"
 #include "config.hpp"
 #include "knock_detector.hpp"
@@ -16,13 +17,6 @@
 using namespace knockthru;
 
 namespace {
-
-int failures = 0;
-
-void check(bool ok, const std::string& what) {
-    std::cout << (ok ? "  ok    " : "  FAIL  ") << what << "\n";
-    if (!ok) ++failures;
-}
 
 std::vector<KnockEvent> drain(KnockDetector& detector, double now, std::vector<KnockEvent> events = {}) {
     if (auto event = detector.poll(now)) events.push_back(*event);
@@ -344,6 +338,5 @@ int main(int argc, char** argv) {
     replay_tests();
     calibration_tests();
     calibrated_replay_tests();
-    std::cout << (failures ? std::to_string(failures) + " failed\n" : "all passed\n");
-    return failures ? 1 : 0;
+    return finish();
 }

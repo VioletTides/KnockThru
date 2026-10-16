@@ -1,5 +1,6 @@
 // Update tests: version order, manifest parsing, SHA-256, the file swap, and the issue link,
 // in a scratch directory. The install test reads a local ZIP through curl's file:// support.
+#include "check.hpp"
 #include "report.hpp"
 #include "report_server.hpp"
 #include "update.hpp"
@@ -27,13 +28,6 @@ using namespace knockthru;
 namespace fs = std::filesystem;
 
 namespace {
-
-int failures = 0;
-
-void check(bool ok, const std::string& what) {
-    std::cout << (ok ? "  ok    " : "  FAIL  ") << what << "\n";
-    if (!ok) ++failures;
-}
 
 void write(const fs::path& path, const std::string& text) {
     fs::create_directories(path.parent_path());
@@ -309,6 +303,5 @@ int main() {
     }
 
     fs::remove_all(root);
-    if (failures) std::cout << failures << " update checks failed\n";
-    return failures ? 1 : 0;
+    return finish();
 }

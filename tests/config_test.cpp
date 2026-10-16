@@ -1,4 +1,5 @@
 // Config tests: the tour flag and factory reset, in a scratch user directory.
+#include "check.hpp"
 #include "config.hpp"
 
 #include <cstdlib>
@@ -11,17 +12,6 @@
 
 using namespace knockthru;
 namespace fs = std::filesystem;
-
-namespace {
-
-int failures = 0;
-
-void check(bool ok, const std::string& what) {
-    std::cout << (ok ? "  ok    " : "  FAIL  ") << what << "\n";
-    if (!ok) ++failures;
-}
-
-} // namespace
 
 int main() {
     const auto root = fs::temp_directory_path() / ("knockthru-config-test-" + std::to_string(getpid()));
@@ -93,6 +83,5 @@ int main() {
     }
 
     fs::remove_all(root);
-    std::cout << (failures ? std::to_string(failures) + " failed\n" : "all passed\n");
-    return failures ? 1 : 0;
+    return finish();
 }
