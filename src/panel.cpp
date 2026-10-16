@@ -147,16 +147,12 @@ void Panel::passthrough_tile(Rect rect, const PanelState& state) {
             canvas_.text(regular_, line, x, y, 26, kText);
             y += 36;
         }
-    } else {
-        const std::string hint = on ? "Select to turn off, or knock twice" : "Select to turn on, or knock twice";
-        canvas_.text(regular_, hint, x, rect.y + rect.h - 48, 26, on ? kText : kDim);
     }
     targets_.push_back({rect, PanelClick{PanelCommand::RoomView}, std::nullopt});
 }
 
 void Panel::style_control(Rect rect, const PanelState& state) {
     canvas_.text(bold_, "Style", rect.x, rect.y + 16, 28, kText);
-    canvas_.text(regular_, "or knock three times", rect.x + rect.w, rect.y + 16, 26, kDim, Align::Right);
     const Rect track{rect.x, rect.y + 46, rect.w, 84};
     canvas_.rounded_rect(track, track.h / 2, kSurface);
     const char* names[2] = {"Translucent", "Opaque"};

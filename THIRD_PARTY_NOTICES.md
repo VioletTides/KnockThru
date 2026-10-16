@@ -138,15 +138,19 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Logo
+## Logo and Steam Frame drawings
 
-The controller outlines in `images/logo.svg`, `images/logo-wordmark.svg`, and
-`images/social-preview.png` are traced from Valve's Steam Frame controller CAD files
-(<https://gitlab.steamos.cloud/SteamHardware/SteamFrame>), which Valve Corporation
-released under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0
-International license. These logo files use that same license
-(<https://creativecommons.org/licenses/by-nc-sa/4.0/>), not the MIT license.
-KnockThru is not associated with or endorsed by Valve.
+These files are traced or rendered from Valve's Steam Frame CAD files
+(<https://gitlab.steamos.cloud/SteamHardware/SteamFrame>):
+
+- The logo: `images/logo.svg`, `images/logo-wordmark.svg`, and `images/social-preview.png`.
+- The README drawings: `images/cad/`, `images/hero.gif`, `images/knock-kinds.gif`, `images/calibrate.gif`,
+  `images/update.gif`, `images/report.gif`, and `images/dashboard.png`.
+
+Valve Corporation released the CAD files under the Creative Commons
+Attribution-NonCommercial-ShareAlike 4.0 International license. These files use that
+same license (<https://creativecommons.org/licenses/by-nc-sa/4.0/>), not the MIT
+license. KnockThru is not associated with or endorsed by Valve.
 
 The controller and headset outlines in `src/sprite_shapes.hpp`, drawn in the
 calibration animations, are traced from renders of the same CAD files, including

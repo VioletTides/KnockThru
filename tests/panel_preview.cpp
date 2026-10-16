@@ -1,12 +1,19 @@
 // Writes the dashboard panel in sample states to PNG files.
 // Usage: panel_preview OUTPUT_DIRECTORY
+//        panel_preview --readme OUTPUT_DIRECTORY
 // The calibration steps also get frame sequences in OUTPUT_DIRECTORY/frames, at 25
-// frames a second, to review the animations.
+// frames a second, to review the animations. The --readme form writes clean states for
+// the README images instead.
 #include "panel.hpp"
+#include "report_server.hpp"
 
+#include <cmath>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <string>
+#include <vector>
 
 using namespace knockthru;
 
@@ -127,7 +134,276 @@ void tour(const std::filesystem::path& out, const PanelState& idle) {
     shot(panel, state, 100, out / "tour-2-kinds-none.png");
 }
 
+// Writes 25 frames a second of one screen, numbered on from earlier calls, and moves the clock on.
+// It also moves a pointer, which hovers what it rests on, and logs where it is for the README
+// script to draw.
+struct Recorder {
+    using Point = std::pair<float, float>;
+    Panel* panel;
+    std::filesystem::path dir;
+    double t = 100;
+    int index = 0;
+    std::optional<Point> pointer;   // starts and ends the loop at kRest
+    std::optional<Point> from, bend, to; // a pointer move in progress, along a curve through bend
+    double move_t = 0, move_s = 0;
+    std::vector<int> cuts;          // frames where the clock jumps, to cross-fade
+    std::vector<int> clicks;        // frames where the pointer clicks
+    std::ofstream log{(std::filesystem::create_directories(dir), dir / "pointer.txt")};
+
+    void play(const PanelState& state, double seconds) { until(state, t + seconds); }
+    void until(const PanelState& state, double end) {
+        for (; t < end - 1e-6; t += 1 / 25.0) {
+            if (to) {
+                // Minimum-jerk timing, as a hand moves: a smooth start and a long settle.
+                const float p = std::min(1.0f, static_cast<float>((t - move_t) / move_s));
+                const float e = p * p * p * (10 - 15 * p + 6 * p * p);
+                const auto at = [&](float a, float b, float c) { return (1 - e) * (1 - e) * a + 2 * (1 - e) * e * b + e * e * c; };
+                pointer = Point{at(from->first, bend->first, to->first), at(from->second, bend->second, to->second)};
+                if (p >= 1) to.reset();
+            }
+            std::ostringstream file;
+            file << std::setw(4) << std::setfill('0') << index++ << ".png";
+            panel->render(state, pointer, t).write_png(dir / file.str());
+            log << pointer->first << " " << pointer->second << "\n";
+        }
+    }
+    // Moves the pointer to (x, y) along a slight arc. Longer moves take longer, as with a real pointer.
+    void aim(float x, float y) {
+        from = pointer;
+        to = Point{x, y};
+        const float dx = x - from->first, dy = y - from->second, length = std::hypot(dx, dy);
+        bend = Point{(from->first + x) / 2 + dy * 0.12f, (from->second + y) / 2 - dx * 0.12f};
+        move_t = t;
+        move_s = 0.35 + length / 1600;
+    }
+    void click() {
+        clicks.push_back(index);
+        panel->click(pointer->first, pointer->second);
+    }
+    void write_marks() const {
+        std::ofstream marks(dir / "marks.txt");
+        marks << "cuts";
+        for (int cut : cuts) marks << " " << cut;
+        marks << "\nclicks";
+        for (int click : clicks) marks << " " << click;
+        marks << "\n";
+    }
+    // The first time after the clock where `phase` seconds into a `loop` long animation comes round.
+    double next(double loop, double phase) const { return t + std::fmod(phase - std::fmod(t, loop) + 2 * loop, loop); }
+};
+
+// A surface calibration from the Settings button to the saved banner, as frames in `dir`.
+// Counted knocks land on the contacts of the panel's own knock drawing.
+void readme_calibration(const std::filesystem::path& dir) {
+    Panel panel(KNOCKTHRU_FONTS);
+    PanelState state;
+    state.room_view = false;
+    state.opaque = false;
+    state.app_key = "steam.app.620980";
+    state.app_name = "Beat Saber";
+    state.version = "0.2.0";
+    // A spot that hovers nothing on the main screen or under the Saved banner.
+    const Recorder::Point rest{300, 730};
+    Recorder rec{&panel, dir};
+    rec.pointer = rest;
+    rec.play(state, 0.5);
+    rec.aim(460, 64); // Settings
+    rec.play(state, 1.0);
+    rec.click();
+    rec.play(state, 0.4);
+    rec.aim(1050, 188); // Calibrate
+    rec.play(state, 1.2);
+    rec.click();
+    rec.play(state, 0.5);
+    rec.aim(600, 420); // the surface card
+    rec.play(state, 1.5);
+    rec.click();
+    rec.play(state, 1.2);
+    rec.aim(1040, 656); // Start, which the app answers by recording
+    rec.play(state, 1.0);
+    rec.click();
+
+    // Robin's surface calibration on the Frame, 2026-10-15, as in calibration().
+    const std::vector<double> peaks{80, 401, 115, 342, 446, 91, 64, 234, 64, 147};
+    const std::vector<double> speeds{1.21, 0.85, 0.71, 0.81, 0.62, 0.77, 0.63, 0.53, 0.72, 1.71};
+    CalibrationView view;
+    view.kind = KnockKind::Surface;
+    view.started_t = rec.t - 2.0; // most of the get-ready time skipped
+    view.seconds_left = 88;
+    state.calibration = view;
+    rec.aim(760, 730); // out of the way while knocking
+    const auto knock = [&](std::size_t i) {
+        auto& v = *state.calibration;
+        rec.until(state, rec.next(2.0, 0.5)); // the record screen knocks once every 2 s
+        v.peaks.push_back(peaks[i]);
+        v.speeds.push_back(speeds[i]);
+        v.knocked_t = v.counted_t = rec.t;
+        v.seconds_left = 90 - static_cast<int>(rec.t - v.started_t);
+    };
+    knock(0);
+    knock(1);
+    rec.play(state, 1.0);
+    // Skip ahead to just before the tenth knock, which lands as the cross-fade ends.
+    rec.cuts.push_back(rec.index);
+    rec.t += 14.6;
+    for (std::size_t i = 2; i < 9; ++i) state.calibration->peaks.push_back(peaks[i]), state.calibration->speeds.push_back(speeds[i]);
+    state.calibration->knocked_t = state.calibration->counted_t = rec.t - 1.6;
+    state.calibration->seconds_left = 90 - static_cast<int>(rec.t - state.calibration->started_t);
+    knock(9);
+    rec.play(state, 0.9);
+
+    state.calibration->phase = CalibrationView::Phase::Trying;
+    rec.play(state, 1.0);
+    rec.until(state, rec.next(2.6, 1.2)); // the try screen knocks twice every 2.6 s, then waits 0.4 s
+    state.calibration->trial_passed = true;
+    state.calibration->trial_t = rec.t;
+    rec.play(state, 0.5);
+    rec.aim(1030, 696); // Save
+    rec.play(state, 1.2);
+    rec.click();
+    state.calibration.reset();
+    state.calibration_saved = KnockKind::Surface;
+    rec.play(state, 0.8);
+    rec.aim(1043, 632); // Done on the Saved banner, back to Settings
+    rec.play(state, 1.2);
+    rec.click();
+    rec.play(state, 0.5);
+    rec.aim(100, 68); // Back, to the main screen the loop starts on
+    rec.play(state, 1.0);
+    rec.click();
+    rec.play(state, 0.4);
+    rec.aim(rest.first, rest.second); // back where the loop starts
+    rec.play(state, 1.6); // the README script cross-fades the last 0.4 s to the first frame
+
+    rec.write_marks();
+}
+
+// Installing an update from the dot on the Settings button to the restarted app, as frames in `dir`.
+void readme_update(const std::filesystem::path& dir) {
+    Panel panel(KNOCKTHRU_FONTS);
+    PanelState state;
+    state.room_view = false;
+    state.opaque = false;
+    state.app_key = "steam.app.620980";
+    state.app_name = "Beat Saber";
+    state.version = "0.1.0";
+    state.update = {UpdateView::Status::Available, "0.2.0", ""};
+    const Recorder::Point rest{300, 730};
+    Recorder rec{&panel, dir};
+    rec.pointer = rest;
+    rec.play(state, 1.2);
+    rec.aim(460, 64); // Settings, with its yellow update dot
+    rec.play(state, 1.1);
+    rec.click();
+    rec.play(state, 0.6);
+    rec.aim(1035, 68); // Install 0.2.0
+    rec.play(state, 1.4);
+    rec.click();
+    state.update.status = UpdateView::Status::Installing;
+    for (int i = 0; i <= 60; ++i) { // the download fills the button over 2.4 s
+        const float p = i / 60.0f;
+        state.update_progress = p * p * (3 - 2 * p);
+        rec.play(state, 0.04);
+    }
+    state.update_progress = 0;
+    state.update.status = UpdateView::Status::Installed;
+    rec.play(state, 1.2);
+    rec.click(); // Restart, where Install was
+    state.update.status = UpdateView::Status::Restarting;
+    rec.play(state, 1.2);
+    // KnockThru restarts from the new files. Its panel opens on the main screen with the update card.
+    rec.cuts.push_back(rec.index);
+    Panel restarted(KNOCKTHRU_FONTS);
+    rec.panel = &restarted;
+    state.version = "0.2.0";
+    state.update = {UpdateView::Status::Updated, "0.1.0", ""};
+    state.update_notice = UpdateNotice{false, "You now have version 0.2.0. You had version 0.1.0."};
+    rec.play(state, 1.0);
+    rec.aim(832, 466); // OK on the card
+    rec.play(state, 1.8);
+    rec.click();
+    state.update_notice.reset();
+    rec.play(state, 0.4);
+    rec.aim(rest.first, rest.second);
+    rec.play(state, 1.8); // the README script cross-fades the last 0.4 s to the first frame
+    rec.write_marks();
+}
+
+// Sending a report: Settings, Report, then Done once the phone has the report, as frames in
+// `dir`. The README script draws the phone beside it, timed from the Report click.
+void readme_report(const std::filesystem::path& dir) {
+    Panel panel(KNOCKTHRU_FONTS);
+    PanelState state;
+    state.room_view = false;
+    state.opaque = false;
+    state.app_key = "steam.app.620980";
+    state.app_name = "Beat Saber";
+    state.version = "0.2.0";
+    state.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
+    state.report_full = true;
+    const Recorder::Point rest{300, 730};
+    Recorder rec{&panel, dir};
+    rec.pointer = rest;
+    rec.play(state, 0.8);
+    rec.aim(460, 64); // Settings
+    rec.play(state, 1.1);
+    rec.click();
+    rec.play(state, 0.5);
+    rec.aim(1050, 542); // Report on the Something wrong? row
+    rec.play(state, 1.3);
+    rec.click();
+    rec.play(state, 0.3);
+    rec.aim(rest.first, rest.second); // out of the way while the phone works
+    rec.play(state, 17.5);
+    rec.aim(951, 627); // Done
+    rec.play(state, 1.1);
+    rec.click();
+    rec.play(state, 0.4);
+    rec.aim(rest.first, rest.second);
+    rec.play(state, 1.8); // the README script cross-fades the last 0.4 s to the first frame
+    rec.write_marks();
+}
+
+// Writes the passthrough off, on, and opaque states with no hover highlight.
+int readme(const std::filesystem::path& out) {
+    Panel panel(KNOCKTHRU_FONTS);
+    PanelState state;
+    state.room_view = false;
+    state.opaque = false;
+    state.app_key = "steam.app.620980";
+    state.app_name = "Beat Saber";
+    shot(panel, state, 10, out / "readme-off.png");
+    state.room_view = true;
+    shot(panel, state, 20, out / "readme-on.png");
+    state.opaque = true;
+    shot(panel, state, 30, out / "readme-opaque.png");
+    // The report card, opened from Settings. The README script dims its sample QR code.
+    Panel report_panel(KNOCKTHRU_FONTS);
+    PanelState report = state;
+    report.opaque = false;
+    report.room_view = false;
+    report.version = "0.2.0";
+    report.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
+    report.report_full = true;
+    report_panel.render(report, std::nullopt, 40);
+    report_panel.click(460, 60); // Settings
+    report_panel.render(report, std::nullopt, 41);
+    report_panel.click(1050, 542); // Report on the Something wrong? row
+    shot(report_panel, report, 43, out / "readme-report.png");
+    // The page the phone opens from the QR code, as the headset serves it.
+    std::ofstream(out / "readme-phone.html") << report_page(
+        "KnockThru bug report, 2026-10-15 14:02:11\n\nKnockThru: 0.2.0\nSteamVR: 2.18.2\n"
+        "Registered with SteamVR: yes\nStarts with SteamVR: yes\nCurrent app: steam.app.620980\n",
+        "https://github.com/VioletTides/KnockThru/issues/new?template=bug.yml&version=0.2.0", "report.txt");
+    readme_calibration(out / "calibrate");
+    readme_update(out / "update");
+    readme_report(out / "report");
+    std::cout << "Wrote README panel states to " << out << "\n";
+    return 0;
+}
+
 int main(int argc, char** argv) {
+    if (argc > 2 && std::string(argv[1]) == "--readme") return readme(argv[2]);
     const std::filesystem::path out = argc > 1 ? argv[1] : ".";
     Panel panel(KNOCKTHRU_FONTS);
 
