@@ -55,7 +55,22 @@ int main() {
     check(fs::exists(user / "application.log"), "reset keeps application.log");
     const auto after = load_config(install);
     check(!after.tour_done && !after.paused, "settings are back to defaults after reset");
-    check(after.check_updates, "the weekly update check is on by default");
+    check(after.check_updates, "the daily update check is on by default");
+
+    std::ofstream(user / "config.json") << R"({"paused": true, "classic_bar_icon": true, "sounds": false,
+        "tour_done": true, "check_updates": false})";
+    const auto flags = load_config(install);
+    check(flags.paused && flags.classic_bar_icon && !flags.sounds && flags.tour_done && !flags.check_updates,
+        "every true or false setting loads from config.json");
+    std::ofstream(user / "config.json") << R"({"sounds": "yes"})";
+    try {
+        load_config(install);
+        check(false, "a setting that is not true or false is rejected");
+    } catch (const std::exception& error) {
+        check(std::string(error.what()).find("sounds must be true or false") != std::string::npos,
+            "a setting that is not true or false is rejected");
+    }
+    fs::remove(user / "config.json");
 
     {
         AppState state = load_state();
