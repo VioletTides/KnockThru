@@ -64,12 +64,12 @@ Run these on the Frame over SSH.
 | --- | --- |
 | `knockthru` or `--install` | Register with SteamVR, turn on autostart, and start |
 | `--uninstall` | Stop and remove from SteamVR. Keeps `~/.config/knockthru` |
-| `--uninstall --purge` | Also delete `~/.config/knockthru` and SteamVR's autostart file for KnockThru |
+| `--uninstall --purge` | Also delete `~/.config/knockthru`, SteamVR's autostart file for KnockThru, and the report files in your home folder |
 | `--status` | Show registration, the running process, and Room View state |
 | `--update` | Install the latest GitHub release over this one and restart |
 | `--report` | Write `~/knockthru-report.txt` with versions, settings, and logs. Attach it to an issue |
 
-To report a problem from the headset, open Settings and select Report. Hold your phone up to a lens and scan the QR code. Your phone opens a page from the Frame, on the same Wi-Fi, with the full report. Its button copies the report and opens a GitHub issue with your KnockThru and SteamVR versions filled in. If the Frame is offline, the QR code opens the GitHub issue directly, without the report.
+To report a problem from the headset, open Settings and select Report. Hold your phone up to a lens and scan the QR code. Your phone must be on the same Wi-Fi as the Frame. The code opens a page that the Frame serves, with the full report. Tap Copy report and open GitHub, then paste the report into the new issue. The issue already has your KnockThru and SteamVR versions filled in. If the Frame is offline, the code opens the GitHub issue directly, and Save to headset keeps the report as a file to attach.
 
 If knocks get missed or do the wrong thing, select Record knocks on the report card first, then knock the way that goes wrong for 20 s. The phone page then gives you one file, `knockthru-report.zip`, with the report and the recording inside, to attach to the issue. To replay a recording from a report, unzip it and run `build/bin/detector_test knockthru-knocks.csv.gz`.
 | `--toggle`, `--style` | Turn Room View on or off, or switch its style, once |

@@ -135,7 +135,7 @@ int last_status(const fs::path& headers) {
 
 // Downloads `url` to `path` with curl, and turns failures into readable messages.
 // The HTTP status comes from the response headers, because curl's exit code for
-// an HTTP error differs between versions: 22 on this PC's curl, 56 on the Frame's.
+// an HTTP error differs between versions: 22 on Arch Linux's curl, 56 on the Frame's.
 void download(const std::string& url, const fs::path& path, int seconds, const std::string& missing) {
     const auto headers = path.string() + ".headers";
     const int code = run_program({"curl", "--silent", "--location", "--max-time", std::to_string(seconds),

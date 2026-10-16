@@ -416,7 +416,7 @@ void unregister() {
     fs::remove(icon_path(), error);
 }
 
-// The bug report files go in the home folder, where Desktop Mode's file manager opens.
+// The bug report files go in the home folder, outside ~/.config, so a person can find them to attach.
 fs::path report_path() {
     const auto home = std::getenv("HOME");
     return fs::path(home && *home ? home : "/tmp") / "knockthru-report.txt";
