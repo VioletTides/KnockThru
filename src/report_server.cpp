@@ -154,8 +154,8 @@ std::string report_page(const std::string& report, const std::string& issue_link
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KnockThru bug report</title>
 <style>
-/* The panel's colors. The button blue is darker than the panel accent, so white text passes WCAG AA. */
-:root{--bg:#121418;--surface:#1c1f25;--line:#2e323a;--text:#eceef1;--dim:#969ca8;--accent:#2a78c8;--link:#50a0f0}
+/* The panel's colors. The button blue is darker than the panel accent, so its text reaches 4.7:1 (WCAG AA). */
+:root{--bg:#121418;--surface:#1c1f25;--line:#2e323a;--text:#eceef1;--dim:#969ca8;--accent:#2670bc;--link:#50a0f0}
 @media (prefers-color-scheme: light){
  :root{--bg:#f4f5f7;--surface:#ffffff;--line:#d5d9e0;--text:#16181c;--dim:#545b68;--link:#1f66b0}
 }
@@ -173,7 +173,7 @@ ol.actions li{margin:0 0 16px}
 .file{white-space:nowrap}
 a{color:var(--link)}
 textarea{width:100%;box-sizing:border-box;height:220px;margin-top:8px;background:var(--surface);color:var(--text);
- border:1px solid var(--line);border-radius:12px;padding:12px;font:13px/1.4 ui-monospace,monospace}
+ border:1px solid var(--line);border-radius:16px;padding:12px;font:13px/1.4 ui-monospace,monospace}
 details{margin-top:24px;color:var(--dim)}
 @media (prefers-reduced-motion: reduce){button:active,a.button:active{transform:none}}
 </style></head><body><main>

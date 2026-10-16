@@ -578,7 +578,7 @@ void Panel::report_card(const PanelState& state) {
 
     // The code on white with a 4-module quiet zone, in whole pixels per module.
     const Rect white{card.x + card.w - 48 - box, card.y + 48, box, box};
-    canvas_.rounded_rect(white, 12, {255, 255, 255});
+    canvas_.rounded_rect(white, kRadius, {255, 255, 255});
     if (!state.report_url.empty()) {
         const auto qr = qrcodegen::QrCode::encodeText(state.report_url.c_str(), qrcodegen::QrCode::Ecc::MEDIUM);
         const int size = qr.getSize(), module = static_cast<int>(box) / (size + 8);
