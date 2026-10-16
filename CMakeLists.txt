@@ -14,7 +14,7 @@ endif()
 include(cmake/OpenVRLoader.cmake)
 find_package(Threads REQUIRED)
 
-add_library(knockthru_core STATIC src/knock_detector.cpp src/config.cpp src/calibrator.cpp)
+add_library(knockthru_core STATIC src/knock_detector.cpp src/config.cpp src/calibrator.cpp src/update.cpp)
 target_include_directories(knockthru_core PUBLIC src third_party/json)
 target_compile_options(knockthru_core PRIVATE -Wall -Wextra -Wpedantic)
 
@@ -45,6 +45,11 @@ add_executable(config_test tests/config_test.cpp)
 target_link_libraries(config_test PRIVATE knockthru_core)
 target_compile_options(config_test PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME config COMMAND config_test)
+
+add_executable(update_test tests/update_test.cpp)
+target_link_libraries(update_test PRIVATE knockthru_core)
+target_compile_options(update_test PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME update COMMAND update_test)
 
 # Renders the dashboard panel in sample states to PNG files, for review.
 add_executable(panel_preview tests/panel_preview.cpp)

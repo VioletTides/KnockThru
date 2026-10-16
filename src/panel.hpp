@@ -41,11 +41,20 @@ struct TourView {
     double triple_t = -1; // when the triple knock step heard a triple knock
 };
 
+// The update check in Settings, filled in by the app.
+struct UpdateView {
+    enum class Status { Idle, Checking, Current, Available, Installing, Failed };
+    Status status = Status::Idle;
+    std::string latest; // the newest release, once a check found one
+    std::string error;  // why the check or the install failed
+};
+
 // Everything the dashboard panel shows. The app fills it in, the panel draws it.
 // Times are seconds on the app clock, the same clock render() gets.
 struct PanelState {
     std::optional<bool> room_view;   // unknown until the first debug port read
     std::string room_view_error;     // why Room View cannot be read or changed
+    bool dashboard_changed = false;  // the Room View button is missing, likely after a Steam update
     std::optional<bool> opaque;      // Room View style, unknown without SteamVR
     bool busy = false;               // a Room View change is in progress
     bool paused = false;
@@ -57,6 +66,8 @@ struct PanelState {
     std::optional<CalibrationView> calibration;
     std::optional<TourView> tour;
     std::optional<KnockKind> calibration_saved; // the kind the last calibration just saved
+    std::string version;             // this KnockThru's version
+    UpdateView update;
     std::string message;
     bool message_is_error = false;
 };
@@ -77,6 +88,8 @@ enum class PanelCommand {
     StartTour, TourNext, TourBack,
     TourSkip,           // ends the tour from any step, including Done
     FactoryReset,
+    CheckUpdate, InstallUpdate,
+    SaveReport,         // writes the bug report to the home folder
 };
 
 struct PanelClick {

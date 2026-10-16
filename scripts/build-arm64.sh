@@ -18,6 +18,7 @@ sources=(
     src/sound.cpp
     src/config.cpp
     src/calibrator.cpp
+    src/update.cpp
     src/canvas.cpp
     src/panel.cpp
     src/overlay_texture.cpp

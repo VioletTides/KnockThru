@@ -63,7 +63,10 @@ Run these on the Frame over SSH.
 | --- | --- |
 | `knockthru` or `--install` | Register with SteamVR, turn on autostart, and start |
 | `--uninstall` | Stop and remove from SteamVR. Keeps `~/.config/knockthru` |
+| `--uninstall --purge` | Also delete `~/.config/knockthru` and SteamVR's autostart file for KnockThru |
 | `--status` | Show registration, the running process, and Room View state |
+| `--update` | Install the latest GitHub release over this one and restart |
+| `--report` | Write `~/knockthru-report.txt` with versions, settings, and logs. Attach it to an issue |
 | `--toggle`, `--style` | Turn Room View on or off, or switch its style, once |
 | `--detect` | Print knocks live without acting on them |
 
@@ -100,6 +103,6 @@ node scripts/package.mjs --build-dir build-arm64 --version 0.1.0
 - [KominoVR/frame-passthrough-shortcuts](https://github.com/KominoVR/frame-passthrough-shortcuts) (MIT): app scaffolding, style switch, and packaging.
 - [toorux/steam-frame-passthrough-toggle](https://github.com/toorux/steam-frame-passthrough-toggle) (MIT): the Room View button click through the debug port.
 
-Room View control uses Steam's internal dashboard UI. A Steam update can break it.
+Room View control uses Steam's internal dashboard UI. A Steam update can break it. If that happens, the panel's passthrough tile says so, and `--report` records the SteamVR version.
 
 [MIT licensed](LICENSE). Developed with help from coding agents.

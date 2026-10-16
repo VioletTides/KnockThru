@@ -6,6 +6,7 @@
 #include "room_view.hpp"
 #include "sound.hpp"
 #include "style.hpp"
+#include "update.hpp"
 
 #include <json.hpp>
 #include <openvr.h>
@@ -26,11 +27,13 @@
 #include <iostream>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
 
+#include <sys/utsname.h>
 #include <unistd.h>
 
 namespace {
@@ -378,12 +381,14 @@ void register_app() {
 }
 
 // Stops a running KnockThru, after checking that the process is this program.
+// After an update renames a new file over the old one, the running process's
+// exe link reads "knockthru (deleted)".
 void stop_running_app() {
     const auto pid = vr::VRApplications()->GetApplicationProcessId(kAppKey);
     if (!pid || pid == static_cast<uint32_t>(getpid())) return;
     std::error_code error;
     const auto exe = fs::read_symlink(fs::path("/proc") / std::to_string(pid) / "exe", error);
-    if (error || exe.filename() != "knockthru") return;
+    if (error || (exe.filename() != "knockthru" && exe.filename() != "knockthru (deleted)")) return;
     ::kill(static_cast<pid_t>(pid), SIGTERM);
     for (int i = 0; i < 50 && fs::exists(fs::path("/proc") / std::to_string(pid)); ++i)
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -409,12 +414,138 @@ void unregister() {
     fs::remove(icon_path(), error);
 }
 
-int uninstall() {
+// SteamVR's own per-app file, which holds the autostart flag.
+fs::path steamvr_app_config() {
+    return knockthru::user_directory().parent_path() / "openvr" / "config" / "vrappconfig" /
+           (std::string(kAppKey) + ".vrappconfig");
+}
+
+// With `purge`, also deletes ~/.config/knockthru and SteamVR's file for the app.
+// The install folder stays, because FrameDrop or the person who unpacked it owns it.
+int uninstall(bool purge) {
     VrSession session(vr::VRApplication_Utility);
     stop_running_app();
     unregister();
-    std::cout << "KnockThru stopped and removed from SteamVR. Your settings stay in "
-              << knockthru::user_directory().string() << ".\n";
+    if (!purge) {
+        std::cout << "KnockThru stopped and removed from SteamVR. Your settings stay in "
+                  << knockthru::user_directory().string() << ". Add --purge to delete them.\n";
+        return 0;
+    }
+    fs::remove_all(knockthru::user_directory());
+    fs::remove(steamvr_app_config());
+    std::cout << "KnockThru stopped and removed from SteamVR. Deleted " << knockthru::user_directory().string()
+              << " and " << steamvr_app_config().string() << ".\n";
+    return 0;
+}
+
+std::string steamvr_version() {
+    const char* version = vr::VRSystem() ? vr::VRSystem()->GetRuntimeVersion() : nullptr;
+    return version && *version ? version : "unknown";
+}
+
+// The last `count` lines of a text file, or a note if it is missing.
+std::string tail(const fs::path& path, std::size_t count) {
+    std::ifstream stream(path);
+    if (!stream) return "(missing)\n";
+    std::vector<std::string> lines;
+    for (std::string line; std::getline(stream, line);) {
+        lines.push_back(line);
+        if (lines.size() > count) lines.erase(lines.begin());
+    }
+    std::string text;
+    for (const auto& line : lines) text += line + "\n";
+    return text.empty() ? "(empty)\n" : text;
+}
+
+std::string os_name() {
+    std::ifstream stream("/etc/os-release");
+    std::string name = "unknown";
+    for (std::string line; std::getline(stream, line);)
+        if (line.rfind("PRETTY_NAME=", 0) == 0) name = line.substr(12);
+    name.erase(std::remove(name.begin(), name.end(), '"'), name.end());
+    utsname system{};
+    if (::uname(&system) == 0) name += std::string(", kernel ") + system.release;
+    return name;
+}
+
+fs::path report_path() {
+    const auto home = std::getenv("HOME");
+    return fs::path(home && *home ? home : "/tmp") / "knockthru-report.txt";
+}
+
+// Writes a bug report for a GitHub issue: versions, SteamVR state, settings,
+// and the end of the logs. `vr` is false when SteamVR is not running, and
+// `room_view` describes what the caller read from Room View.
+fs::path write_report(bool vr, const std::string& room_view) {
+    std::ostringstream out;
+    const auto now = std::time(nullptr);
+    char stamp[32];
+    std::strftime(stamp, sizeof stamp, "%F %T", std::localtime(&now));
+    out << "KnockThru bug report, " << stamp << "\n\n";
+    out << "KnockThru: " << kVersion << "\n";
+    out << "Program: " << executable().string() << "\n";
+    out << "System: " << os_name() << "\n";
+    if (vr) {
+        auto* apps = vr::VRApplications();
+        out << "SteamVR: " << steamvr_version() << "\n";
+        out << "Registered with SteamVR: " << (apps->IsApplicationInstalled(kAppKey) ? "yes" : "no") << "\n";
+        out << "Starts with SteamVR: " << (apps->GetApplicationAutoLaunch(kAppKey) ? "yes" : "no") << "\n";
+        const auto pid = apps->GetApplicationProcessId(kAppKey);
+        out << "Running: " << (pid ? "yes, pid " + std::to_string(pid) : std::string("no")) << "\n";
+        try {
+            out << "Style: " << knockthru::to_string(knockthru::read_style()) << "\n";
+        } catch (const std::exception& error) {
+            out << "Style: " << error.what() << "\n";
+        }
+        const auto key = scene_app_key();
+        out << "Current app: " << (key.empty() ? "none" : key) << "\n";
+    } else {
+        out << "SteamVR: not running\n";
+    }
+    out << "Room View: " << room_view << "\n";
+    const auto user = knockthru::user_directory();
+    for (const auto* name : {"config.json", "calibration.json"})
+        out << "\n== " << (user / name).string() << " ==\n" << tail(user / name, 400);
+    out << "\n== " << (user / "application.log").string() << ", last 300 lines ==\n" << tail(user / "application.log", 300);
+    const auto home = std::getenv("HOME");
+    if (home && *home) {
+        const auto steam_log = fs::path(home) / ".local/share/Steam/logs/vrclient_knockthru.txt";
+        out << "\n== " << steam_log.string() << ", last 100 lines ==\n" << tail(steam_log, 100);
+    }
+    const auto path = report_path();
+    std::ofstream file(path, std::ios::trunc);
+    if (!(file << out.str())) throw std::runtime_error("Cannot write " + path.string());
+    return path;
+}
+
+// Installs the latest release over this one, then restarts KnockThru.
+int update() {
+    const auto work = knockthru::user_directory() / "update";
+    const auto release = knockthru::fetch_latest_release(work);
+    if (knockthru::compare_versions(release.version, kVersion) <= 0) {
+        std::cout << "KnockThru " << kVersion << " is up to date. The latest release is " << release.version << ".\n";
+        return 0;
+    }
+    std::cout << "Installing KnockThru " << release.version << " from " << release.url << "\n";
+    knockthru::install_release(release, install_directory(), work);
+    // The new files are in place. install() restarts the resident app from them.
+    return install();
+}
+
+int report(int port) {
+    std::unique_ptr<VrSession> session;
+    try {
+        session = std::make_unique<VrSession>(vr::VRApplication_Utility);
+    } catch (const std::exception&) {
+    }
+    std::string room_view;
+    try {
+        room_view = knockthru::RoomView(port).active() ? "on" : "off";
+    } catch (const std::exception& error) {
+        room_view = error.what();
+    }
+    const auto path = write_report(session != nullptr, room_view);
+    std::cout << "Wrote " << path.string() << ". Attach it to an issue at https://github.com/VioletTides/KnockThru/issues\n";
     return 0;
 }
 
@@ -554,6 +685,7 @@ int run() {
     open_log();
     log(std::string("KnockThru ") + kVersion + " starting");
     VrSession session(vr::VRApplication_Overlay, true);
+    log("SteamVR " + steamvr_version());
 
     const auto pid = static_cast<uint32_t>(getpid());
     std::array<char, vr::k_unMaxApplicationKeyLength> key{};
@@ -621,6 +753,11 @@ int run() {
     std::future<RoomViewResult> room_view_job;
     bool room_view_job_toggles = false;
     std::future<void> tint_job;
+    std::future<knockthru::Release> check_job;
+    std::future<void> install_job;
+    std::optional<knockthru::Release> latest; // the newer release a check found
+    const auto update_work = knockthru::user_directory() / "update";
+    state.version = kVersion;
     double next_slow_check = 0;
     double binary_missing_since = -1;
     const auto binary = executable();
@@ -801,6 +938,31 @@ int run() {
                         show(std::string("Factory reset failed: ") + error.what(), true);
                     }
                     break;
+                case PanelCommand::CheckUpdate:
+                    if (check_job.valid() || install_job.valid()) break;
+                    state.update = {knockthru::UpdateView::Status::Checking, "", ""};
+                    check_job = std::async(std::launch::async, [update_work] {
+                        return knockthru::fetch_latest_release(update_work);
+                    });
+                    break;
+                case PanelCommand::InstallUpdate:
+                    if (!latest || check_job.valid() || install_job.valid()) break;
+                    log("Installing KnockThru " + latest->version + " from " + latest->url);
+                    state.update.status = knockthru::UpdateView::Status::Installing;
+                    install_job = std::async(std::launch::async, [release = *latest, update_work] {
+                        knockthru::install_release(release, install_directory(), update_work);
+                    });
+                    break;
+                case PanelCommand::SaveReport: {
+                    const std::string room_view = !state.room_view_error.empty() ? state.room_view_error
+                        : !state.room_view ? "not read yet" : *state.room_view ? "on" : "off";
+                    try {
+                        show("Bug report saved to " + write_report(true, room_view).string());
+                    } catch (const std::exception& error) {
+                        show(std::string("Bug report not saved: ") + error.what(), true);
+                    }
+                    break;
+                }
                 case PanelCommand::BarIcon:
                     if (save([&] { knockthru::save_classic_bar_icon(!config.classic_bar_icon); }))
                         show(config.classic_bar_icon ? "Classic bar icon on" : "Classic bar icon off");
@@ -957,7 +1119,20 @@ int run() {
                 if (state.room_view != result.on && panel) panel->invalidate();
                 state.room_view = result.on;
                 state.room_view_error.clear();
+                state.dashboard_changed = false;
                 if (!result.message.empty()) show(result.message);
+            } catch (const knockthru::DashboardChanged& error) {
+                // Logged once per change, with the SteamVR version, for bug reports.
+                if (!state.dashboard_changed)
+                    log(std::string(error.what()) + ". SteamVR " + steamvr_version() +
+                        ". A Steam update may have changed the dashboard.");
+                state.dashboard_changed = true;
+                state.room_view.reset();
+                state.room_view_error = "A Steam update moved the Room View button. Update KnockThru in Settings.";
+                if (toggled) {
+                    show("Passthrough not changed: Room View button not found", true);
+                    haptics.buzz(3, t);
+                }
             } catch (const std::exception& error) {
                 state.room_view.reset();
                 const std::string reason = error.what();
@@ -971,6 +1146,34 @@ int run() {
                     show(error.what(), true);
                 }
             }
+        }
+
+        using UpdateStatus = knockthru::UpdateView::Status;
+        if (check_job.valid() && check_job.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            try {
+                const auto release = check_job.get();
+                const bool newer = knockthru::compare_versions(release.version, kVersion) > 0;
+                if (newer) latest = release;
+                else latest.reset();
+                state.update = {newer ? UpdateStatus::Available : UpdateStatus::Current, release.version, ""};
+                log("Update check: " + release.version + (newer ? " is available" : " is the latest"));
+            } catch (const std::exception& error) {
+                state.update = {UpdateStatus::Failed, "", error.what()};
+                log(std::string("Update check failed: ") + error.what());
+            }
+            if (panel) panel->invalidate();
+        }
+        if (install_job.valid() && install_job.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            try {
+                install_job.get();
+                // knockthru-ctl --install stops this process and starts the new one.
+                log("Installed KnockThru " + latest->version + ". Restarting.");
+                knockthru::start_detached({(install_directory() / "knockthru-ctl").string(), "--install"});
+            } catch (const std::exception& error) {
+                state.update = {UpdateStatus::Failed, latest ? latest->version : "", error.what()};
+                log(std::string("Update not installed: ") + error.what());
+            }
+            if (panel) panel->invalidate();
         }
 
         if (panel) {
@@ -1012,7 +1215,10 @@ void usage() {
         "Run with no arguments to register with SteamVR and start (the same as --install).\n\n"
         "  --install            Register, turn on SteamVR autostart, and start\n"
         "  --uninstall          Stop and remove from SteamVR. Keeps ~/.config/knockthru\n"
+        "  --purge              With --uninstall, also delete ~/.config/knockthru\n"
         "  --status             Show registration and Room View state\n"
+        "  --report             Write ~/knockthru-report.txt for a bug report\n"
+        "  --update             Install the latest release from GitHub and restart\n"
         "  --toggle             Turn Room View on or off once\n"
         "  --style              Switch Room View translucent or opaque once\n"
         "  --calibrate KIND     Set the threshold for together, surface, or headset knocks\n"
@@ -1031,6 +1237,7 @@ int main(int argc, char** argv) {
     try {
         std::string command = "--install", path, kind;
         double seconds = 0;
+        bool purge = false;
         for (int i = 1; i < argc; ++i) {
             const std::string arg = argv[i];
             const auto value = [&]() -> std::string {
@@ -1040,10 +1247,12 @@ int main(int argc, char** argv) {
             if (arg == "--help" || arg == "-h") { usage(); return 0; }
             if (arg == "--seconds") seconds = std::stod(value());
             else if (arg == "--save") path = value();
+            else if (arg == "--purge") purge = true;
             else if (arg == "--record") { command = arg; path = value(); }
             else if (arg == "--calibrate") { command = arg; kind = value(); }
             else if (arg == "--install" || arg == "--uninstall" || arg == "--status" || arg == "--toggle" ||
-                     arg == "--style" || arg == "--current-app" || arg == "--detect" || arg == "--run")
+                     arg == "--style" || arg == "--current-app" || arg == "--detect" || arg == "--run" ||
+                     arg == "--report" || arg == "--update")
                 command = arg;
             else throw std::runtime_error("Unknown argument: " + arg + ". See --help.");
         }
@@ -1064,13 +1273,16 @@ int main(int argc, char** argv) {
 
         if (command == "--run") return run();
         if (command == "--install") return install();
-        if (command == "--uninstall") return uninstall();
+        if (purge && command != "--uninstall") throw std::runtime_error("--purge only works with --uninstall");
+        if (command == "--uninstall") return uninstall(purge);
         if (command == "--record") return record(path, seconds);
         if (command == "--detect") return detect(seconds, path);
         if (command == "--calibrate") return calibrate(kind);
+        if (command == "--update") return update();
 
         const auto config = knockthru::load_config(install_directory());
         if (command == "--status") return status(config.debug_port);
+        if (command == "--report") return report(config.debug_port);
         if (command == "--toggle") {
             std::cout << "Room View " << (knockthru::RoomView(config.debug_port).toggle() ? "on" : "off") << "\n";
             return 0;
