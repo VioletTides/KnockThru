@@ -142,7 +142,7 @@ struct Recorder {
     std::filesystem::path dir;
     double t = 100;
     int index = 0;
-    std::optional<Point> pointer;   // hidden when unset
+    std::optional<Point> pointer;   // starts and ends the loop at kRest
     std::optional<Point> from, bend, to; // a pointer move in progress, along a curve through bend
     double move_t = 0, move_s = 0;
     std::vector<int> cuts;          // frames where the clock jumps, to cross-fade
@@ -160,25 +160,15 @@ struct Recorder {
                 pointer = Point{at(from->first, bend->first, to->first), at(from->second, bend->second, to->second)};
                 if (p >= 1) to.reset();
             }
-            // A hand held out drifts a little, so the resting dot never sits perfectly still.
-            std::optional<Point> shown = pointer;
-            if (shown) {
-                const float d = static_cast<float>(t);
-                shown->first += 1.6f * std::sin(d * 1.7f) + 0.8f * std::sin(d * 4.1f + 1);
-                shown->second += 1.4f * std::sin(d * 2.3f + 2) + 0.7f * std::sin(d * 3.7f);
-            }
             std::ostringstream file;
             file << std::setw(4) << std::setfill('0') << index++ << ".png";
-            panel.render(state, shown, t).write_png(dir / file.str());
-            if (shown) log << shown->first << " " << shown->second << "\n";
-            else log << "-\n";
+            panel.render(state, pointer, t).write_png(dir / file.str());
+            log << pointer->first << " " << pointer->second << "\n";
         }
     }
-    // Moves the pointer to (x, y) along a slight arc, from where it is or from below if hidden.
-    // Longer moves take longer, as with a real pointer.
+    // Moves the pointer to (x, y) along a slight arc. Longer moves take longer, as with a real pointer.
     void aim(float x, float y) {
-        from = pointer.value_or(Point{x - 80, y + 160});
-        if (!pointer) pointer = from;
+        from = pointer;
         to = Point{x, y};
         const float dx = x - from->first, dy = y - from->second, length = std::hypot(dx, dy);
         bend = Point{(from->first + x) / 2 + dy * 0.12f, (from->second + y) / 2 - dx * 0.12f};
@@ -202,8 +192,11 @@ void readme_calibration(const std::filesystem::path& dir) {
     state.opaque = false;
     state.app_key = "steam.app.620980";
     state.app_name = "Beat Saber";
+    // A spot that hovers nothing on the main screen or under the Saved banner.
+    const Recorder::Point rest{300, 730};
     Recorder rec{panel, dir};
-    rec.play(state, 0.3);
+    rec.pointer = rest;
+    rec.play(state, 0.5);
     rec.aim(460, 64); // Settings
     rec.play(state, 1.0);
     rec.click();
@@ -228,8 +221,7 @@ void readme_calibration(const std::filesystem::path& dir) {
     view.started_t = rec.t - 2.0; // most of the get-ready time skipped
     view.seconds_left = 88;
     state.calibration = view;
-    rec.play(state, 0.3);
-    rec.pointer.reset(); // knocking, not pointing
+    rec.aim(760, 730); // out of the way while knocking
     const auto knock = [&](std::size_t i) {
         auto& v = *state.calibration;
         rec.until(state, rec.next(2.0, 0.5)); // the record screen knocks once every 2 s
@@ -262,8 +254,8 @@ void readme_calibration(const std::filesystem::path& dir) {
     state.calibration.reset();
     state.calibration_saved = KnockKind::Surface;
     rec.play(state, 0.8);
-    rec.pointer.reset();
-    rec.play(state, 1.6);
+    rec.aim(rest.first, rest.second); // back where the loop starts
+    rec.play(state, 1.6); // the README script cross-fades the last 0.4 s to the first frame
 
     std::ofstream marks(dir / "marks.txt");
     marks << "cuts";

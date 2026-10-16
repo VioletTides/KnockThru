@@ -282,63 +282,50 @@ def hero(panel_dir):
 
 # Calibrate: the panel's own calibration screens, from the Settings button to the saved banner.
 
-def pointer_dot(image, x, y, shown, press, ring):
+def pointer_dot(image, x, y, press, ring, scale=1.0):
     """Draws SteamVR's dashboard pointer: a light blue dot, lighter at the top, in a dark ring.
     The colors and proportions match /opt/steamvr/resources/overlay_pointer_circle.png on the
-    Frame. press shrinks the dot on a click. ring runs 0 to 1 as a click ring spreads, or is None."""
-    scale = 4  # drawn large, then shrunk, for smooth edges
-    size = 40 * scale
+    Frame. press shrinks the dot on a click. ring runs 0 to 1 as a click ring spreads, or is None.
+    Sizes are in panel pixels, times scale."""
+    k = 4 * scale  # drawn large, then shrunk, for smooth edges
+    half = 40  # room for the widest click ring
+    size = round(2 * half * k)
     dot = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(dot)
     c = size / 2
     if ring is not None:
-        rr = (17 + 16 * ease_out(ring)) * scale
+        rr = (17 + 16 * ease_out(ring)) * k
         draw.ellipse([c - rr, c - rr, c + rr, c + rr], outline=(109, 186, 216, round(180 * (1 - ring))),
-                     width=3 * scale)
-    outer = 14 * (1 - 0.15 * press) * scale
+                     width=round(3 * k))
+    outer = 14 * (1 - 0.15 * press) * k
     inner = outer * 18 / 27.5
     draw.ellipse([c - outer, c - outer, c + outer, c + outer], fill=(41, 45, 50, 237))
     top, bottom = (119, 197, 227), (100, 177, 207)
     gradient = Image.new("RGBA", (size, size))
-    gradient.putdata([(*mix(bottom, ease_in_out((row / size - 0.4) / 0.3), top), 255)
+    gradient.putdata([(*mix(bottom, ease_in_out(((row - c) / inner + 0.28) / 0.67), top), 255)
                       for row in range(size) for _ in range(size)])
     mask = Image.new("L", (size, size), 0)
     ImageDraw.Draw(mask).ellipse([c - inner, c - inner, c + inner, c + inner], fill=255)
     dot.paste(gradient, mask=mask)
-    dot = dot.resize((40, 40), Image.LANCZOS)
-    if shown < 1:
-        dot.putalpha(dot.getchannel("A").point(lambda a: round(a * shown)))
-    image.alpha_composite(dot, (round(x - 20), round(y - 20)))
+    out = round(2 * half * scale)
+    dot = dot.resize((out, out), Image.LANCZOS)
+    image.alpha_composite(dot, (round(x - out / 2), round(y - out / 2)))
 
 
 def calibrate(panel_dir):
     width = 640
+    scale = width / 1200
     frames_dir = panel_dir / "calibrate"
     marks = dict(line.split(maxsplit=1) if " " in line else (line, "")
                  for line in (frames_dir / "marks.txt").read_text().splitlines())
     cuts = [int(n) for n in marks["cuts"].split()]
     clicks = [int(n) for n in marks["clicks"].split()]
-    pointer = [None if line == "-" else tuple(map(float, line.split()))
-               for line in (frames_dir / "pointer.txt").read_text().splitlines()]
-
-    def shown(i):
-        """Fades the pointer in over its first 5 frames and out over its last 5."""
-        if pointer[i] is None:
-            return 0.0
-        run_in = next((k for k in range(6) if i - k < 0 or pointer[i - k] is None), 6)
-        run_out = next((k for k in range(6) if i + k >= len(pointer) or pointer[i + k] is None), 6)
-        return ease_in_out(min(run_in, run_out) / 6)
+    pointer = [tuple(map(float, line.split())) for line in (frames_dir / "pointer.txt").read_text().splitlines()]
+    count = len(pointer)
 
     frames = []
-    for i, path in enumerate(sorted(frames_dir.glob("*.png"))):
-        image = Image.open(path).convert("RGBA")
-        if pointer[i]:
-            since = [i - c for c in clicks if 0 <= i - c < 8]
-            before = [c - i for c in clicks if 0 < c - i <= 3]
-            press = 1 - since[0] / 8 if since else (1 - before[0] / 4 if before else 0)
-            ring = since[0] / 8 if since else None
-            pointer_dot(image, *pointer[i], shown(i), press, ring)
-        image = image.resize((width, round(770 * width / 1200)), Image.LANCZOS)
+    for path in sorted(frames_dir.glob("*.png")):
+        image = Image.open(path).convert("RGBA").resize((width, round(770 * width / 1200)), Image.LANCZOS)
         flat = Image.new("RGB", image.size, BACKGROUND)
         flat.paste(image, mask=image)
         frames.append(flat)
@@ -349,10 +336,27 @@ def calibrate(panel_dir):
         for k in range(fade):
             frames[cut + k] = Image.blend(before, frames[cut + k], ease_in_out((k + 1) / (fade + 1)))
     for k in range(fade):
-        i = len(frames) - fade + k
-        frames[i] = Image.blend(frames[i], frames[0], ease_in_out((k + 1) / fade))
-    write_gif(frames, IMAGES / "calibrate.gif")
+        i = count - fade + k  # stops one step short, so the first frame finishes the fade
+        frames[i] = Image.blend(frames[i], frames[0], ease_in_out((k + 1) / (fade + 1)))
 
+    # The pointer goes on after the fades, so it never doubles. A hand held out drifts a little.
+    # Each drift wave fits a whole number of times into the loop, so the loop has no jump.
+    def wave(i, per_second, phase=0.0):
+        cycles = max(1, round(count / FPS * per_second))
+        return math.sin(2 * math.pi * cycles * i / count + phase)
+
+    for i, frame in enumerate(frames):
+        x, y = pointer[i]
+        x += 1.6 * wave(i, 0.27) + 0.8 * wave(i, 0.65, 1)
+        y += 1.4 * wave(i, 0.37, 2) + 0.7 * wave(i, 0.59)
+        since = [i - c for c in clicks if 0 <= i - c < 8]
+        before = [c - i for c in clicks if 0 < c - i <= 3]
+        press = 1 - since[0] / 8 if since else (1 - before[0] / 4 if before else 0)
+        ring = since[0] / 8 if since else None
+        image = frame.convert("RGBA")
+        pointer_dot(image, x * scale, y * scale, press, ring, scale)
+        frames[i] = image.convert("RGB")
+    write_gif(frames, IMAGES / "calibrate.gif")
 
 # Knock kinds: three small loops side by side, on the shared timeline.
 
