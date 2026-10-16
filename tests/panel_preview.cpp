@@ -264,6 +264,14 @@ void readme_calibration(const std::filesystem::path& dir) {
     state.calibration.reset();
     state.calibration_saved = KnockKind::Surface;
     rec.play(state, 0.8);
+    rec.aim(1043, 632); // Done on the Saved banner, back to Settings
+    rec.play(state, 1.2);
+    rec.click();
+    rec.play(state, 0.5);
+    rec.aim(100, 68); // Back, to the main screen the loop starts on
+    rec.play(state, 1.0);
+    rec.click();
+    rec.play(state, 0.4);
     rec.aim(rest.first, rest.second); // back where the loop starts
     rec.play(state, 1.6); // the README script cross-fades the last 0.4 s to the first frame
 
@@ -346,7 +354,7 @@ void readme_report(const std::filesystem::path& dir) {
     rec.click();
     rec.play(state, 0.3);
     rec.aim(rest.first, rest.second); // out of the way while the phone works
-    rec.play(state, 16.0);
+    rec.play(state, 17.5);
     rec.aim(951, 627); // Done
     rec.play(state, 1.1);
     rec.click();

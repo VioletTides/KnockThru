@@ -635,12 +635,12 @@ def report_phone(panel_dir):
 # The report GIF: the panel's report card, then the headset taken off and turned around, with
 # the card in both lenses. The phone comes up to a lens to scan the code, then goes through the
 # phone page and the issue form beside it. Times are seconds after the Report click.
-TAKE_OFF = (0.8, 1.3)       # the panel shrinks away and the headset appears, front first
-TURN = (1.3, 2.5)           # the headset turns to show its lenses
-PHONE_TO_LENS = (2.6, 3.4)  # the phone moves over the left lens
-STORY_START = 2.9           # the phone story's time 0, so its link tap lands while at the lens
-PHONE_BACK = (5.7, 6.3)     # the phone goes back beside the headset once the link opens
-PUT_ON = (15.0, 15.8)       # the view zooms into the left lens and back to the panel
+TAKE_OFF = (2.3, 2.8)       # after a moment to read the card, the panel shrinks away and the headset appears
+TURN = (2.8, 4.0)           # the headset turns to show its lenses
+PHONE_TO_LENS = (4.1, 4.9)  # the phone moves over the left lens
+STORY_START = 4.4           # the phone story's time 0, so its link tap lands while at the lens
+PHONE_BACK = (7.2, 7.8)     # the phone goes back beside the headset once the link opens
+PUT_ON = (16.5, 17.3)       # the view zooms into the left lens and back to the panel
 LENS = (20, 24, 32)         # the lens glass color in images/cad/headset-turn/, from cad_sprites.py
 
 
