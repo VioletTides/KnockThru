@@ -233,6 +233,8 @@ void replay_tests() {
     check(headset["headsetx2"] >= 15, "headset: at least 15 headset doubles");
     check(total(replay("play")) == 0, "play: no actions");
     check(total(replay("noise")) == 0, "noise: no actions");
+    // The controllers bumping while the wearer fit the strap on each one, in Into the Radius 2.
+    check(total(replay("straps")) == 0, "straps: no actions");
     mixed_test();
 }
 
@@ -301,6 +303,16 @@ void calibrated_replay_tests() {
         const int least = kind == KnockKind::Surface ? 17 : 19;
         check(doubles >= least, name + " calibrated: at least " + std::to_string(least) + " doubles");
     }
+    // The calibration that let the strap bumps through. Its soft together knocks
+    // peaked as low as 20 m/s^2, under today's together floor.
+    Calibration soft;
+    soft[KnockKind::Together] = KindCalibration{20, 0.203, {}, {}};
+    soft[KnockKind::Surface] = KindCalibration{59.8, 0.249, {}, {}};
+    soft[KnockKind::Headset] = KindCalibration{25.0, 0.154, {}, {}};
+    DetectorConfig config;
+    apply_calibration(soft, config);
+    check(config.confirmed_peak == Calibrator::floor(KnockKind::Together), "soft calibration: together floor applies");
+    check(replay_events("straps", config).empty(), "soft calibration: no actions in straps");
 }
 
 // Calibration lowers the thresholds, so waving the controllers must not count.
