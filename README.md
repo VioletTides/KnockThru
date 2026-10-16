@@ -15,7 +15,7 @@ From then on, KnockThru starts with SteamVR.
 ### Install without a PC
 
 1. Do step 1 of Setup.
-2. On the Steam bar, open **Desktop**, then open Konsole.
+2. On the Steam bar, open Konsole. Developer Mode adds it there.
 3. Run:
 
 ```sh
