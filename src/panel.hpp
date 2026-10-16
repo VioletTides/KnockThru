@@ -69,6 +69,7 @@ struct PanelState {
     std::string version;             // this KnockThru's version
     UpdateView update;
     std::string report_url;          // the GitHub issue link the report card shows as a QR code
+    bool report_full = false;        // report_url is the headset's page with the full report
     std::string report_saved;        // where Save report file wrote the report, empty before
     std::string report_error;        // why Save report file failed
     std::string message;
@@ -92,7 +93,8 @@ enum class PanelCommand {
     TourSkip,           // ends the tour from any step, including Done
     FactoryReset,
     CheckUpdate, InstallUpdate,
-    ShowReport,         // builds the issue link for the report card
+    ShowReport,         // starts the report page for the report card's QR code
+    CloseReport,
     SaveReport,         // writes the full report to the home folder
 };
 

@@ -7,6 +7,7 @@
 #include "sound.hpp"
 #include "style.hpp"
 #include "report.hpp"
+#include "report_server.hpp"
 #include "update.hpp"
 
 #include <json.hpp>
@@ -474,10 +475,10 @@ fs::path report_path() {
     return fs::path(home && *home ? home : "/tmp") / "knockthru-report.txt";
 }
 
-// Writes a bug report for a GitHub issue: versions, SteamVR state, settings,
-// and the end of the logs. `vr` is false when SteamVR is not running, and
-// `room_view` describes what the caller read from Room View.
-fs::path write_report(bool vr, const std::string& room_view) {
+// A bug report for a GitHub issue: versions, SteamVR state, settings, and the
+// end of the logs. `vr` is false when SteamVR is not running, and `room_view`
+// describes what the caller read from Room View.
+std::string report_text(bool vr, const std::string& room_view) {
     std::ostringstream out;
     const auto now = std::time(nullptr);
     char stamp[32];
@@ -513,9 +514,13 @@ fs::path write_report(bool vr, const std::string& room_view) {
         const auto steam_log = fs::path(home) / ".local/share/Steam/logs/vrclient_knockthru.txt";
         out << "\n== " << steam_log.string() << ", last 100 lines ==\n" << tail(steam_log, 100);
     }
+    return out.str();
+}
+
+fs::path write_report(bool vr, const std::string& room_view) {
     const auto path = report_path();
     std::ofstream file(path, std::ios::trunc);
-    if (!(file << out.str())) throw std::runtime_error("Cannot write " + path.string());
+    if (!(file << report_text(vr, room_view))) throw std::runtime_error("Cannot write " + path.string());
     return path;
 }
 
@@ -764,6 +769,7 @@ int run() {
     const auto binary = executable();
 
     std::string last_error; // for the report link
+    std::unique_ptr<knockthru::ReportServer> report_server; // while the report card shows
     const auto room_view_text = [&]() -> std::string {
         return !state.room_view_error.empty() ? state.room_view_error
             : !state.room_view ? "not read yet" : *state.room_view ? "on" : "off";
@@ -960,11 +966,27 @@ int run() {
                         knockthru::install_release(release, install_directory(), update_work);
                     });
                     break;
-                case PanelCommand::ShowReport:
-                    state.report_url = knockthru::issue_url({kVersion, steamvr_version(), room_view_text(),
-                        last_error});
+                case PanelCommand::ShowReport: {
+                    // The QR code opens a page this headset serves, with the full report. Without a
+                    // network, it opens the GitHub form directly, which only has room for the versions.
+                    const auto issue = knockthru::issue_url({kVersion, steamvr_version(), room_view_text(), last_error});
+                    report_server.reset();
+                    try {
+                        report_server = std::make_unique<knockthru::ReportServer>(report_text(true, room_view_text()), issue);
+                        state.report_url = report_server->url();
+                        state.report_full = true;
+                        log("Serving the bug report at " + state.report_url);
+                    } catch (const std::exception& error) {
+                        state.report_url = issue;
+                        state.report_full = false;
+                        log(std::string("Bug report page unavailable: ") + error.what());
+                    }
                     state.report_saved.clear();
                     state.report_error.clear();
+                    break;
+                }
+                case PanelCommand::CloseReport:
+                    report_server.reset();
                     break;
                 case PanelCommand::SaveReport:
                     try {

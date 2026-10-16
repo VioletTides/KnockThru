@@ -1,6 +1,7 @@
 // Update tests: version order, manifest parsing, SHA-256, the file swap, and the issue link,
 // in a scratch directory. The install test reads a local ZIP through curl's file:// support.
 #include "report.hpp"
+#include "report_server.hpp"
 #include "update.hpp"
 
 #include <filesystem>
@@ -89,6 +90,26 @@ int main() {
     check(long_url.find(std::string(100, 'x')) != std::string::npos &&
               long_url.find(std::string(101, 'x')) == std::string::npos,
         "issue_url cuts long fields to 100 characters");
+
+    {
+        // The report server answers its page and file, and nothing else. curl fetches them.
+        ReportServer server("line one\n<b>log</b>\n", issue_url({"0.1.0", "2.18.2", "on", ""}));
+        const auto page = root / "page.html", file = root / "report.txt", other = root / "other";
+        fs::create_directories(root);
+        const auto get = [](const std::string& url, const fs::path& out) {
+            return run_program({"curl", "--fail", "--silent", "--max-time", "5", "--output", out.string(), url});
+        };
+        check(server.url().rfind("http://", 0) == 0, "report server has an http link: " + server.url());
+        check(get(server.url(), page) == 0 && read(page).find("&lt;b&gt;log&lt;/b&gt;") != std::string::npos,
+            "report server serves the page with the report escaped");
+        check(read(page).find("const link = \"https://github.com/VioletTides/KnockThru/issues/new?template=bug.yml&version=") !=
+                  std::string::npos,
+            "report page opens the prefilled GitHub form");
+        check(get(server.url() + "/report/knockthru-report.txt", file) == 0 && read(file) == "line one\n<b>log</b>\n",
+            "report server serves the report file");
+        const auto base = server.url().substr(0, server.url().rfind('/'));
+        check(get(base + "/0000000000000000", other) == 22, "report server refuses a wrong token");
+    }
 
     check(run_program({"true"}) == 0 && run_program({"false"}) == 1, "run_program returns exit codes");
     check(run_program({"knockthru-no-such-program"}) == -1, "run_program returns -1 for a missing program");

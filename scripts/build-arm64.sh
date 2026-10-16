@@ -20,6 +20,7 @@ sources=(
     src/calibrator.cpp
     src/update.cpp
     src/report.cpp
+    src/report_server.cpp
     third_party/qrcodegen/qrcodegen.cpp
     src/canvas.cpp
     src/panel.cpp

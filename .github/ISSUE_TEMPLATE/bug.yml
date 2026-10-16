@@ -30,5 +30,6 @@ body:
   - type: textarea
     id: report
     attributes:
-      label: Report file (optional)
-      description: If you can, attach knockthru-report.txt from the Frame's home folder, or run `knockthru --report` over SSH to make one.
+      label: Report
+      description: Paste the report that the page from your Frame copied. Or attach knockthru-report.txt, or run `knockthru --report` over SSH to make one.
+      render: text

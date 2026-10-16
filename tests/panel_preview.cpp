@@ -185,14 +185,18 @@ int main(int argc, char** argv) {
     update.update = {};
     update.message.clear();
     update.message_is_error = false;
-    update.report_url = "https://github.com/VioletTides/KnockThru/issues/new?template=bug.yml&version=0.1.0"
-                        "&steamvr=2.18.2&passthrough=on";
+    update.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
+    update.report_full = true;
     settings_panel.click(1050, 542); // Report on the Something wrong? row
     settings_panel.render(update, std::nullopt, 0);
     settings_panel.render(update).write_png(out / "panel-report.png");
     update.report_saved = "/home/steamos/knockthru-report.txt";
     settings_panel.render(update).write_png(out / "panel-report-saved.png");
     update.report_saved.clear();
+    update.report_full = false;
+    update.report_url = "https://github.com/VioletTides/KnockThru/issues/new?template=bug.yml&version=0.1.0"
+                        "&steamvr=2.18.2&passthrough=on";
+    settings_panel.render(update).write_png(out / "panel-report-offline.png");
     settings_panel.click(900, 638); // Done
     settings_panel.click(1050, 632); // Reset on the factory reset row
     settings_panel.render(idle, std::make_pair(800.0f, 500.0f)).write_png(out / "panel-reset-confirm.png");

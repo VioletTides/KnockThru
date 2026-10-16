@@ -8,6 +8,7 @@
 #include <qrcodegen.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace knockthru {
@@ -519,9 +520,10 @@ void Panel::update_control(const PanelState& state) {
     button(rect, label, click, std::nullopt, primary, enabled);
 }
 
-// The report card over Settings. Three numbered steps send a GitHub issue through
-// a QR code that a phone scans through a lens. Save report file writes the full
-// report to the headset, for the developer to ask for.
+// The report card over Settings. A phone held to a lens scans the QR code and
+// opens a page the headset serves, which copies the full report and opens the
+// GitHub form. Without a network, the code opens the form directly. Save report
+// file writes the report to the headset, for when the developer asks for it.
 void Panel::report_card(const PanelState& state) {
     targets_.clear();
     canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
@@ -530,17 +532,24 @@ void Panel::report_card(const PanelState& state) {
     const float box = 380, x = card.x + 48, text_w = card.w - 96 - box - 40;
     canvas_.text(bold_, "Send a bug report", x, card.y + 72, 38, kText);
 
-    constexpr const char* kSteps[3] = {"Open the camera on your phone.", "Hold the phone up to a lens and scan the code.",
-                                       "Sign in to GitHub, say what went wrong, and press Create."};
+    const char* last = state.report_full ? "Follow the steps on your phone."
+                                         : "Sign in to GitHub, say what went wrong, and press Create.";
+    const std::array<const char*, 3> steps{"Open the camera on your phone.", "Hold the phone up to a lens and scan the code.",
+                                           last};
     float y = card.y + 150;
     for (int i = 0; i < 3; ++i) {
         canvas_.circle(x + 22, y, 22, kAccent);
         canvas_.text(bold_, std::to_string(i + 1), x + 22, y, 26, kText, Align::Center);
-        const auto lines = canvas_.wrap(regular_, kSteps[i], 28, text_w - 64, 2);
+        const auto lines = canvas_.wrap(regular_, steps[i], 28, text_w - 64, 2);
         for (std::size_t k = 0; k < lines.size(); ++k) canvas_.text(regular_, lines[k], x + 64, y + k * 40, 28, kText);
         y += 40 * lines.size() + 36;
     }
-    canvas_.text(regular_, "Nothing is sent until you press Create.", x, y, 26, kDim);
+    const std::string hint = state.report_full ? "Your phone needs the same Wi-Fi as the Frame. Nothing is sent until you press Create on GitHub."
+                                               : "Nothing is sent until you press Create. The Frame is offline, so only the versions go along.";
+    for (const auto& line : canvas_.wrap(regular_, hint, 26, text_w, 3)) {
+        canvas_.text(regular_, line, x, y, 26, kDim);
+        y += 36;
+    }
 
     // The code on white with a 4-module quiet zone, in whole pixels per module.
     const Rect white{card.x + card.w - 48 - box, card.y + 48, box, box};
@@ -577,7 +586,7 @@ void Panel::report_card(const PanelState& state) {
     }
     button({x, by, 300, 72}, saved ? "Saved" : "Save report file", PanelClick{PanelCommand::SaveReport}, std::nullopt,
         false, !saved);
-    button({card.x + card.w - 48 - 240, by, 240, 72}, "Done", std::nullopt, Screen::Settings, true);
+    button({card.x + card.w - 48 - 240, by, 240, 72}, "Done", PanelClick{PanelCommand::CloseReport}, Screen::Settings, true);
 }
 
 // A confirm card over the screen below it. Only its two buttons respond.
