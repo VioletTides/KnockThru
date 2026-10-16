@@ -66,6 +66,9 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
         } else if (key == "sounds") {
             if (!value.is_boolean()) fail("sounds must be true or false");
             config.sounds = value.get<bool>();
+        } else if (key == "tour_done") {
+            if (!value.is_boolean()) fail("tour_done must be true or false");
+            config.tour_done = value.get<bool>();
         } else if (key == "debug_port") {
             if (!value.is_number_integer()) fail("debug_port must be a whole number");
             config.debug_port = value.get<int>();
@@ -134,6 +137,19 @@ void save_knock_types(const std::array<bool, 3>& enabled) {
 }
 
 void save_blocked_apps(const std::set<std::string>& apps) { update_user_config("blocked_apps", apps); }
+
+void save_sounds(bool sounds) { update_user_config("sounds", sounds); }
+
+void save_tour_done(bool done) { update_user_config("tour_done", done); }
+
+void reset_user_settings() {
+    for (const auto* name : {"config.json", "calibration.json"}) {
+        const auto path = user_directory() / name;
+        std::error_code error;
+        fs::remove(path, error); // a missing file is not an error
+        if (error) throw std::runtime_error("Cannot delete " + path.string() + ": " + error.message());
+    }
+}
 
 Calibration load_calibration() {
     const auto path = user_directory() / "calibration.json";

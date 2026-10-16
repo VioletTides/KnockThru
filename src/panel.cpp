@@ -24,6 +24,8 @@ constexpr Color kAccent{58, 145, 232};
 constexpr Color kAccentHover{80, 160, 240};
 constexpr Color kKnobOff{196, 200, 208};
 constexpr Color kError{240, 110, 100};
+constexpr Color kErrorHover{248, 132, 122};
+constexpr Color kOnError{40, 14, 12};
 // The knocks row is a tint of the accent while knocks act, so the passthrough tile keeps the full accent.
 constexpr Color kActive{34, 62, 94};
 constexpr Color kActiveHover{40, 72, 108};
@@ -94,16 +96,20 @@ void Panel::switch_control(float right, float cy, bool on, bool enabled, float s
     canvas_.circle(on ? track.x + track.w - r : track.x + r, cy, r - 6 * scale, !enabled ? kFaint : on ? kText : kKnobOff);
 }
 
+// A danger button is red when primary, and has a red label otherwise.
 void Panel::button(Rect rect, const std::string& label, std::optional<PanelClick> click, std::optional<Screen> go_to,
-                   bool primary, bool enabled) {
+                   bool primary, bool enabled, bool danger) {
     if (!enabled) {
         canvas_.rounded_rect(rect, kRadius, kSurfaceHover);
         canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, 28, kFaint, Align::Center);
         return;
     }
     const bool hover = hovered(rect);
-    canvas_.rounded_rect(rect, kRadius, primary ? (hover ? kAccentHover : kAccent) : (hover ? kRaisedHover : kRaised));
-    canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, 28, kText, Align::Center);
+    const Color fill = primary && danger ? (hover ? kErrorHover : kError)
+        : primary ? (hover ? kAccentHover : kAccent) : (hover ? kRaisedHover : kRaised);
+    canvas_.rounded_rect(rect, kRadius, fill);
+    canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, 28,
+        primary && danger ? kOnError : danger ? kError : kText, Align::Center);
     targets_.push_back({rect, click, go_to});
 }
 
@@ -178,6 +184,15 @@ void Panel::switch_row(Rect rect, std::optional<PanelClick> click, bool on, cons
     if (enabled && click) targets_.push_back({rect, click, std::nullopt});
 }
 
+// A settings row with a title, a detail line, and a button at the right.
+void Panel::button_row(Rect rect, const std::string& title, const std::string& detail, const std::string& label,
+                       std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger, bool divider) {
+    if (divider) canvas_.rounded_rect({rect.x + 24, rect.y, rect.w - 48, 1.5f}, 0, kHairline);
+    canvas_.text(bold_, title, rect.x + 24, rect.y + rect.h / 2 - 17, 30, kText);
+    canvas_.text(regular_, detail, rect.x + 24, rect.y + rect.h / 2 + 21, 26, kDim);
+    button({rect.x + rect.w - 24 - 170, rect.y + rect.h / 2 - 30, 170, 60}, label, click, go_to, false, true, danger);
+}
+
 void Panel::knocks_row(Rect rect, const PanelState& state) {
     const bool any_kind = state.enabled[0] || state.enabled[1] || state.enabled[2];
     const bool active = !state.paused && any_kind;
@@ -205,34 +220,30 @@ void Panel::main_screen(const PanelState& state) {
     y += 112;
 
     y += 24;
-    for (int k = 0; k < 3; ++k, y += 88)
-        switch_row({x, y, w, 88}, PanelClick{PanelCommand::Kind, static_cast<KnockKind>(k)}, state.enabled[k],
+    for (int k = 0; k < 3; ++k, y += 120)
+        switch_row({x, y, w, 120}, PanelClick{PanelCommand::Kind, static_cast<KnockKind>(k)}, state.enabled[k],
             kKindTitles[k], "", !state.paused, false);
     y += 8;
 
     if (state.app_key.empty()) {
-        switch_row({x, y, w, 112}, std::nullopt, false, "This game", "No game running", false, true);
+        switch_row({x, y, w, 128}, std::nullopt, false, "This game", "No game running", false, true);
     } else {
         const auto name = state.app_name.empty() ? state.app_key : state.app_name;
-        switch_row({x, y, w, 112}, PanelClick{PanelCommand::BlockApp}, !state.app_blocked, "Knocks in " + name,
+        switch_row({x, y, w, 128}, PanelClick{PanelCommand::BlockApp}, !state.app_blocked, "Knocks in " + name,
             state.app_blocked ? "Off for this game only" : "On", true, true);
     }
-    y += 112;
-
-    canvas_.rounded_rect({x + 24, y, w - 48, 1.5f}, 0, kHairline);
-    canvas_.text(bold_, "Knocks getting missed?", x + 24, y + 56, 30, kText);
-    button({x + w - 24 - 170, y + 28, 170, 56}, "Calibrate", std::nullopt, Screen::Pick);
 
     // The tiles already show what worked, so the main screen only shows errors.
     if (state.message_is_error) message(state, 718);
 }
 
-// Four bars at the top right. Steps up to `current` (from 1) are filled.
-void Panel::steps(int current) {
+// One bar per step at the top right. Steps up to `current` (from 1) are filled.
+void Panel::steps(int current, int total) {
     const float w = 44, gap = 10, right = kWidth - kMargin, y = 64;
-    const float left = right - 4 * w - 3 * gap;
-    canvas_.text(regular_, "Step " + std::to_string(current) + " of 4", left - 20, y + 4, 24, kDim, Align::Right);
-    for (int i = 0; i < 4; ++i)
+    const float left = right - total * w - (total - 1) * gap;
+    canvas_.text(regular_, "Step " + std::to_string(current) + " of " + std::to_string(total), left - 20, y + 4, 24, kDim,
+        Align::Right);
+    for (int i = 0; i < total; ++i)
         canvas_.rounded_rect({left + i * (w + gap), y, w, 8}, 4, i < current ? kAccent : kRaised);
 }
 
@@ -271,9 +282,9 @@ void Panel::knock_scene(KnockKind kind, Rect box, float t, int knocks) {
 
 // Step 1: three cards, each knocking twice on a loop, as knocks work outside calibration.
 void Panel::pick_screen(const PanelState& state) {
-    button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Main);
+    button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Settings);
     canvas_.text(bold_, "Calibrate", kMargin + 172, 68, 38, kText);
-    steps(1);
+    steps(1, 4);
     const float t = static_cast<float>(std::fmod(now_, 2.6));
     // The cards fill the panel, and make room when the Saved banner shows.
     const bool banner = state.calibration_saved && !saved_dismissed_;
@@ -297,10 +308,18 @@ void Panel::pick_screen(const PanelState& state) {
         canvas_.text(bold_, "Saved", done.x + 32, done.y + done.h / 2 - 20, 38, kText);
         canvas_.text(regular_, canvas_.fit(regular_, saved_note, 26, done.w - 260), done.x + 32, done.y + done.h / 2 + 24,
             26, kText);
-        button({done.x + done.w - 32 - 170, done.y + 30, 170, 60}, "Done", std::nullopt, Screen::Main, true);
+        button({done.x + done.w - 32 - 170, done.y + 30, 170, 60}, "Done", std::nullopt, Screen::Settings, true);
     } else if (state.message_is_error) {
         message(state, 730);
     }
+}
+
+// A check mark drawn as two bars on an accent circle. `pop` scales it from 0 to 1.
+void Panel::check_mark(float cx, float cy, float radius, float pop) {
+    canvas_.circle(cx, cy, radius * pop, kAccent);
+    const float s = pop * radius / 34;
+    canvas_.polygon({{{cx - 16 * s, cy}, {cx - 6 * s, cy + 11 * s}, {cx - 6 * s, cy + 20 * s}, {cx - 21 * s, cy + 5 * s}}}, kText);
+    canvas_.polygon({{{cx - 6 * s, cy + 11 * s}, {cx + 16 * s, cy - 13 * s}, {cx + 21 * s, cy - 8 * s}, {cx - 6 * s, cy + 20 * s}}}, kText);
 }
 
 // Step 2: how to knock for calibration, one knock at a time.
@@ -308,7 +327,7 @@ void Panel::learn_screen(const PanelState& state) {
     const int k = static_cast<int>(learn_kind_);
     button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Pick);
     canvas_.text(bold_, kKindTitles[k], kMargin + 172, 68, 38, kText);
-    steps(2);
+    steps(2, 4);
     const Rect box{kMargin, 128, 540, 560};
     canvas_.rounded_rect(box, kRadius, kSurface);
     knock_scene(learn_kind_, {box.x + 30, box.y + 60, box.w - 60, 440}, static_cast<float>(std::fmod(now_, 2.0)), 1);
@@ -336,7 +355,7 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
     const int k = static_cast<int>(view.kind);
     button({kMargin, 36, 160, 64}, "Cancel", PanelClick{PanelCommand::CancelCalibration, view.kind}, std::nullopt);
     canvas_.text(bold_, "Recording", kMargin + 192, 68, 38, kText);
-    steps(3);
+    steps(3, 4);
     const Rect box{kMargin, 128, 420, 560};
     canvas_.rounded_rect(box, kRadius, kSurface);
     knock_scene(view.kind, {box.x + 20, box.y + 40, box.w - 40, 340}, static_cast<float>(std::fmod(now_, 2.0)), 1);
@@ -404,7 +423,7 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
     const int k = static_cast<int>(view.kind);
     button({kMargin, 36, 160, 64}, "Cancel", PanelClick{PanelCommand::CancelCalibration, view.kind}, std::nullopt);
     canvas_.text(bold_, "Try it", kMargin + 192, 68, 38, kText);
-    steps(4);
+    steps(4, 4);
     const Rect box{kMargin, 128, 420, 500};
     canvas_.rounded_rect(box, kRadius, kSurface);
     knock_scene(view.kind, {box.x + 20, box.y + 40, box.w - 40, 340}, static_cast<float>(std::fmod(now_, 2.6)), 2);
@@ -425,13 +444,8 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
         canvas_.text(bold_, "Listening", status.x + 96, status.y + status.h / 2, 34, kText);
     } else if (*view.trial_passed) {
         canvas_.rounded_rect(status, kRadius, kActive);
-        const float pop = anim::ease_out_back(since / 0.3f);
         const float cx = status.x + 64, cy = status.y + status.h / 2;
-        canvas_.circle(cx, cy, 34 * pop, kAccent);
-        // A check mark drawn as two bars.
-        const float s = pop;
-        canvas_.polygon({{{cx - 16 * s, cy}, {cx - 6 * s, cy + 11 * s}, {cx - 6 * s, cy + 20 * s}, {cx - 21 * s, cy + 5 * s}}}, kText);
-        canvas_.polygon({{{cx - 6 * s, cy + 11 * s}, {cx + 16 * s, cy - 13 * s}, {cx + 21 * s, cy - 8 * s}, {cx - 6 * s, cy + 20 * s}}}, kText);
+        check_mark(cx, cy, 34, anim::ease_out_back(since / 0.3f));
         canvas_.text(bold_, "That worked", cx + 64, cy - 22, 34, kText);
         canvas_.text(regular_, "Save to keep this calibration.", cx + 64, cy + 24, 26, kText);
     } else {
@@ -456,14 +470,197 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
 void Panel::settings_screen(const PanelState& state) {
     button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Main);
     canvas_.text(bold_, "Settings", kMargin + 172, 68, 38, kText);
-    const float top = 150, w = kWidth - 2 * kMargin;
-    canvas_.rounded_rect({kMargin, top, w, 128}, kRadius, kSurface);
-    switch_row({kMargin, top, w, 128}, PanelClick{PanelCommand::BarIcon}, state.classic_bar_icon, "Classic bar icon",
-        "Show the logo colors in the dashboard bar", true, false);
+    const float top = 128, w = kWidth - 2 * kMargin, row = 112;
+    canvas_.rounded_rect({kMargin, top, w, 5 * row}, kRadius, kSurface);
+    button_row({kMargin, top, w, row}, "Knocks getting missed?", "KnockThru learns how hard you knock", "Calibrate",
+        std::nullopt, Screen::Pick, false, false);
+    switch_row({kMargin, top + row, w, row}, PanelClick{PanelCommand::Sounds}, state.sounds, "Sounds",
+        "Click on a triple knock and on buttons", true, true);
+    switch_row({kMargin, top + 2 * row, w, row}, PanelClick{PanelCommand::BarIcon}, state.classic_bar_icon,
+        "Classic bar icon", "Show the logo colors in the dashboard bar", true, true);
     Canvas icon(64, 64);
     draw_icon(icon, state.classic_bar_icon ? IconStyle::BarColor : IconStyle::BarWhite);
-    canvas_.draw(icon, static_cast<int>(kMargin + w - 24 - 80 - 40 - 64), static_cast<int>(top + 32));
-    if (state.message_is_error) message(state, top + 128 + 50);
+    canvas_.draw(icon, static_cast<int>(kMargin + w - 24 - 80 - 40 - 64), static_cast<int>(top + 2 * row + 24));
+    button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "Learn the knocks again", "Replay",
+        PanelClick{PanelCommand::StartTour}, std::nullopt, false);
+    button_row({kMargin, top + 4 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset", std::nullopt,
+        Screen::Reset, true);
+    if (state.message_is_error) message(state, top + 5 * row + 50);
+}
+
+// A confirm card over the screen below it. Only its two buttons respond.
+void Panel::confirm_card(const std::string& title, const std::string& text, const std::string& cancel, Screen cancel_to,
+                         const std::string& confirm, PanelClick confirm_click, bool danger) {
+    targets_.clear();
+    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
+    const Rect card{220, 190, kWidth - 440, 390};
+    canvas_.rounded_rect(card, kRadius, kSurface);
+    canvas_.text(bold_, title, card.x + 48, card.y + 72, 38, kText);
+    float y = card.y + 140;
+    for (const auto& line : canvas_.wrap(regular_, text, 28, card.w - 96, 3)) {
+        canvas_.text(regular_, line, card.x + 48, y, 28, kText);
+        y += 40;
+    }
+    const float by = card.y + card.h - 48 - 72;
+    button({card.x + 48, by, 240, 72}, cancel, std::nullopt, cancel_to);
+    button({card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, Screen::Main, true, true, danger);
+}
+
+// Back and Next along the bottom, with Skip. The first step has Skip and Start, the last Back and Done.
+// Next stays off until the step is complete. Skip always works, after a confirm card.
+void Panel::tour_buttons(bool first, bool last, bool complete) {
+    const float y = 656, h = 72;
+    const Rect go{kWidth - kMargin - 200, y, 200, h};
+    if (first) {
+        button({kMargin, y, 180, h}, "Skip", std::nullopt, Screen::SkipTour);
+        button(go, "Start", PanelClick{PanelCommand::TourNext}, std::nullopt, true);
+        return;
+    }
+    button({kMargin, y, 180, h}, "Back", PanelClick{PanelCommand::TourBack}, std::nullopt);
+    if (last) {
+        button(go, "Done", PanelClick{PanelCommand::TourSkip}, std::nullopt, true);
+        return;
+    }
+    button({go.x - 24 - 160, y, 160, h}, "Skip", std::nullopt, Screen::SkipTour);
+    button(go, "Next", PanelClick{PanelCommand::TourNext}, std::nullopt, true, complete);
+}
+
+// The double and triple knock steps: the knock on a loop at the left, and at the
+// right what to do and whether it worked. Knocks here really switch.
+void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
+    const bool triple = tour.step == TourView::Step::Triple;
+    canvas_.text(bold_, triple ? "Knock three times" : "Knock twice", kMargin, 68, 38, kText);
+    const Rect box{kMargin, 128, 420, 500};
+    canvas_.rounded_rect(box, kRadius, kSurface);
+    // The scene shows each knock kind in turn, one per loop.
+    const double loop = 2.6;
+    const auto kind = static_cast<KnockKind>(static_cast<int>(now_ / loop) % 3);
+    knock_scene(kind, {box.x + 20, box.y + 40, box.w - 40, 340}, static_cast<float>(std::fmod(now_, loop)), triple ? 3 : 2);
+    canvas_.text(bold_, kKindTitles[static_cast<int>(kind)], box.x + box.w / 2, box.y + 440, 28, kText, Align::Center);
+
+    const float x = box.x + box.w + 48, w = kWidth - kMargin - x;
+    float y = 190;
+    for (const auto& line : canvas_.wrap(bold_,
+             triple ? "Knock three times to switch between translucent and opaque" : "Knock twice to switch passthrough", 36, w, 2)) {
+        canvas_.text(bold_, line, x, y, 36, kText);
+        y += 48;
+    }
+    y += 4;
+    // Lists only the kinds left on, since the others do nothing.
+    static constexpr const char* kWays[3] = {"controllers together", "a controller on a table", "a controller on the headset"};
+    std::vector<std::string> ways;
+    for (int k = 0; k < 3; ++k)
+        if (state.enabled[k]) ways.push_back(kWays[k]);
+    std::string list;
+    for (std::size_t i = 0; i < ways.size(); ++i)
+        list += (i == 0 ? "" : i + 1 == ways.size() ? (ways.size() == 2 ? " or " : ", or ") : ", ") + ways[i];
+    const std::string how = ways.size() > 1 ? "Any of these work: " + list + "." : "Use " + list + ".";
+    for (const auto& line : canvas_.wrap(regular_, how, 28, w, 3)) {
+        canvas_.text(regular_, line, x, y, 28, kDim);
+        y += 40;
+    }
+
+    const Rect status{x, 408, w, 220};
+    const double heard_t = triple ? tour.triple_t : tour.double_t;
+    const float cy = status.y + status.h / 2;
+    if (!triple && !state.room_view_error.empty()) {
+        canvas_.rounded_rect(status, kRadius, kSurface);
+        canvas_.text(bold_, "Passthrough unavailable", status.x + 40, status.y + 64, 34, kError);
+        float line_y = status.y + 118;
+        for (const auto& line : canvas_.wrap(regular_, state.room_view_error, 26, status.w - 80, 2)) {
+            canvas_.text(regular_, line, status.x + 40, line_y, 26, kDim);
+            line_y += 36;
+        }
+    } else if (heard_t < 0) {
+        canvas_.rounded_rect(status, kRadius, kSurface);
+        const float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(now_) * 2 * anim::kPi / 1.4f);
+        canvas_.circle(status.x + 56, cy, 14 + 6 * pulse, faded(kAccent, 0.5f + 0.5f * pulse));
+        canvas_.text(bold_, "Listening", status.x + 96, cy, 34, kText);
+    } else {
+        canvas_.rounded_rect(status, kRadius, kActive);
+        const float cx = status.x + 64;
+        check_mark(cx, cy, 34, anim::ease_out_back(static_cast<float>(now_ - heard_t) / 0.3f));
+        std::string title, detail;
+        if (triple) {
+            title = !state.opaque ? "Style switched" : *state.opaque ? "Room View is opaque" : "Room View is translucent";
+            detail = "Knock three times again to switch back.";
+        } else {
+            const bool on = state.room_view.value_or(false);
+            title = state.busy ? "Switching" : on ? "Passthrough is on" : "Passthrough is off";
+            detail = std::string("Knock twice again to turn it ") + (on ? "off." : "on.");
+        }
+        canvas_.text(bold_, canvas_.fit(bold_, title, 34, status.w - 150), cx + 64, cy - 22, 34, kText);
+        canvas_.text(regular_, canvas_.fit(regular_, detail, 26, status.w - 150), cx + 64, cy + 24, 26, kText);
+    }
+}
+
+// The first-run tour: welcome, the knock kinds, calibration, the double knock, the triple knock, and done.
+void Panel::tour_screen(const PanelState& state, const TourView& tour) {
+    using Step = TourView::Step;
+    steps(static_cast<int>(tour.step) + 1, 6);
+    const float cx = kWidth / 2.0f;
+    switch (tour.step) {
+    case Step::Welcome: {
+        Canvas icon(152, 152);
+        draw_icon(icon);
+        canvas_.draw(icon, (kWidth - 152) / 2, 150);
+        canvas_.text(bold_, "Welcome to KnockThru", cx, 370, 48, kText, Align::Center);
+        canvas_.text(regular_, "Knock to switch passthrough, without the side button.", cx, 440, 30, kDim, Align::Center);
+        canvas_.text(regular_, "This tour takes a few minutes.", cx, 484, 30, kDim, Align::Center);
+        tour_buttons(true, false, true);
+        break;
+    }
+    case Step::Double:
+    case Step::Triple:
+        tour_knock_step(state, tour);
+        tour_buttons(false, false, (tour.step == Step::Double ? tour.double_t : tour.triple_t) >= 0);
+        break;
+    case Step::Kinds: {
+        canvas_.text(bold_, "Pick your knocks", kMargin, 68, 38, kText);
+        const float w = kWidth - 2 * kMargin;
+        canvas_.rounded_rect({kMargin, 128, w, 352}, kRadius, kSurface);
+        for (int k = 0; k < 3; ++k)
+            switch_row({kMargin, 136 + k * 112.0f, w, 112}, PanelClick{PanelCommand::Kind, static_cast<KnockKind>(k)},
+                state.enabled[k], kKindTitles[k], kKindOnce[k], true, k > 0);
+        if (!state.enabled[0] && !state.enabled[1] && !state.enabled[2])
+            canvas_.text(regular_, "Turn on at least one knock to continue.", kMargin, 530, 28, kError);
+        tour_buttons(false, false, state.enabled[0] || state.enabled[1] || state.enabled[2]);
+        break;
+    }
+    case Step::Calibrate: {
+        canvas_.text(bold_, "Calibrate", kMargin, 68, 38, kText);
+        const float t = static_cast<float>(std::fmod(now_, 2.6));
+        const float card_h = 500;
+        bool complete = true; // every kind that is on has a calibration
+        for (int k = 0; k < 3; ++k) {
+            const Rect card{kMargin + k * 384.0f, 128, 352, card_h};
+            // A kind turned off on the previous step has nothing to calibrate.
+            const bool on = state.enabled[k];
+            canvas_.rounded_rect(card, kRadius, on && hovered(card) ? kSurfaceHover : kSurface);
+            knock_scene(static_cast<KnockKind>(k), {card.x + 16, card.y + 16, card.w - 32, card_h - 100}, t, 2);
+            if (!on) canvas_.rounded_rect(card, kRadius, faded(kBackground, 0.7f));
+            canvas_.text(bold_, kKindTitles[k], card.x + card.w / 2, card.y + card_h - 60, 28, on ? kText : kFaint,
+                Align::Center);
+            if (on && !tour.calibrated[k]) complete = false;
+            const std::string note = !on ? "Off" : tour.calibrated[k] ? "Calibrated" : "Select to calibrate";
+            canvas_.text(regular_, note, card.x + card.w / 2, card.y + card_h - 24, 24, tour.calibrated[k] ? kAccent : kFaint,
+                Align::Center);
+            if (tour.calibrated[k]) check_mark(card.x + card.w - 40, card.y + 40, 22, 1);
+            if (on) targets_.push_back({card, std::nullopt, Screen::Learn, static_cast<KnockKind>(k)});
+        }
+        tour_buttons(false, false, complete);
+        break;
+    }
+    case Step::Done:
+        check_mark(cx, 230, 56, 1);
+        canvas_.text(bold_, "You're set", cx, 340, 48, kText, Align::Center);
+        canvas_.text(regular_, "Replay this tour any time from Settings.", cx, 410, 30, kDim, Align::Center);
+        tour_buttons(false, true, true);
+        break;
+    }
+    // Errors go in the strip under the buttons, which every step leaves clear.
+    if (state.message_is_error)
+        canvas_.text(regular_, canvas_.fit(regular_, state.message, 24, kWidth - 2 * kMargin), kMargin, 748, 24, kError);
 }
 
 const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<float, float>> hover, double now) {
@@ -478,18 +675,36 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
         screen_ = Screen::Pick; // canceled or saved
     }
     was_calibrating_ = calibration.has_value();
+    if (state.tour && !was_touring_) screen_ = Screen::Main; // just started
+    if (!state.tour && was_touring_) screen_ = Screen::Main; // finished or skipped
+    was_touring_ = state.tour.has_value();
+    // The tour's Calibrate step hands over to the Learn screen, whose Back returns to the tour.
+    const bool tour_on_screen = state.tour && screen_ != Screen::Learn;
 
     View view = screen_ == Screen::Main ? View::Main : screen_ == Screen::Settings ? View::Settings
-        : screen_ == Screen::Pick ? View::Pick : View::Learn;
+        : screen_ == Screen::Reset ? View::Reset : screen_ == Screen::Pick ? View::Pick : View::Learn;
+    std::optional<TourView::Step> tour_step;
     if (calibration) {
         using Phase = CalibrationView::Phase;
         view = calibration->phase == Phase::Recording ? View::Record : View::Try;
         if (view == View::Record) record_screen(state, *calibration);
         else try_screen(state, *calibration);
+    } else if (tour_on_screen) {
+        view = View::Tour;
+        tour_step = state.tour->step;
+        tour_screen(state, *state.tour);
+        if (screen_ == Screen::SkipTour)
+            confirm_card("Skip the tour?", "You can replay it any time from Settings.", "Keep going", Screen::Main,
+                "Skip", PanelClick{PanelCommand::TourSkip}, false);
     } else if (screen_ == Screen::Main) {
         main_screen(state);
     } else if (screen_ == Screen::Settings) {
         settings_screen(state);
+    } else if (screen_ == Screen::Reset) {
+        settings_screen(state);
+        confirm_card("Reset KnockThru?",
+            "This deletes your settings, blocked games, and calibration. The tour starts again afterward.", "Cancel",
+            Screen::Settings, "Reset", PanelClick{PanelCommand::FactoryReset}, true);
     } else if (screen_ == Screen::Pick) {
         pick_screen(state);
     } else {
@@ -497,15 +712,19 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
     }
 
     // A new view rises into place. The first render has nothing to move from.
-    if (view_ && *view_ != view) view_t_ = now;
+    // The reset confirm appears over Settings in place, so only the other views rise.
+    const bool overlay = (view == View::Reset && view_ == View::Settings) || (view == View::Settings && view_ == View::Reset);
+    if ((view_ && *view_ != view && !overlay) || (tour_step && tour_step_ && *tour_step_ != *tour_step)) view_t_ = now;
     view_ = view;
+    tour_step_ = tour_step;
     const float entering = static_cast<float>((now - view_t_) / 0.3);
     if (entering < 1 && now > 0) {
         scratch_ = canvas_;
         canvas_ = background_;
         canvas_.draw(scratch_, 0, static_cast<int>(std::lround(20 * (1 - anim::ease_out(entering)))), anim::ease_out(entering));
     }
-    animating_ = view == View::Pick || view == View::Learn || view == View::Record || view == View::Try || entering < 1;
+    animating_ = view == View::Pick || view == View::Learn || view == View::Record || view == View::Try ||
+        view == View::Tour || entering < 1;
     return canvas_;
 }
 
@@ -514,7 +733,7 @@ std::optional<PanelClick> Panel::click(float x, float y) {
         if (!target.rect.contains(x, y)) continue;
         if (target.go_to) {
             // Leaving the calibration screens hides the Saved banner.
-            if (screen_ == Screen::Pick && *target.go_to == Screen::Main) saved_dismissed_ = true;
+            if (screen_ == Screen::Pick && *target.go_to == Screen::Settings) saved_dismissed_ = true;
             screen_ = *target.go_to;
             if (target.learn) learn_kind_ = *target.learn;
         }

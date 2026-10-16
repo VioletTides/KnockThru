@@ -600,6 +600,20 @@ int run() {
     std::optional<knockthru::Calibrator> calibrator;
     std::optional<knockthru::CalibrationView> calibration; // the walkthrough the panel shows
     using Phase = knockthru::CalibrationView::Phase;
+    std::optional<knockthru::TourView> tour; // the first-run tour, while the panel shows it
+    using Step = knockthru::TourView::Step;
+    // Someone with settings or a calibration already knows KnockThru, so the tour
+    // only shows itself to new users. Settings can replay it.
+    if (!config.tour_done && (fs::exists(knockthru::user_directory() / "config.json") ||
+                              fs::exists(knockthru::user_directory() / "calibration.json"))) {
+        try {
+            knockthru::save_tour_done(true);
+            config = knockthru::load_config(install_directory());
+            stamp = config_stamp();
+        } catch (const std::exception& error) {
+            log(std::string("Tour not marked done: ") + error.what());
+        }
+    }
 
     Clock clock;
     PoseThread poses(clock);
@@ -627,6 +641,17 @@ int run() {
     // is pressed, so a double knock and the panel's Room View button stay silent.
     const auto play_click = [&] {
         if (config.sounds) knockthru::play_click();
+    };
+    // A new tour counts kinds calibrated earlier as done, so a replay only asks for the rest.
+    const auto start_tour = [&] {
+        tour.emplace();
+        try {
+            auto calibrated = knockthru::load_calibration();
+            for (const auto kind : {knockthru::KnockKind::Together, knockthru::KnockKind::Surface, knockthru::KnockKind::Headset})
+                tour->calibrated[static_cast<int>(kind)] = calibrated[kind].has_value();
+        } catch (const std::exception& error) {
+            log(error.what());
+        }
     };
     const auto read_room_view = [&] {
         if (room_view_job.valid()) return;
@@ -743,6 +768,39 @@ int run() {
                     if (save([&] { knockthru::save_paused(!config.paused); }))
                         show(config.paused ? "KnockThru off" : "KnockThru on");
                     break;
+                case PanelCommand::Sounds:
+                    if (save([&] { knockthru::save_sounds(!config.sounds); }))
+                        show(config.sounds ? "Sounds on" : "Sounds off");
+                    break;
+                case PanelCommand::StartTour: start_tour(); break;
+                case PanelCommand::TourNext:
+                    if (tour && tour->step != Step::Done) tour->step = static_cast<Step>(static_cast<int>(tour->step) + 1);
+                    break;
+                case PanelCommand::TourBack:
+                    if (tour && tour->step != Step::Welcome) tour->step = static_cast<Step>(static_cast<int>(tour->step) - 1);
+                    break;
+                case PanelCommand::TourSkip:
+                    // The tour closes even if the flag cannot be saved, so it never traps anyone.
+                    if (!config.tour_done) save([&] { knockthru::save_tour_done(true); });
+                    if (tour) log(tour->step == Step::Done ? "Tour finished" : "Tour skipped");
+                    tour.reset();
+                    break;
+                case PanelCommand::FactoryReset:
+                    calibrator.reset();
+                    calibration.reset();
+                    try {
+                        knockthru::reset_user_settings();
+                        reload();
+                        log("Factory reset: settings and calibration deleted");
+                        state.message.clear();
+                        state.message_is_error = false;
+                        state.calibration_saved.reset();
+                        start_tour();
+                    } catch (const std::exception& error) {
+                        detector = knockthru::KnockDetector(config.detector);
+                        show(std::string("Factory reset failed: ") + error.what(), true);
+                    }
+                    break;
                 case PanelCommand::BarIcon:
                     if (save([&] { knockthru::save_classic_bar_icon(!config.classic_bar_icon); }))
                         show(config.classic_bar_icon ? "Classic bar icon on" : "Classic bar icon off");
@@ -791,13 +849,19 @@ int run() {
                         calibration.reset();
                         reload();
                         show("Calibration saved");
-                        state.calibration_saved = click.kind;
+                        // The tour's Calibrate step marks its card, so the Saved banner is only for Settings.
+                        if (tour) tour->calibrated[static_cast<int>(click.kind)] = true;
+                        else state.calibration_saved = click.kind;
                         haptics.buzz(2, t);
                     } catch (const std::exception& error) {
                         show(std::string("Calibration not saved: ") + error.what(), true);
                     }
                     break;
                 }
+            }
+            if (shown && !config.tour_done && !tour && !calibrator) {
+                log("Starting the first-run tour");
+                start_tour();
             }
             if (shown) {
                 if (config.sounds) knockthru::prepare_click();
@@ -865,17 +929,23 @@ int run() {
         } else if (!calibrator && knock_event) {
             const std::string what = std::string(" (") + (knock_event->count == 3 ? "triple " : "double ") +
                 knockthru::to_string(knock_event->kind) + " knock)";
-            if (config.paused) {
+            // The tour's knock steps act even when paused or off in this game, so the user can practice.
+            // Only while the panel shows them, so a tour left open never overrides the settings in a game.
+            const bool practicing = tour && (tour->step == Step::Double || tour->step == Step::Triple) && panel &&
+                panel->visible();
+            if (config.paused && !practicing) {
                 log("Ignored" + what + ": paused");
-            } else if (config.blocked_apps.count(state.app_key)) {
+            } else if (config.blocked_apps.count(state.app_key) && !practicing) {
                 log("Ignored" + what + ": knocks are off in " + state.app_key);
             } else if (knock_event->count == 3) {
                 const bool changed = toggle_style(what);
                 if (changed) play_click();
                 haptics.buzz(changed ? 2 : 3, t);
+                if (changed && tour && tour->step == Step::Triple) tour->triple_t = t;
             } else if (toggle_room_view(what)) {
                 // Buzz now, because the switch can take a second. A failure buzzes 3 times later.
                 haptics.buzz(1, t);
+                if (tour && tour->step == Step::Double) tour->double_t = t;
             }
         }
 
@@ -907,6 +977,8 @@ int run() {
             state.busy = room_view_job.valid() && room_view_job_toggles;
             state.paused = config.paused;
             state.classic_bar_icon = config.classic_bar_icon;
+            state.sounds = config.sounds;
+            state.tour = tour;
             panel->set_bar_icon(config.classic_bar_icon);
             state.enabled = config.detector.enabled;
             state.app_blocked = config.blocked_apps.count(state.app_key) > 0;

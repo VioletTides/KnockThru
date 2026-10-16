@@ -41,6 +41,11 @@ target_compile_definitions(detector_test PRIVATE KNOCKTHRU_TEST_DATA="${CMAKE_CU
 target_compile_options(detector_test PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME detector COMMAND detector_test)
 
+add_executable(config_test tests/config_test.cpp)
+target_link_libraries(config_test PRIVATE knockthru_core)
+target_compile_options(config_test PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME config COMMAND config_test)
+
 # Renders the dashboard panel in sample states to PNG files, for review.
 add_executable(panel_preview tests/panel_preview.cpp)
 target_link_libraries(panel_preview PRIVATE knockthru_ui)

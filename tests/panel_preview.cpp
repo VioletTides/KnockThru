@@ -32,7 +32,9 @@ void shot(Panel& panel, const PanelState& state, double t, const std::filesystem
 void calibration(const std::filesystem::path& out, const PanelState& idle) {
     Panel panel(KNOCKTHRU_FONTS);
     panel.render(idle, std::nullopt, 10);
-    panel.click(1050, 620); // Calibrate on the main screen
+    panel.click(460, 60); // Settings on the main screen
+    panel.render(idle, std::nullopt, 10.2);
+    panel.click(1050, 184); // Calibrate in Settings
     shot(panel, idle, 10.6, out / "calibrate-1-pick.png", std::make_pair(600.0f, 400.0f));
     frames(panel, idle, out, "pick", 20.8, 2.6);
     panel.click(600, 400); // the surface card
@@ -83,6 +85,48 @@ void calibration(const std::filesystem::path& out, const PanelState& idle) {
     shot(panel, state, 81, out / "calibrate-saved-kind-off.png");
 }
 
+// The tour's six steps, with the knock and calibrate steps before and after they finish.
+void tour(const std::filesystem::path& out, const PanelState& idle) {
+    Panel panel(KNOCKTHRU_FONTS);
+    PanelState state = idle;
+    state.message.clear();
+    TourView view;
+    state.tour = view;
+    shot(panel, state, 10, out / "tour-1-welcome.png");
+    state.tour->step = TourView::Step::Kinds;
+    state.enabled = {true, true, false};
+    shot(panel, state, 20, out / "tour-2-kinds.png");
+    state.tour->step = TourView::Step::Calibrate;
+    shot(panel, state, 30, out / "tour-3-calibrate.png", std::make_pair(600.0f, 400.0f));
+    panel.click(600, 400); // the surface card opens the Learn screen
+    shot(panel, state, 32, out / "tour-3-calibrate-learn.png");
+    panel.click(100, 60); // Back returns to the tour
+    state.tour->calibrated[static_cast<int>(KnockKind::Surface)] = true;
+    shot(panel, state, 34, out / "tour-3-calibrate-saved.png");
+    state.tour->step = TourView::Step::Double;
+    shot(panel, state, 40, out / "tour-4-double.png");
+    state.tour->double_t = 49;
+    state.room_view = true;
+    shot(panel, state, 50, out / "tour-4-double-heard.png");
+    state.tour->step = TourView::Step::Triple;
+    shot(panel, state, 60, out / "tour-5-triple.png");
+    state.tour->triple_t = 69;
+    state.opaque = true;
+    shot(panel, state, 70, out / "tour-5-triple-heard.png");
+    state.tour->step = TourView::Step::Done;
+    shot(panel, state, 80, out / "tour-6-done.png");
+    state.tour->step = TourView::Step::Triple;
+    panel.render(state, std::nullopt, 89);
+    panel.click(856, 692); // Skip opens the confirm card
+    shot(panel, state, 90, out / "tour-skip-confirm.png");
+    panel.click(388, 496); // Keep going
+    state.tour->step = TourView::Step::Kinds;
+    state.enabled = {false, false, false};
+    state.message = "Settings not saved: Cannot write config.json";
+    state.message_is_error = true;
+    shot(panel, state, 100, out / "tour-2-kinds-none.png");
+}
+
 int main(int argc, char** argv) {
     const std::filesystem::path out = argc > 1 ? argv[1] : ".";
     Panel panel(KNOCKTHRU_FONTS);
@@ -122,6 +166,11 @@ int main(int argc, char** argv) {
     settings_panel.render(idle, std::make_pair(600.0f, 200.0f)).write_png(out / "panel-settings.png");
     idle.classic_bar_icon = true;
     settings_panel.render(idle).write_png(out / "panel-settings-color.png");
+    settings_panel.click(1050, 632); // Reset on the factory reset row
+    settings_panel.render(idle, std::make_pair(800.0f, 500.0f)).write_png(out / "panel-reset-confirm.png");
+    idle.classic_bar_icon = false;
+
+    tour(out, idle);
 
     Canvas icon(256, 256);
     Panel::draw_icon(icon);
