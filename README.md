@@ -12,6 +12,18 @@ Knock twice to turn Steam Frame passthrough (Room View) on or off. Knock three t
 
 From then on, KnockThru starts with SteamVR.
 
+### Install without a PC
+
+1. Do step 1 of Setup.
+2. Switch the Frame to Desktop mode and open Konsole.
+3. Run:
+
+```sh
+curl -fsSL https://github.com/VioletTides/KnockThru/releases/latest/download/install.sh | sh
+```
+
+The script downloads the latest release and checks its SHA-256. It unpacks the release to `~/KnockThru`, adds KnockThru to your Steam library, and starts it. Run it again to reinstall. If SteamVR does not answer, go back to Gaming mode and launch KnockThru once from **Library → Non-Steam**.
+
 ## Knocks
 
 | Knock | What counts |
