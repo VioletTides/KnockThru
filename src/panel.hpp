@@ -41,11 +41,20 @@ struct TourView {
     double triple_t = -1; // when the triple knock step heard a triple knock
 };
 
+// The update check in Settings, filled in by the app.
+struct UpdateView {
+    enum class Status { Idle, Checking, Current, Available, Installing, Failed };
+    Status status = Status::Idle;
+    std::string latest; // the newest release, once a check found one
+    std::string error;  // why the check or the install failed
+};
+
 // Everything the dashboard panel shows. The app fills it in, the panel draws it.
 // Times are seconds on the app clock, the same clock render() gets.
 struct PanelState {
     std::optional<bool> room_view;   // unknown until the first debug port read
     std::string room_view_error;     // why Room View cannot be read or changed
+    bool dashboard_changed = false;  // the Room View button is missing, likely after a Steam update
     std::optional<bool> opaque;      // Room View style, unknown without SteamVR
     bool busy = false;               // a Room View change is in progress
     bool paused = false;
@@ -57,6 +66,15 @@ struct PanelState {
     std::optional<CalibrationView> calibration;
     std::optional<TourView> tour;
     std::optional<KnockKind> calibration_saved; // the kind the last calibration just saved
+    std::string version;             // this KnockThru's version
+    UpdateView update;
+    std::string report_url;          // the GitHub issue link the report card shows as a QR code
+    bool report_full = false;        // report_url is the headset's page with the full report
+    std::string report_saved;        // where Save report file wrote the report, empty before
+    std::string report_error;        // why Save to headset or the recording failed
+    int recording_left = -1;         // seconds left in a knock recording, -1 when none runs
+    int recording_knocks = 0;        // knocks heard so far in the recording
+    bool recorded = false;           // a knock recording is ready for the report
     std::string message;
     bool message_is_error = false;
 };
@@ -77,6 +95,11 @@ enum class PanelCommand {
     StartTour, TourNext, TourBack,
     TourSkip,           // ends the tour from any step, including Done
     FactoryReset,
+    CheckUpdate, InstallUpdate,
+    ShowReport,         // starts the report page for the report card's QR code
+    CloseReport,
+    SaveReport,         // writes the full report to the home folder
+    RecordKnocks,       // records 20 s of controller motion for the report
 };
 
 struct PanelClick {
@@ -111,9 +134,9 @@ public:
     static void draw_icon(Canvas& canvas, IconStyle style = IconStyle::Tile);
 
 private:
-    enum class Screen { Main, Settings, Reset, Pick, Learn, SkipTour };
+    enum class Screen { Main, Settings, Reset, Report, Pick, Learn, SkipTour };
     // What is on screen, for transitions: a screen, a calibration phase, or the tour.
-    enum class View { Main, Settings, Reset, Pick, Learn, Record, Try, Tour };
+    enum class View { Main, Settings, Reset, Report, Pick, Learn, Record, Try, Tour };
     struct Target {
         Rect rect;
         std::optional<PanelClick> click = {};
@@ -152,6 +175,8 @@ private:
     void check_mark(float cx, float cy, float radius, float pop);
     void knock_scene(KnockKind kind, Rect box, float t, int knocks);
     void settings_screen(const PanelState& state);
+    void update_control(const PanelState& state);
+    void report_card(const PanelState& state);
     void knocks_row(Rect rect, const PanelState& state);
     void passthrough_tile(Rect rect, const PanelState& state);
     void style_control(Rect rect, const PanelState& state);

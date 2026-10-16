@@ -5,7 +5,10 @@
 #include "logo_shapes.hpp"
 #include "sprite_shapes.hpp"
 
+#include <qrcodegen.hpp>
+
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace knockthru {
@@ -207,7 +210,13 @@ void Panel::knocks_row(Rect rect, const PanelState& state) {
 
 void Panel::main_screen(const PanelState& state) {
     header("KnockThru");
-    button({kMargin + 500 - 160, 36, 160, 64}, "Settings", std::nullopt, Screen::Settings);
+    const Rect settings{kMargin + 500 - 160, 36, 160, 64};
+    button(settings, "Settings", std::nullopt, Screen::Settings);
+    // A dot on Settings when an update is ready, ringed in the background color so it reads on any fill.
+    if (state.update.status == UpdateView::Status::Available) {
+        canvas_.circle(settings.x + settings.w - 6, settings.y + 6, 13, kBackground);
+        canvas_.circle(settings.x + settings.w - 6, settings.y + 6, 9, kAccent);
+    }
     const float left_w = 500;
     passthrough_tile({kMargin, 128, left_w, 340}, state);
     style_control({kMargin, 500, left_w, 170}, state);
@@ -470,8 +479,9 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
 void Panel::settings_screen(const PanelState& state) {
     button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Main);
     canvas_.text(bold_, "Settings", kMargin + 172, 68, 38, kText);
-    const float top = 128, w = kWidth - 2 * kMargin, row = 112;
-    canvas_.rounded_rect({kMargin, top, w, 5 * row}, kRadius, kSurface);
+    update_control(state);
+    const float top = 128, w = kWidth - 2 * kMargin, row = 92;
+    canvas_.rounded_rect({kMargin, top, w, 6 * row}, kRadius, kSurface);
     button_row({kMargin, top, w, row}, "Knocks getting missed?", "KnockThru learns how hard you knock", "Calibrate",
         std::nullopt, Screen::Pick, false, false);
     switch_row({kMargin, top + row, w, row}, PanelClick{PanelCommand::Sounds}, state.sounds, "Sounds",
@@ -480,12 +490,132 @@ void Panel::settings_screen(const PanelState& state) {
         "Classic bar icon", "Show the logo colors in the dashboard bar", true, true);
     Canvas icon(64, 64);
     draw_icon(icon, state.classic_bar_icon ? IconStyle::BarColor : IconStyle::BarWhite);
-    canvas_.draw(icon, static_cast<int>(kMargin + w - 24 - 80 - 40 - 64), static_cast<int>(top + 2 * row + 24));
+    canvas_.draw(icon, static_cast<int>(kMargin + w - 24 - 80 - 40 - 64), static_cast<int>(top + 2 * row + (row - 64) / 2));
     button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "Learn the knocks again", "Replay",
         PanelClick{PanelCommand::StartTour}, std::nullopt, false);
-    button_row({kMargin, top + 4 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset", std::nullopt,
+    button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
+        PanelClick{PanelCommand::ShowReport}, Screen::Report, false);
+    button_row({kMargin, top + 5 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset", std::nullopt,
         Screen::Reset, true);
-    if (state.message_is_error) message(state, top + 5 * row + 50);
+    if (state.message_is_error) message(state, top + 6 * row + 40);
+}
+
+// The version and the update button, at the top right of Settings.
+void Panel::update_control(const PanelState& state) {
+    using Status = UpdateView::Status;
+    const auto& update = state.update;
+    const float right = kWidth - kMargin, w = 250, h = 64, y = 36;
+    const Rect rect{right - w, y, w, h};
+    std::string status = "Version " + state.version, label = "Check for updates";
+    bool primary = false, enabled = true;
+    std::optional<PanelClick> click = PanelClick{PanelCommand::CheckUpdate};
+    switch (update.status) {
+    case Status::Idle: break;
+    case Status::Checking: label = "Checking"; enabled = false; break;
+    case Status::Current: status = "Version " + state.version + " is the latest"; break;
+    case Status::Available:
+        status = "You have version " + state.version;
+        label = "Install " + update.latest;
+        primary = true;
+        click = PanelClick{PanelCommand::InstallUpdate};
+        break;
+    case Status::Installing: label = "Installing"; enabled = false; break;
+    case Status::Failed: status = update.latest.empty() ? "Check failed" : "Install failed"; label = "Try again"; break;
+    }
+    canvas_.text(regular_, status, rect.x - 24, y + h / 2, 26, update.status == Status::Failed ? kError : kDim, Align::Right);
+    button(rect, label, click, std::nullopt, primary, enabled);
+}
+
+// The report card over Settings. A phone held to a lens scans the QR code and
+// opens a page the headset serves, which copies the full report and opens the
+// GitHub form. Without a network, the code opens the form directly, and Save to
+// headset writes the report to a file for the person to attach.
+void Panel::report_card(const PanelState& state) {
+    targets_.clear();
+    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
+    const Rect card{80, 60, kWidth - 160, 650};
+    canvas_.rounded_rect(card, kRadius, kSurface);
+    const float box = 380, x = card.x + 48, text_w = card.w - 96 - box - 40;
+    canvas_.text(bold_, "Report a problem", x, card.y + 72, 38, kText);
+
+    const auto steps = state.report_full
+        ? std::array<const char*, 3>{"Scan this code with your phone.", "Tap Copy report and open GitHub.",
+                                     "Paste, say what went wrong, and tap Create."}
+        : std::array<const char*, 3>{"Scan this code with your phone.",
+                                     "Sign in to GitHub and say what went wrong.",
+                                     "Attach the saved report, then tap Create."};
+    float y = card.y + 150;
+    for (int i = 0; i < 3; ++i) {
+        canvas_.circle(x + 22, y, 22, kAccent);
+        canvas_.text(bold_, std::to_string(i + 1), x + 22, y, 26, kText, Align::Center);
+        const auto lines = canvas_.wrap(regular_, steps[i], 28, text_w - 64, 2);
+        for (std::size_t k = 0; k < lines.size(); ++k) canvas_.text(regular_, lines[k], x + 64, y + k * 40, 28, kText);
+        y += 40 * lines.size() + 36;
+    }
+    const std::string hint = state.report_full ? "Hold the phone up to a lens. Use the Frame's Wi-Fi."
+                                               : "The Frame is offline. Save the report below to attach it.";
+    for (const auto& line : canvas_.wrap(regular_, hint, 26, text_w, 3)) {
+        canvas_.text(regular_, line, x, y, 26, kDim);
+        y += 36;
+    }
+
+    // Knock problems need the motion itself, so the report can carry a recording.
+    const Rect record{x, card.y + 420, 240, 64};
+    const bool recording = state.recording_left >= 0;
+    const std::string record_label = recording ? "Recording " + std::to_string(state.recording_left) + " s"
+        : state.recorded ? "Record again" : "Record knocks";
+    button(record, record_label, PanelClick{PanelCommand::RecordKnocks}, std::nullopt, false, !recording);
+    std::string record_note = "Knocks missed or wrong? Record 20 s of them.";
+    if (recording) record_note = "Knock the way that goes wrong. Heard " + std::to_string(state.recording_knocks) + " so far.";
+    else if (state.recorded) record_note = state.report_full ? "Recording added. Your phone gets it in one report file."
+                                                             : "Recording saved as knockthru-knocks.csv.gz.";
+    const float record_x = record.x + record.w + 24;
+    float ry = record.y + record.h / 2 - 16;
+    for (const auto& line : canvas_.wrap(regular_, record_note, 24, text_w - record.w - 24, 2)) {
+        canvas_.text(regular_, line, record_x, ry, 24, kDim);
+        ry += 32;
+    }
+
+    // The code on white with a 4-module quiet zone, in whole pixels per module.
+    const Rect white{card.x + card.w - 48 - box, card.y + 48, box, box};
+    canvas_.rounded_rect(white, kRadius, {255, 255, 255});
+    if (!state.report_url.empty()) {
+        const auto qr = qrcodegen::QrCode::encodeText(state.report_url.c_str(), qrcodegen::QrCode::Ecc::MEDIUM);
+        const int size = qr.getSize(), module = static_cast<int>(box) / (size + 8);
+        const float origin_x = std::floor(white.x + (box - module * size) / 2);
+        const float origin_y = std::floor(white.y + (box - module * size) / 2);
+        // Each run of dark modules in a row is one rectangle, so no seams show between them.
+        // Radius 0.5 fills solid. Radius 0 gives every pixel half coverage in rounded_rect.
+        for (int my = 0; my < size; ++my) {
+            for (int mx = 0; mx < size;) {
+                if (!qr.getModule(mx, my)) { ++mx; continue; }
+                int end = mx;
+                while (end < size && qr.getModule(end, my)) ++end;
+                canvas_.rounded_rect({origin_x + mx * module, origin_y + my * module,
+                    static_cast<float>((end - mx) * module), static_cast<float>(module)}, 0.5f, {0, 0, 0});
+                mx = end;
+            }
+        }
+    }
+
+    // Without a phone, the file is the way to get the full report into an issue.
+    const float by = card.y + card.h - 48 - 72;
+    const bool saved = !state.report_saved.empty();
+    // Offline, the hint above already points here.
+    std::string note = state.report_full ? "No phone? Save the report, then attach it to an issue." : "";
+    if (saved) note = "Saved as knockthru-report.txt in your home folder.";
+    if (!state.report_error.empty()) note = "Not saved: " + state.report_error;
+    // The note sits between the two buttons, next to the one it explains.
+    const float note_x = x + 300 + 28, note_w = card.x + card.w - 48 - 240 - 28 - note_x;
+    const auto note_lines = note.empty() ? std::vector<std::string>{} : canvas_.wrap(regular_, note, 24, note_w, 2);
+    float ny = by + 36 - 16 * (static_cast<float>(note_lines.size()) - 1);
+    for (const auto& line : note_lines) {
+        canvas_.text(regular_, line, note_x, ny, 24, state.report_error.empty() ? kDim : kError);
+        ny += 32;
+    }
+    button({x, by, 300, 72}, saved ? "Saved" : "Save to headset", PanelClick{PanelCommand::SaveReport}, std::nullopt,
+        false, !saved);
+    button({card.x + card.w - 48 - 240, by, 240, 72}, "Done", PanelClick{PanelCommand::CloseReport}, Screen::Settings, true);
 }
 
 // A confirm card over the screen below it. Only its two buttons respond.
@@ -682,7 +812,7 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
     const bool tour_on_screen = state.tour && screen_ != Screen::Learn;
 
     View view = screen_ == Screen::Main ? View::Main : screen_ == Screen::Settings ? View::Settings
-        : screen_ == Screen::Reset ? View::Reset : screen_ == Screen::Pick ? View::Pick : View::Learn;
+        : screen_ == Screen::Reset ? View::Reset : screen_ == Screen::Report ? View::Report : screen_ == Screen::Pick ? View::Pick : View::Learn;
     std::optional<TourView::Step> tour_step;
     if (calibration) {
         using Phase = CalibrationView::Phase;
@@ -705,6 +835,9 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
         confirm_card("Reset KnockThru?",
             "This deletes your settings, blocked games, and calibration. The tour starts again afterward.", "Cancel",
             Screen::Settings, "Reset", PanelClick{PanelCommand::FactoryReset}, true);
+    } else if (screen_ == Screen::Report) {
+        settings_screen(state);
+        report_card(state);
     } else if (screen_ == Screen::Pick) {
         pick_screen(state);
     } else {
@@ -713,7 +846,8 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
 
     // A new view rises into place. The first render has nothing to move from.
     // The reset confirm appears over Settings in place, so only the other views rise.
-    const bool overlay = (view == View::Reset && view_ == View::Settings) || (view == View::Settings && view_ == View::Reset);
+    const auto over_settings = [](std::optional<View> v) { return v == View::Reset || v == View::Report; };
+    const bool overlay = (over_settings(view) && view_ == View::Settings) || (view == View::Settings && over_settings(view_));
     if ((view_ && *view_ != view && !overlay) || (tour_step && tour_step_ && *tour_step_ != *tour_step)) view_t_ = now;
     view_ = view;
     tour_step_ = tour_step;

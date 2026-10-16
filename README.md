@@ -43,6 +43,7 @@ Put your settings in `~/.config/knockthru/config.json`. This file survives updat
 - `debug_port`: the CEF Remote Debugging port. The default is 8080.
 - `classic_bar_icon`: `true` shows the dashboard bar icon in the logo colors. The default `false` shows the logo in grey, and white on hover, like Steam's own icons.
 - `sounds`: `false` silences the click. By default, KnockThru plays SteamVR's dashboard click on a triple knock and on panel buttons. Steam already clicks when a double knock changes passthrough.
+- `check_updates`: `false` stops the weekly update check. By default, KnockThru asks GitHub for the latest release once a week, a minute after it starts. A new release shows a dot on the Settings button and an Install button in Settings. Check for updates in Settings works either way.
 - `tour_done`: `true` once the first-run tour is finished or skipped. Set it to `false` to see the tour the next time you open the KnockThru tab. Settings also has a Replay button.
 
 ## Calibration
@@ -63,7 +64,14 @@ Run these on the Frame over SSH.
 | --- | --- |
 | `knockthru` or `--install` | Register with SteamVR, turn on autostart, and start |
 | `--uninstall` | Stop and remove from SteamVR. Keeps `~/.config/knockthru` |
+| `--uninstall --purge` | Also delete `~/.config/knockthru`, SteamVR's autostart file for KnockThru, and the report files in your home folder |
 | `--status` | Show registration, the running process, and Room View state |
+| `--update` | Install the latest GitHub release over this one and restart |
+| `--report` | Write `~/knockthru-report.txt` with versions, settings, and logs. Attach it to an issue |
+
+To report a problem from the headset, open Settings and select Report. Hold your phone up to a lens and scan the QR code. Your phone must be on the same Wi-Fi as the Frame. The code opens a page that the Frame serves, with the full report. Tap Copy report and open GitHub, then paste the report into the new issue. The issue already has your KnockThru and SteamVR versions filled in. If the Frame is offline, the code opens the GitHub issue directly, and Save to headset keeps the report as a file to attach.
+
+If knocks get missed or do the wrong thing, select Record knocks on the report card first, then knock the way that goes wrong for 20 s. The phone page then gives you one file, `knockthru-report.zip`, with the report and the recording inside, to attach to the issue. To replay a recording from a report, unzip it and run `build/bin/detector_test knockthru-knocks.csv.gz`.
 | `--toggle`, `--style` | Turn Room View on or off, or switch its style, once |
 | `--detect` | Print knocks live without acting on them |
 
@@ -100,6 +108,6 @@ node scripts/package.mjs --build-dir build-arm64 --version 0.1.0
 - [KominoVR/frame-passthrough-shortcuts](https://github.com/KominoVR/frame-passthrough-shortcuts) (MIT): app scaffolding, style switch, and packaging.
 - [toorux/steam-frame-passthrough-toggle](https://github.com/toorux/steam-frame-passthrough-toggle) (MIT): the Room View button click through the debug port.
 
-Room View control uses Steam's internal dashboard UI. A Steam update can break it.
+Room View control uses Steam's internal dashboard UI. A Steam update can break it. If that happens, the panel's passthrough tile says so, and `--report` records the SteamVR version.
 
 [MIT licensed](LICENSE). Developed with help from coding agents.

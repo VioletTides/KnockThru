@@ -69,6 +69,9 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
         } else if (key == "tour_done") {
             if (!value.is_boolean()) fail("tour_done must be true or false");
             config.tour_done = value.get<bool>();
+        } else if (key == "check_updates") {
+            if (!value.is_boolean()) fail("check_updates must be true or false");
+            config.check_updates = value.get<bool>();
         } else if (key == "debug_port") {
             if (!value.is_number_integer()) fail("debug_port must be a whole number");
             config.debug_port = value.get<int>();
@@ -149,6 +152,35 @@ void reset_user_settings() {
         fs::remove(path, error); // a missing file is not an error
         if (error) throw std::runtime_error("Cannot delete " + path.string() + ": " + error.message());
     }
+}
+
+AppState load_state() {
+    AppState state;
+    try {
+        const auto file = read_json(user_directory() / "state.json");
+        state.steamvr_version = file.value("steamvr_version", "");
+        state.steamvr_since = file.value("steamvr_since", "");
+        state.steamvr_previous = file.value("steamvr_previous", "");
+        state.last_update_check = file.value("last_update_check", 0LL);
+    } catch (const std::exception&) {
+        // A damaged state file only costs the remembered values.
+    }
+    return state;
+}
+
+void save_state(const AppState& state) {
+    write_json(user_directory() / "state.json",
+        {{"steamvr_version", state.steamvr_version}, {"steamvr_since", state.steamvr_since},
+         {"steamvr_previous", state.steamvr_previous}, {"last_update_check", state.last_update_check}});
+}
+
+std::string note_steamvr_version(AppState& state, const std::string& version, const std::string& today) {
+    if (version.empty() || version == state.steamvr_version) return "";
+    const auto previous = state.steamvr_version;
+    if (!previous.empty()) state.steamvr_previous = previous;
+    state.steamvr_version = version;
+    state.steamvr_since = today;
+    return previous;
 }
 
 Calibration load_calibration() {

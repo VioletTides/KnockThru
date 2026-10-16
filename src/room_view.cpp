@@ -156,10 +156,11 @@ std::string RoomView::evaluate(const std::string& expression) const {
     for (;;) {
         const auto reply = json::parse(websocket_read(socket));
         if (reply.value("id", 0) != 1) continue;
-        if (reply.contains("error")) throw std::runtime_error("Dashboard script failed: " + reply["error"].dump());
+        // The scripts only fail if the page no longer has what they expect.
+        if (reply.contains("error")) throw DashboardChanged("Dashboard script failed: " + reply["error"].dump());
         const auto& result = reply["result"]["result"];
         if (result.value("subtype", "") == "error")
-            throw std::runtime_error("Dashboard script failed: " + result.value("description", ""));
+            throw DashboardChanged("Dashboard script failed: " + result.value("description", ""));
         return result.value("value", "");
     }
 }
@@ -167,7 +168,7 @@ std::string RoomView::evaluate(const std::string& expression) const {
 bool RoomView::active() const {
     const auto state = evaluate(std::string("(() => {") + kFindButton +
         "  if (!button) return 'missing';\n  return roomViewAction(button).active ? 'on' : 'off';\n})()");
-    if (state == "missing") throw std::runtime_error("Room View button not found on the SteamVR dashboard");
+    if (state == "missing") throw DashboardChanged("Room View button not found on the SteamVR dashboard");
     return state == "on";
 }
 
@@ -175,7 +176,7 @@ bool RoomView::toggle() const {
     const bool before = active();
     const auto clicked = evaluate(std::string("(() => {") + kFindButton +
         "  if (!button) return 'missing';\n  button.click();\n  return 'clicked';\n})()");
-    if (clicked != "clicked") throw std::runtime_error("Room View button not found on the SteamVR dashboard");
+    if (clicked != "clicked") throw DashboardChanged("Room View button not found on the SteamVR dashboard");
     // The button state updates after SteamVR applies the change.
     for (int attempt = 0; attempt < 10; ++attempt) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));

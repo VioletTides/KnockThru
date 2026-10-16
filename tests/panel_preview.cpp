@@ -139,6 +139,10 @@ int main(int argc, char** argv) {
     idle.message = "Passthrough off (double together knock)";
     panel.render(idle, std::make_pair(900.0f, 300.0f)).write_png(out / "panel-idle.png");
 
+    PanelState ready = idle;
+    ready.update = {UpdateView::Status::Available, "0.2.0", ""};
+    panel.render(ready).write_png(out / "panel-update-ready.png");
+
     PanelState busy = idle;
     busy.room_view = true;
     busy.opaque = true;
@@ -151,6 +155,9 @@ int main(int argc, char** argv) {
     broken.room_view_error = "Turn on CEF Remote Debugging in the Frame's Developer settings.";
     broken.opaque = false;
     panel.render(broken).write_png(out / "panel-broken.png");
+    broken.dashboard_changed = true;
+    broken.room_view_error = "A Steam update moved the Room View button. Update KnockThru in Settings.";
+    panel.render(broken).write_png(out / "panel-dashboard-changed.png");
 
     calibration(out, idle);
 
@@ -166,6 +173,40 @@ int main(int argc, char** argv) {
     settings_panel.render(idle, std::make_pair(600.0f, 200.0f)).write_png(out / "panel-settings.png");
     idle.classic_bar_icon = true;
     settings_panel.render(idle).write_png(out / "panel-settings-color.png");
+    PanelState update = idle;
+    update.version = "0.1.0";
+    settings_panel.render(update).write_png(out / "panel-settings-update-idle.png");
+    update.update = {UpdateView::Status::Checking, "", ""};
+    settings_panel.render(update).write_png(out / "panel-settings-update-checking.png");
+    update.update = {UpdateView::Status::Available, "0.2.0", ""};
+    settings_panel.render(update, std::make_pair(1000.0f, 68.0f)).write_png(out / "panel-settings-update-available.png");
+    update.update = {UpdateView::Status::Current, "0.1.0", ""};
+    settings_panel.render(update).write_png(out / "panel-settings-update-current.png");
+    update.update = {UpdateView::Status::Failed, "", "Cannot reach GitHub. Check the Wi-Fi connection."};
+    update.message = "Update check failed: Cannot reach GitHub. Check the Wi-Fi connection.";
+    update.message_is_error = true;
+    settings_panel.render(update).write_png(out / "panel-settings-update-failed.png");
+    update.update = {};
+    update.message.clear();
+    update.message_is_error = false;
+    update.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
+    update.report_full = true;
+    settings_panel.click(1050, 542); // Report on the Something wrong? row
+    settings_panel.render(update, std::nullopt, 0);
+    settings_panel.render(update).write_png(out / "panel-report.png");
+    update.recording_left = 14;
+    update.recording_knocks = 3;
+    settings_panel.render(update).write_png(out / "panel-report-recording.png");
+    update.recording_left = -1;
+    update.recorded = true;
+    update.report_saved = "/home/steamos/knockthru-report.txt";
+    settings_panel.render(update).write_png(out / "panel-report-saved.png");
+    update.report_saved.clear();
+    update.report_full = false;
+    update.report_url = "https://github.com/VioletTides/KnockThru/issues/new?template=bug.yml&version=0.1.0"
+                        "&steamvr=2.18.2&passthrough=on";
+    settings_panel.render(update).write_png(out / "panel-report-offline.png");
+    settings_panel.click(900, 638); // Done
     settings_panel.click(1050, 632); // Reset on the factory reset row
     settings_panel.render(idle, std::make_pair(800.0f, 500.0f)).write_png(out / "panel-reset-confirm.png");
     idle.classic_bar_icon = false;

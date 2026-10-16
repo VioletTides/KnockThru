@@ -146,8 +146,10 @@ std::vector<KnockEvent> replay_events(const std::string& name, const DetectorCon
     return events;
 }
 
+// `name` is a recording in tests/data, or a path to any .csv.gz recording.
 std::map<std::string, int> replay(const std::string& name) {
-    const auto rows = load(std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz");
+    const bool path = name.find('/') != std::string::npos || name.find(".csv") != std::string::npos;
+    const auto rows = load(path ? name : std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz");
     KnockDetector detector(test_config());
     std::map<std::string, int> counts;
     for (const auto& row : rows) {
@@ -317,7 +319,15 @@ void calibration_tests() {
 
 } // namespace
 
-int main() {
+// With file arguments, replays each recording, such as a knockthru-knocks.csv.gz
+// from a bug report, and prints every knock and action instead of testing.
+// KNOCKTHRU_TEST_SET applies the reporter's calibrated thresholds.
+int main(int argc, char** argv) {
+    if (argc > 1) {
+        setenv("KNOCKTHRU_TEST_VERBOSE", "1", 1);
+        for (int i = 1; i < argc; ++i) replay(argv[i]);
+        return 0;
+    }
     synthetic_tests();
     replay_tests();
     calibration_tests();
