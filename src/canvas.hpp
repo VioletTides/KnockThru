@@ -86,6 +86,7 @@ private:
     void blend(int x, int y, Color color, float coverage);
     // Blends `color` at full coverage over pixels `from` to `to` (exclusive) of row `y`.
     void fill_span(int y, int from, int to, Color color);
+    float measure(Font& font, const std::u32string& text, float size);
 };
 
 } // namespace knockthru

@@ -231,8 +231,9 @@ void Canvas::arc(float cx, float cy, float inner, float outer, float from, float
     }
 }
 
-float Canvas::measure(Font& font, const std::string& utf8, float size) {
-    const auto text = decode_utf8(utf8);
+float Canvas::measure(Font& font, const std::string& utf8, float size) { return measure(font, decode_utf8(utf8), size); }
+
+float Canvas::measure(Font& font, const std::u32string& text, float size) {
     float width = 0;
     for (std::size_t i = 0; i < text.size(); ++i) {
         width += font.glyph(text[i], size).advance;
@@ -287,12 +288,12 @@ std::vector<std::string> Canvas::wrap(Font& font, const std::string& utf8, float
 }
 
 void Canvas::text(Font& font, const std::string& utf8, float x, float y, float size, Color color, Align align) {
-    const float width = measure(font, utf8, size);
+    const auto text = decode_utf8(utf8);
+    const float width = measure(font, text, size);
     if (align == Align::Center) x -= width / 2;
     if (align == Align::Right) x -= width;
     // Centers the cap height on y. Cap height is about 0.7 of the pixel size.
     const float baseline = y + size * 0.36f;
-    const auto text = decode_utf8(utf8);
     float pen = x;
     for (std::size_t i = 0; i < text.size(); ++i) {
         const auto& glyph = font.glyph(text[i], size);
