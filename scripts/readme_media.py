@@ -408,7 +408,7 @@ def knock_kinds():
         cx, table_y, h = cell + cell // 2, 210, 150
         burst(draw, cx, table_y, played, base=SURFACE)
         place(cards, "controller-right", cx + shake, table_y - head_radius(h) * 0.95 - 45 * gap, h,
-              angle=round(165 - 12 * gap))
+              angle=round(135 - 12 * gap))
         draw.rectangle([cx - 130, table_y, cx + 130, table_y + 16], fill=TABLE)
 
         # The left controller count the left side of the headset.
