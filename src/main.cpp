@@ -103,11 +103,36 @@ void check_app(vr::EVRApplicationError error, const char* what) {
         throw std::runtime_error(std::string(what) + ": " + vr::VRApplications()->GetApplicationsErrorNameFromEnum(error));
 }
 
+constexpr std::array<const char*, 3> kDeviceNames{"hmd", "left", "right"}; // indexed by Device
+
+knockthru::Vec3 position_of(const vr::TrackedDevicePose_t& pose) {
+    const auto& m = pose.mDeviceToAbsoluteTracking.m;
+    return {m[0][3], m[1][3], m[2][3]};
+}
+
+knockthru::Vec3 velocity_of(const vr::TrackedDevicePose_t& pose) {
+    const float* v = pose.vVelocity.v;
+    return {v[0], v[1], v[2]};
+}
+
+constexpr const char* kCsvHeader = "t_s,device,valid,px,py,pz,vx,vy,vz,wx,wy,wz\n";
+
+// One row of the tests/data CSV format. Without `angular`, its columns are zero.
+void write_csv_row(std::ostream& out, double t, Device device, const knockthru::Vec3& p, const knockthru::Vec3& v,
+                   const float* angular = nullptr) {
+    char line[256];
+    const int n = std::snprintf(line, sizeof line, "%.6f,%s,1,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,", t,
+        kDeviceNames[static_cast<int>(device)], p[0], p[1], p[2], v[0], v[1], v[2]);
+    if (angular) std::snprintf(line + n, sizeof line - n, "%.5f,%.5f,%.5f\n", angular[0], angular[1], angular[2]);
+    else std::snprintf(line + n, sizeof line - n, "0,0,0\n");
+    out << line;
+}
+
 // Reads headset and controller poses once per call. SteamVR poses are only
 // valid in the standing universe on the Frame.
 class PoseSampler {
 public:
-    using Callback = std::function<void(Device, const char* name, const vr::TrackedDevicePose_t&)>;
+    using Callback = std::function<void(Device, const vr::TrackedDevicePose_t&)>;
 
     void sample(const Callback& callback) {
         const auto now = std::chrono::steady_clock::now();
@@ -123,29 +148,19 @@ public:
         for (const auto index : indices_)
             if (index < vr::k_unMaxTrackedDeviceCount) count = std::max(count, index + 1);
         vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0, poses_.data(), count);
-        static constexpr std::array<Device, 3> devices{Device::Hmd, Device::Left, Device::Right};
-        static constexpr std::array<const char*, 3> names{"hmd", "left", "right"};
         for (std::size_t i = 0; i < 3; ++i) {
             if (indices_[i] >= vr::k_unMaxTrackedDeviceCount) continue;
             const auto& pose = poses_[indices_[i]];
-            if (pose.bPoseIsValid) callback(devices[i], names[i], pose);
+            if (pose.bPoseIsValid) callback(static_cast<Device>(i), pose);
         }
     }
 
     static void feed(knockthru::KnockDetector& detector, double t, Device device, const vr::TrackedDevicePose_t& pose) {
-        const auto& m = pose.mDeviceToAbsoluteTracking.m;
-        const float* v = pose.vVelocity.v;
-        detector.push(device, t, {m[0][3], m[1][3], m[2][3]}, {v[0], v[1], v[2]});
+        detector.push(device, t, position_of(pose), velocity_of(pose));
     }
 
-    static void write_csv(std::ofstream& out, double t, const char* name, const vr::TrackedDevicePose_t& pose) {
-        const auto& m = pose.mDeviceToAbsoluteTracking.m;
-        const float* v = pose.vVelocity.v;
-        const float* w = pose.vAngularVelocity.v;
-        char line[256];
-        std::snprintf(line, sizeof line, "%.6f,%s,1,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f\n", t, name,
-            m[0][3], m[1][3], m[2][3], v[0], v[1], v[2], w[0], w[1], w[2]);
-        out << line;
+    static void write_csv(std::ostream& out, double t, Device device, const vr::TrackedDevicePose_t& pose) {
+        write_csv_row(out, t, device, position_of(pose), velocity_of(pose), pose.vAngularVelocity.v);
     }
 
 private:
@@ -153,8 +168,6 @@ private:
     std::array<vr::TrackedDevicePose_t, vr::k_unMaxTrackedDeviceCount> poses_{};
     std::chrono::steady_clock::time_point next_refresh_{};
 };
-
-constexpr const char* kCsvHeader = "t_s,device,valid,px,py,pz,vx,vy,vz,wx,wy,wz\n";
 
 class Clock {
 public:
@@ -202,11 +215,9 @@ private:
         Clock ticker;
         while (!stop_) {
             const double t = clock.now();
-            sampler.sample([&](Device device, const char*, const vr::TrackedDevicePose_t& pose) {
-                const auto& m = pose.mDeviceToAbsoluteTracking.m;
-                const float* v = pose.vVelocity.v;
+            sampler.sample([&](Device device, const vr::TrackedDevicePose_t& pose) {
                 std::lock_guard<std::mutex> lock(mutex_);
-                samples_.push_back({device, t, {m[0][3], m[1][3], m[2][3]}, {v[0], v[1], v[2]}});
+                samples_.push_back({device, t, position_of(pose), velocity_of(pose)});
             });
             ticker.tick();
         }
@@ -278,8 +289,8 @@ int record(const std::string& path, double seconds) {
     std::cerr << "Recording to " << path << ". Press Ctrl+C to stop.\n";
     while (!stopping && (seconds <= 0 || clock.now() < seconds)) {
         const double t = clock.now();
-        sampler.sample([&](Device, const char* name, const vr::TrackedDevicePose_t& pose) {
-            PoseSampler::write_csv(out, t, name, pose);
+        sampler.sample([&](Device device, const vr::TrackedDevicePose_t& pose) {
+            PoseSampler::write_csv(out, t, device, pose);
         });
         clock.tick();
     }
@@ -302,8 +313,8 @@ int detect(double seconds, const std::string& save_path) {
     std::cerr << "Detecting knocks. Press Ctrl+C to stop.\n";
     while (!stopping && (seconds <= 0 || clock.now() < seconds)) {
         const double t = clock.now();
-        sampler.sample([&](Device device, const char* name, const vr::TrackedDevicePose_t& pose) {
-            if (out.is_open()) PoseSampler::write_csv(out, t, name, pose);
+        sampler.sample([&](Device device, const vr::TrackedDevicePose_t& pose) {
+            if (out.is_open()) PoseSampler::write_csv(out, t, device, pose);
             PoseSampler::feed(detector, t, device, pose);
         });
         const auto event = detector.poll(t);
@@ -334,7 +345,7 @@ int calibrate(const std::string& kind_name) {
               << static_cast<int>(knockthru::Calibrator::kSeconds) << " s." << std::endl;
     while (!stopping && !calibrator.done() && calibrator.seconds_left(clock.now()) > 0) {
         const double t = clock.now();
-        sampler.sample([&](Device device, const char*, const vr::TrackedDevicePose_t& pose) {
+        sampler.sample([&](Device device, const vr::TrackedDevicePose_t& pose) {
             PoseSampler::feed(detector, t, device, pose);
         });
         detector.poll(t);
@@ -437,15 +448,14 @@ void unregister() {
 }
 
 // The bug report files go in the home folder, outside ~/.config, so a person can find them to attach.
-fs::path report_path() {
+fs::path home_directory() {
     const auto home = std::getenv("HOME");
-    return fs::path(home && *home ? home : "/tmp") / "knockthru-report.txt";
+    return home && *home ? home : "/tmp";
 }
 
-fs::path recording_path() {
-    const auto home = std::getenv("HOME");
-    return fs::path(home && *home ? home : "/tmp") / "knockthru-knocks.csv.gz";
-}
+fs::path report_path() { return home_directory() / "knockthru-report.txt"; }
+
+fs::path recording_path() { return home_directory() / "knockthru-knocks.csv.gz"; }
 
 // SteamVR's own per-app file, which holds the autostart flag.
 fs::path steamvr_app_config() {
@@ -526,14 +536,7 @@ void write_recording(const KnockRecording& recording) {
     {
         std::ofstream out(csv, std::ios::trunc);
         out << kCsvHeader;
-        static constexpr std::array<const char*, 3> names{"hmd", "left", "right"};
-        char line[256];
-        for (const auto& s : recording.samples) {
-            std::snprintf(line, sizeof line, "%.6f,%s,1,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,0,0,0\n", s.t - recording.start,
-                names[static_cast<int>(s.device)], s.position[0], s.position[1], s.position[2], s.velocity[0], s.velocity[1],
-                s.velocity[2]);
-            out << line;
-        }
+        for (const auto& s : recording.samples) write_csv_row(out, s.t - recording.start, s.device, s.position, s.velocity);
         if (!out) throw std::runtime_error("Cannot write " + csv.string());
     }
     if (knockthru::run_program({"gzip", "-f", csv.string()}) != 0) throw std::runtime_error("gzip could not compress the recording");
