@@ -3,3 +3,4 @@
 /.zig-cache/
 *.log
 /compile_commands.json
+/CLAUDE.md
