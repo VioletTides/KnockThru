@@ -110,8 +110,8 @@ function collectFiles(directory, prefix, entries) {
 
 export function packageRelease(options) {
   const root = path.resolve(options.root ?? projectRoot);
-  const version = options.version ?? '0.1.0';
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error('Version must be semver, e.g. 0.1.0');
+  const version = options.version ?? '1.0.0';
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error('Version must be semver, e.g. 1.0.0');
   const platform = options.platform ?? 'linux-arm64';
   const binaryName = appName;
   const binaryPath = path.resolve(options.buildDir ?? path.join(root, 'build-arm64'), 'bin', binaryName);
@@ -185,7 +185,7 @@ function latestManifestUrl(base, manifestName) {
 
 function main(args) {
   if (args.includes('--help')) {
-    console.log('node scripts/package.mjs --build-dir build-arm64 --version 0.1.0 --platform linux-arm64 [--output-dir dist] [--base-url https://host/releases/v0.1.0/] [--file-url https://host/download/knockthru-0.1.0-linux-arm64.zip] [--install-manifest-url https://host/releases/latest/download/knockthru.framedrop.json]');
+    console.log('node scripts/package.mjs --build-dir build-arm64 --version 1.0.0 --platform linux-arm64 [--output-dir dist] [--base-url https://host/releases/v1.0.0/] [--file-url https://host/download/knockthru-1.0.0-linux-arm64.zip] [--install-manifest-url https://host/releases/latest/download/knockthru.framedrop.json]');
     return;
   }
   const mapping = { '--build-dir': 'buildDir', '--version': 'version', '--platform': 'platform', '--output-dir': 'outputDir', '--base-url': 'baseUrl', '--file-url': 'fileUrl', '--install-manifest-url': 'installManifestUrl' };
