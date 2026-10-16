@@ -133,6 +133,19 @@ int main() {
             "report server serves the recording");
     }
 
+    {
+        // A missing file:// ZIP fails with a readable message, whatever curl's exit code.
+        Release missing{"0.9.0", "file://" + (root / "no-such.zip").string(), std::string(64, '0')};
+        try {
+            install_release(missing, root / "install-missing", root / "work-missing");
+            check(false, "install_release fails for a missing ZIP");
+        } catch (const std::exception& error) {
+            check(std::string(error.what()).find("curl exit code") != std::string::npos ||
+                      std::string(error.what()).find("missing") != std::string::npos,
+                std::string("install_release fails for a missing ZIP: ") + error.what());
+        }
+    }
+
     check(run_program({"true"}) == 0 && run_program({"false"}) == 1, "run_program returns exit codes");
     check(run_program({"knockthru-no-such-program"}) == -1, "run_program returns -1 for a missing program");
     {

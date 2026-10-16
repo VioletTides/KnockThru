@@ -120,15 +120,35 @@ std::vector<char*> argv_of(const std::vector<std::string>& args) {
     return argv;
 }
 
-// Downloads `url` to `path` with curl. curl's exit codes become readable messages.
+// The status code of the last response in a curl header dump, after redirects, or 0.
+int last_status(const fs::path& headers) {
+    std::ifstream stream(headers);
+    int status = 0;
+    for (std::string line; std::getline(stream, line);) {
+        if (line.rfind("HTTP/", 0) != 0) continue;
+        std::istringstream fields(line);
+        std::string version;
+        fields >> version >> status;
+    }
+    return status;
+}
+
+// Downloads `url` to `path` with curl, and turns failures into readable messages.
+// The HTTP status comes from the response headers, because curl's exit code for
+// an HTTP error differs between versions: 22 on this PC's curl, 56 on the Frame's.
 void download(const std::string& url, const fs::path& path, int seconds, const std::string& missing) {
-    const int code = run_program({"curl", "--fail", "--silent", "--show-error", "--location", "--max-time",
-                                  std::to_string(seconds), "--output", path.string(), url});
-    if (code == 0) return;
+    const auto headers = path.string() + ".headers";
+    const int code = run_program({"curl", "--silent", "--location", "--max-time", std::to_string(seconds),
+                                  "--dump-header", headers, "--output", path.string(), url});
+    const int status = last_status(headers);
+    std::error_code ignored;
+    fs::remove(headers, ignored);
+    if (status == 404) throw std::runtime_error(missing);
+    if (status >= 400) throw std::runtime_error("GitHub answered with HTTP " + std::to_string(status));
+    if (code == 0) return; // file:// URLs have no HTTP status, so 0 passes too
     if (code == -1 || code == 127) throw std::runtime_error("curl is missing on this system");
     if (code == 6 || code == 7) throw std::runtime_error("Cannot reach GitHub. Check the Wi-Fi connection.");
     if (code == 28) throw std::runtime_error("GitHub took too long to answer");
-    if (code == 22) throw std::runtime_error(missing);
     throw std::runtime_error("Download failed, curl exit code " + std::to_string(code));
 }
 
