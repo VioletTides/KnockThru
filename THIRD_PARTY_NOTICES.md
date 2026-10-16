@@ -145,7 +145,7 @@ These files are traced or rendered from Valve's Steam Frame CAD files
 
 - The logo: `images/logo.svg`, `images/logo-wordmark.svg`, and `images/social-preview.png`.
 - The README drawings: `images/cad/`, `images/hero.gif`, `images/knock-kinds.gif`, `images/calibrate.gif`,
-  `images/update.gif`, and `images/dashboard.png`.
+  `images/update.gif`, `images/report.gif`, and `images/dashboard.png`.
 
 Valve Corporation released the CAD files under the Creative Commons
 Attribution-NonCommercial-ShareAlike 4.0 International license. These files use that

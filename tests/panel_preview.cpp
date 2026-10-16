@@ -5,6 +5,7 @@
 // frames a second, to review the animations. The --readme form writes clean states for
 // the README images instead.
 #include "panel.hpp"
+#include "report_server.hpp"
 
 #include <cmath>
 #include <fstream>
@@ -308,6 +309,41 @@ void readme_update(const std::filesystem::path& dir) {
     rec.write_marks();
 }
 
+// Sending a report: Settings, Report, then Done once the phone has the report, as frames in
+// `dir`. The README script draws the phone beside it, timed from the Report click.
+void readme_report(const std::filesystem::path& dir) {
+    Panel panel(KNOCKTHRU_FONTS);
+    PanelState state;
+    state.room_view = false;
+    state.opaque = false;
+    state.app_key = "steam.app.620980";
+    state.app_name = "Beat Saber";
+    state.version = "0.2.0";
+    state.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
+    state.report_full = true;
+    const Recorder::Point rest{300, 730};
+    Recorder rec{&panel, dir};
+    rec.pointer = rest;
+    rec.play(state, 0.8);
+    rec.aim(460, 64); // Settings
+    rec.play(state, 1.1);
+    rec.click();
+    rec.play(state, 0.5);
+    rec.aim(1050, 542); // Report on the Something wrong? row
+    rec.play(state, 1.3);
+    rec.click();
+    rec.play(state, 0.3);
+    rec.aim(rest.first, rest.second); // out of the way while the phone works
+    rec.play(state, 11.7);
+    rec.aim(951, 627); // Done
+    rec.play(state, 1.1);
+    rec.click();
+    rec.play(state, 0.4);
+    rec.aim(rest.first, rest.second);
+    rec.play(state, 1.8); // the README script cross-fades the last 0.4 s to the first frame
+    rec.write_marks();
+}
+
 // Writes the passthrough off, on, and opaque states with no hover highlight.
 int readme(const std::filesystem::path& out) {
     Panel panel(KNOCKTHRU_FONTS);
@@ -334,8 +370,14 @@ int readme(const std::filesystem::path& out) {
     report_panel.render(report, std::nullopt, 41);
     report_panel.click(1050, 542); // Report on the Something wrong? row
     shot(report_panel, report, 43, out / "readme-report.png");
+    // The page the phone opens from the QR code, as the headset serves it.
+    std::ofstream(out / "readme-phone.html") << report_page(
+        "KnockThru bug report, 2026-10-15 14:02:11\n\nKnockThru: 0.2.0\nSteamVR: 2.18.2\n"
+        "Registered with SteamVR: yes\nStarts with SteamVR: yes\nCurrent app: steam.app.620980\n",
+        "https://github.com/VioletTides/KnockThru/issues/new?template=bug.yml&version=0.2.0", "report.txt");
     readme_calibration(out / "calibrate");
     readme_update(out / "update");
+    readme_report(out / "report");
     std::cout << "Wrote README panel states to " << out << "\n";
     return 0;
 }

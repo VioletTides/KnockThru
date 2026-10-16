@@ -80,7 +80,7 @@ To check right away, press **Check for updates** in Settings. Updating through F
 
 You can send a bug report from the headset with your phone. You need a GitHub account.
 
-![The Report a problem card: three steps, a QR code to scan with your phone, Record knocks, and Save to headset](images/report.png)
+![Reporting a problem: Report in Settings opens a card with a QR code. A phone scans it, opens the report page, copies the report, and fills in a GitHub issue](images/report.gif)
 
 1. Open **Settings** in the KnockThru tab and press **Report**.
 2. Hold your phone up to a lens and scan the QR code. Your phone must be on the same Wi-Fi as the Frame.
@@ -180,7 +180,7 @@ scripts/build-arm64.sh
 node scripts/package.mjs --build-dir build-arm64 --version 0.1.0
 ```
 
-README images (needs Pillow and ffmpeg, after the host build):
+README images (needs Pillow, ffmpeg, and Chromium, after the host build):
 
 ```sh
 python3 scripts/readme_media.py

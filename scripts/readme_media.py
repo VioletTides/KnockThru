@@ -3,7 +3,7 @@
 
 Usage: python3 scripts/readme_media.py [--build-dir build]
 
-Needs Pillow, ffmpeg, and a host build with the panel_preview target.
+Needs Pillow, ffmpeg, Chromium, and a host build with the panel_preview target.
 """
 import argparse
 import math
@@ -313,8 +313,11 @@ def pointer_dot(image, x, y, press, ring, scale=1.0):
     image.alpha_composite(dot, (round(x - out / 2), round(y - out / 2)))
 
 
-def walkthrough(frames_dir, name):
-    """Turns a panel_preview frame sequence with a pointer log into images/NAME.gif."""
+def walkthrough(frames_dir, name, phone=None, qr=None):
+    """Turns a panel_preview frame sequence with a pointer log into images/NAME.gif.
+
+    phone, if given, draws a phone beside the panel: phone(i, clicks) returns an RGBA image.
+    qr is a box in panel pixels to blur while the report card shows, so nobody scans it."""
     width = 640
     scale = width / 1200
     marks = dict(line.split(maxsplit=1) if " " in line else (line, "")
@@ -324,11 +327,26 @@ def walkthrough(frames_dir, name):
     pointer = [tuple(map(float, line.split())) for line in (frames_dir / "pointer.txt").read_text().splitlines()]
     count = len(pointer)
 
+    panel_height = round(770 * width / 1200)
+    if phone:
+        sample = phone(0, clicks)
+        size = (20 + width + 36 + sample.width + 24, max(panel_height, sample.height) + 40)
+    else:
+        size = (width, panel_height)
+    origin = (20 if phone else 0, (size[1] - panel_height) // 2)
+    blur_from, blur_to = (clicks[-2], clicks[-1] + seconds(0.6)) if qr else (0, -1)
+
     frames = []
-    for path in sorted(frames_dir.glob("*.png")):
-        image = Image.open(path).convert("RGBA").resize((width, round(770 * width / 1200)), Image.LANCZOS)
-        flat = Image.new("RGB", image.size, BACKGROUND)
-        flat.paste(image, mask=image)
+    for i, path in enumerate(sorted(frames_dir.glob("*.png"))):
+        image = Image.open(path).convert("RGBA").resize((width, panel_height), Image.LANCZOS)
+        flat = Image.new("RGB", size, BACKGROUND)
+        flat.paste(image, origin, mask=image)
+        if blur_from <= i <= blur_to:
+            box = tuple(round(v * scale) + o for v, o in zip(qr, origin * 2))
+            flat.paste(hide_qr(flat.crop(box)), box)
+        if phone:
+            side = phone(i, clicks)
+            flat.paste(side, (20 + width + 36, (size[1] - side.height) // 2), side)
         frames.append(flat)
     # Where the clock skips ahead, and at the loop back to the start, cross-fade instead of cutting.
     fade = seconds(0.4)
@@ -355,29 +373,265 @@ def walkthrough(frames_dir, name):
         press = 1 - since[0] / 8 if since else (1 - before[0] / 4 if before else 0)
         ring = since[0] / 8 if since else None
         image = frame.convert("RGBA")
-        pointer_dot(image, x * scale, y * scale, press, ring, scale)
+        pointer_dot(image, x * scale + origin[0], y * scale + origin[1], press, ring, scale)
         frames[i] = image.convert("RGB")
     write_gif(frames, IMAGES / f"{name}.gif")
 
-# Report card: a still of the panel's report card, with its sample QR code dimmed so nobody scans it.
+# Report card: its sample QR code gets blurred in the GIF, so nobody scans it.
 
-def report_card(panel_dir):
-    image = Image.open(panel_dir / "readme-report.png").convert("RGBA")
-    flat = Image.new("RGB", image.size, BACKGROUND)
-    flat.paste(image, mask=image)
-    # The QR code sits on the only large white square in the panel.
+def hide_qr(image):
+    """Blurs a QR code past reading, at any size, and softens its contrast."""
+    soft = image.filter(ImageFilter.GaussianBlur(image.width / 28))
+    return Image.blend(soft, Image.new("RGB", soft.size, (150, 156, 168)), 0.35)
+
+
+def qr_box(flat):
+    """The QR code's box on a report card render: the only large white square in the panel."""
     white = flat.point(lambda v: 255 if v > 250 else 0).convert("L").point(lambda v: 255 if v == 255 else 0)
-    left, top, right, bottom = white.getbbox()
-    box = (left, top, right, bottom)
-    card = flat.getpixel((left - 30, top + 10))
-    blurred = flat.crop(box).filter(ImageFilter.GaussianBlur(5))  # too soft for a phone to read
-    flat.paste(Image.blend(blurred, Image.new("RGB", (right - left, bottom - top), card), 0.75), box)
-    draw = ImageDraw.Draw(flat)
-    draw.text(((left + right) / 2, (top + bottom) / 2), "Example", font=font(34, bold=True), fill=TEXT, anchor="mm")
-    width = 800
-    flat = flat.resize((width, round(flat.height * width / flat.width)), Image.LANCZOS)
-    flat.save(IMAGES / "report.png")
-    print("Wrote images/report.png")
+    return white.getbbox()
+
+
+# Phone: the other half of the report GIF. Screens are drawn at twice a 320 by 694 CSS pixel
+# phone. The KnockThru page is the real one the headset serves, captured with Chromium.
+
+PHONE_CSS = (320, 694)
+BAR, URL_BAR = 40, 40  # status bar and browser address bar, in CSS pixels
+PAGE_LIGHT = (244, 245, 247)
+FORM_BLUE = (38, 112, 188)  # the phone page's button blue
+
+
+def capture(html, path, height):
+    """Screenshots an HTML file at the phone's width with headless Chromium, at 2x."""
+    browser = shutil.which("chromium") or shutil.which("google-chrome") or shutil.which("chromium-browser")
+    if not browser:
+        raise SystemExit("Chromium is missing. It renders the phone page.")
+    subprocess.run([browser, "--headless", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=2",
+                    f"--window-size={PHONE_CSS[0]},{height}", f"--screenshot={path}", html.as_uri()],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return Image.open(path).convert("RGB")
+
+
+def browser_chrome(screen, host, dark=False):
+    """Draws a status bar and an address bar showing host over the top of a 2x screen."""
+    draw = ImageDraw.Draw(screen)
+    w = screen.width
+    top = (12, 13, 16) if dark else PAGE_LIGHT
+    ink = (240, 240, 240) if dark else (22, 24, 28)
+    draw.rectangle([0, 0, w, 2 * (BAR + URL_BAR)], fill=top)
+    draw.text((44, 2 * BAR / 2 + 4), "12:00", font=font(26, bold=True), fill=ink, anchor="lm")
+    for k in range(4):  # signal bars
+        x = w - 120 + k * 12
+        draw.rounded_rectangle([x, 2 * BAR / 2 + 12 - 6 * k, x + 7, 2 * BAR / 2 + 14], 2, fill=ink)
+    draw.rounded_rectangle([w - 64, 2 * BAR / 2 - 6, w - 30, 2 * BAR / 2 + 14], 5, outline=ink, width=3)
+    draw.rounded_rectangle([w - 60, 2 * BAR / 2 - 2, w - 40, 2 * BAR / 2 + 10], 2, fill=ink)
+    if host:
+        draw.rounded_rectangle([24, 2 * BAR + 6, w - 24, 2 * (BAR + URL_BAR) - 10], 20,
+                               fill=(226, 228, 233) if not dark else (40, 42, 48))
+        draw.text((w / 2, 2 * BAR + URL_BAR - 2), host, font=font(24), fill=(70, 75, 85), anchor="mm")
+
+
+def touch(screen, x, y, played):
+    """A fingertip touch: a soft gray circle that fades. played runs 0 to 1."""
+    if played is None or not 0 <= played <= 1:
+        return
+    layer = Image.new("RGBA", screen.size, (0, 0, 0, 0))
+    r = 44 * (1 - 0.25 * ease_out(played))
+    ImageDraw.Draw(layer).ellipse([x - r, y - r, x + r, y + r], fill=(90, 95, 105, round(110 * (1 - played))))
+    screen.alpha_composite(layer)
+
+
+def camera_screen(qr_image, t):
+    """The phone camera aimed at the headset lens: the QR code drifts in, the focus box
+    closes on it, and a link to the headset's page pops up. t is seconds since Report."""
+    w, h = 2 * PHONE_CSS[0], 2 * PHONE_CSS[1]
+    screen = Image.new("RGBA", (w, h), (24, 26, 30, 255))
+    glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(glow).ellipse([-w * 0.3, h * 0.12, w * 1.3, h * 0.82], fill=(52, 56, 64, 255))
+    screen.alpha_composite(glow.filter(ImageFilter.GaussianBlur(80)))
+    aim = ease_in_out((t - 0.5) / 0.7)
+    if aim > 0:
+        size = round(w * (0.42 + 0.14 * aim))
+        code = qr_image.resize((size, size), Image.LANCZOS).convert("RGBA")
+        code.putalpha(round(255 * aim))
+        cx, cy = w / 2 + 120 * (1 - aim), h * 0.42 + 60 * (1 - aim)
+        screen.alpha_composite(code, (round(cx - size / 2), round(cy - size / 2)))
+        focus = ease_out_back((t - 1.2) / 0.4)
+        if t >= 1.2:
+            half = size / 2 + 26 + 40 * (1 - clamp(focus))
+            draw = ImageDraw.Draw(screen)
+            for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+                x, y = cx + sx * half, cy + sy * half
+                draw.line([(x, y), (x - sx * 46, y)], fill=(250, 204, 40), width=6)
+                draw.line([(x, y), (x, y - sy * 46)], fill=(250, 204, 40), width=6)
+    pop = ease_out_back((t - 1.7) / 0.35)
+    if t >= 1.7:
+        draw = ImageDraw.Draw(screen)
+        pw, ph = 420 * min(max(pop, 0.0), 1.1), 76
+        y = h * 0.78
+        draw.rounded_rectangle([w / 2 - pw / 2, y - ph / 2, w / 2 + pw / 2, y + ph / 2], 38, fill=(250, 204, 40))
+        if pop > 0.6:
+            draw.text((w / 2, y), "192.168.2.222", font=font(28, bold=True), fill=(24, 26, 30), anchor="mm")
+    # The shutter button, as in a camera app.
+    draw = ImageDraw.Draw(screen)
+    draw.ellipse([w / 2 - 58, h - 190, w / 2 + 58, h - 74], outline=(236, 238, 241), width=8)
+    draw.ellipse([w / 2 - 44, h - 176, w / 2 + 44, h - 88], fill=(236, 238, 241))
+    browser_chrome(screen, None, dark=True)
+    touch(screen, w / 2, h * 0.78, (t - 2.5) / 0.4)
+    return screen
+
+
+FORM_TITLE = "Surface knocks stop in Beat Saber"
+FORM_WHAT = "Table knocks work in the menu, but not once the game starts."
+
+
+def issue_form(report, title, what, pasted, pressed):
+    """A plain issue form with the fields of .github/ISSUE_TEMPLATE/bug.yml, at 2x. Returns the
+    full-height page and the y of the Report box and of the Create button."""
+    w = 2 * PHONE_CSS[0]
+    page = Image.new("RGBA", (w, 2600), PAGE_LIGHT + (255,))
+    draw = ImageDraw.Draw(page)
+    ink, dim, line = (22, 24, 28), (84, 91, 104), (213, 217, 224)
+    label, body, small = font(26, bold=True), font(26), font(22)
+    mono = ImageFont.truetype("/usr/share/fonts/noto/NotoSansMono-Regular.ttf", 20) \
+        if Path("/usr/share/fonts/noto/NotoSansMono-Regular.ttf").exists() else font(20)
+    x, y = 32, 2 * (BAR + URL_BAR) + 28
+    draw.text((x, y), "VioletTides / KnockThru", font=small, fill=dim)
+    y += 44
+    draw.text((x, y), "Something wrong", font=font(40, bold=True), fill=ink)
+    y += 76
+
+    def field(name, value, lines=1, monospace=False):
+        nonlocal y
+        draw.text((x, y), name, font=label, fill=ink)
+        y += 44
+        height = 22 + 38 * lines
+        draw.rounded_rectangle([x, y, w - x, y + height], 14, fill=(255, 255, 255), outline=line, width=2)
+        text_font = mono if monospace else body
+        for k, part in enumerate(value.split("\n")[:lines]):
+            draw.text((x + 18, y + 12 + 38 * k), part, font=text_font, fill=ink)
+        top = y
+        y += height + 30
+        return top
+
+    def wrap(text, width_px, text_font):
+        words, rows, row = text.split(), [], ""
+        for word in words:
+            test = (row + " " + word).strip()
+            if draw.textlength(test, font=text_font) > width_px and row:
+                rows.append(row)
+                row = word
+            else:
+                row = test
+        if row:
+            rows.append(row)
+        return "\n".join(rows)
+
+    field("Title", title)
+    field("What went wrong?", wrap(what, w - 2 * x - 36, body), lines=3)
+    field("KnockThru version", "0.2.0")
+    field("SteamVR version", "2.18.2")
+    field("Passthrough status", "off")
+    field("Last error KnockThru showed", "")
+    report_y = field("Report", report if pasted else "", lines=7, monospace=True)
+    button_y = y + 10
+    fill = tuple(round(c * (0.8 if pressed else 1)) for c in FORM_BLUE)
+    draw.rounded_rectangle([x, button_y, w - x, button_y + 92], 28, fill=fill)
+    draw.text((w / 2, button_y + 46), "Create", font=font(30, bold=True), fill=(245, 247, 250), anchor="mm")
+    return page.crop((0, 0, w, button_y + 92 + 300)), report_y, button_y + 46
+
+
+def report_phone(panel_dir):
+    """Returns phone(i, clicks) for walkthrough(): the phone's half of the report GIF."""
+    frames_dir = panel_dir / "report"
+    with tempfile.TemporaryDirectory() as tmp:
+        page_html = panel_dir / "readme-phone.html"
+        copied_html = Path(tmp) / "copied.html"
+        copied_html.write_text(page_html.read_text().replace(
+            '<p id="status" role="status"></p>', '<p id="status" role="status">Copied. Opening GitHub...</p>'))
+        view = PHONE_CSS[1] - BAR - URL_BAR
+        page = capture(page_html, Path(tmp) / "page.png", view)
+        copied = capture(copied_html, Path(tmp) / "copied.png", view)
+    # The Copy button is the only large run of the button blue.
+    pixels = page.load()
+    rows = [y for y in range(page.height) if pixels[page.width // 2, y] == FORM_BLUE]
+    copy_y = (rows[0] + rows[-1]) / 2 + 2 * (BAR + URL_BAR) if rows else 600
+    report = "KnockThru bug report, 2026-10-15 14:02:11\n\nKnockThru: 0.2.0\nSteamVR: 2.18.2\n" \
+             "Registered with SteamVR: yes\nStarts with SteamVR: yes\nCurrent app: steam.app.620980"
+    card = Image.open(panel_dir / "readme-report.png").convert("RGBA")
+    flat = Image.new("RGB", card.size, BACKGROUND)
+    flat.paste(card, mask=card)
+    qr = hide_qr(flat.crop(qr_box(flat)))  # as blurred as on the panel
+
+    def web(shot, host):
+        screen = Image.new("RGBA", (2 * PHONE_CSS[0], 2 * PHONE_CSS[1]), PAGE_LIGHT + (255,))
+        screen.paste(shot, (0, 2 * (BAR + URL_BAR)))
+        browser_chrome(screen, host)
+        return screen
+
+    def form_screen(t):
+        typed_title = FORM_TITLE[:round(len(FORM_TITLE) * clamp((t - 6.3) / 1.0))]
+        typed_what = FORM_WHAT[:round(len(FORM_WHAT) * clamp((t - 7.6) / 1.2))]
+        full, report_y, button_y = issue_form(report, typed_title, typed_what, t >= 10.1, 11.4 <= t < 11.7)
+        view_h = 2 * PHONE_CSS[1]
+        down = min(report_y - 2 * (BAR + URL_BAR) - 120, full.height - view_h)
+        end = full.height - view_h
+        scroll = down * ease_in_out((t - 9.0) / 0.7) + (end - down) * ease_in_out((t - 10.6) / 0.5)
+        screen = full.crop((0, round(scroll), full.width, round(scroll) + view_h))
+        if 10.1 <= t < 10.6:  # the pasted report flashes once
+            flash = Image.new("RGBA", screen.size, (0, 0, 0, 0))
+            y = report_y + 44 - scroll
+            ImageDraw.Draw(flash).rounded_rectangle([32, y, screen.width - 32, y + 22 + 38 * 7], 14,
+                                                     fill=FORM_BLUE + (round(60 * (1 - (t - 10.1) / 0.5)),))
+            screen.alpha_composite(flash)
+        browser_chrome(screen, "github.com")
+        w = screen.width
+        touch(screen, w * 0.5, 2 * (BAR + URL_BAR) + 200 - scroll, (t - 6.2) / 0.4)  # Title
+        touch(screen, w * 0.5, 2 * (BAR + URL_BAR) + 330 - scroll, (t - 7.5) / 0.4)  # What went wrong?
+        touch(screen, w * 0.5, report_y + 120 - scroll, (t - 9.9) / 0.4)
+        touch(screen, w * 0.5, button_y - scroll, (t - 11.4) / 0.4)
+        return screen
+
+    def screen_at(t):
+        if t < 2.8:
+            return camera_screen(qr, t)
+        if t < 5.5:
+            shot = web(copied if t >= 4.6 else page, "192.168.2.222")
+            touch(shot, shot.width / 2, copy_y, (t - 4.4) / 0.4)
+            if t < 3.2:  # the page slides up over the camera
+                under = camera_screen(qr, t)
+                rise = ease_out((t - 2.8) / 0.4)
+                under.alpha_composite(shot, (0, round(under.height * (1 - rise))))
+                return under
+            return shot
+        form = form_screen(t)
+        if t < 5.9:  # GitHub slides in from the right
+            under = web(copied, "192.168.2.222")
+            under.alpha_composite(form, (round(form.width * (1 - ease_in_out((t - 5.5) / 0.4))), 0))
+            return under
+        return form
+
+    phone_w = 260
+    bezel, radius = 12, 40
+    screen_w = phone_w - 2 * bezel
+    screen_h = round(screen_w * PHONE_CSS[1] / PHONE_CSS[0])
+    phone_h = screen_h + 2 * bezel
+    body = Image.new("RGBA", (phone_w, phone_h), (0, 0, 0, 0))
+    ImageDraw.Draw(body).rounded_rectangle([0, 0, phone_w - 1, phone_h - 1], radius, fill=(10, 11, 14, 255),
+                                           outline=(70, 74, 84, 255), width=2)
+    mask = Image.new("L", (screen_w, screen_h), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, screen_w - 1, screen_h - 1], radius - bezel, fill=255)
+    island = round(phone_w * 0.28)
+
+    def phone(i, clicks):
+        t = (i - clicks[1]) / FPS if len(clicks) > 1 else -1.0
+        screen = screen_at(max(t, -1.0)).convert("RGB").resize((screen_w, screen_h), Image.LANCZOS)
+        image = body.copy()
+        image.paste(screen, (bezel, bezel), mask)
+        ImageDraw.Draw(image).rounded_rectangle([(phone_w - island) / 2, bezel + 8, (phone_w + island) / 2, bezel + 28],
+                                                10, fill=(10, 11, 14))
+        return image
+
+    return phone
 
 
 # Knock kinds: three small loops side by side, on the shared timeline.
@@ -522,7 +776,10 @@ def main():
         hero(Path(tmp))
         walkthrough(Path(tmp) / "calibrate", "calibrate")
         walkthrough(Path(tmp) / "update", "update")
-        report_card(Path(tmp))
+        card = Image.open(Path(tmp) / "readme-report.png").convert("RGBA")
+        flat = Image.new("RGB", card.size, BACKGROUND)
+        flat.paste(card, mask=card)
+        walkthrough(Path(tmp) / "report", "report", phone=report_phone(Path(tmp)), qr=qr_box(flat))
     knock_kinds()
     timing()
 
