@@ -280,6 +280,30 @@ def hero(panel_dir):
     write_gif(frames, IMAGES / "hero.gif")
 
 
+# Calibrate: the panel's own calibration screens, from the Settings button to the saved banner.
+
+def calibrate(panel_dir):
+    width = 640
+    frames_dir = panel_dir / "calibrate"
+    cuts = {int(line) for line in (frames_dir / "cuts.txt").read_text().split()}
+    frames = []
+    for path in sorted(frames_dir.glob("*.png")):
+        image = Image.open(path).convert("RGBA").resize((width, round(770 * width / 1200)), Image.LANCZOS)
+        flat = Image.new("RGB", image.size, BACKGROUND)
+        flat.paste(image, mask=image)
+        frames.append(flat)
+    # Where the clock skips ahead, and at the loop back to the start, cross-fade instead of cutting.
+    fade = seconds(0.4)
+    for cut in sorted(cuts):
+        before = frames[cut - 1]
+        for k in range(fade):
+            frames[cut + k] = Image.blend(before, frames[cut + k], ease_in_out((k + 1) / (fade + 1)))
+    for k in range(fade):
+        i = len(frames) - fade + k
+        frames[i] = Image.blend(frames[i], frames[0], ease_in_out((k + 1) / fade))
+    write_gif(frames, IMAGES / "calibrate.gif")
+
+
 # Knock kinds: three small loops side by side, on the shared timeline.
 
 def knock_kinds():
@@ -420,6 +444,7 @@ def main():
         shutil.copy(Path(tmp) / "readme-off.png", IMAGES / "dashboard.png")
         print("Wrote images/dashboard.png")
         hero(Path(tmp))
+        calibrate(Path(tmp))
     knock_kinds()
     timing()
 
