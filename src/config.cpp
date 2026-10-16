@@ -1,5 +1,7 @@
 #include "config.hpp"
 
+#include "calibrator.hpp"
+
 #include <json.hpp>
 
 #include <algorithm>
@@ -250,6 +252,9 @@ void save_calibration(const Calibration& calibration) {
 
 void apply_calibration(const Calibration& calibration, DetectorConfig& detector) {
     auto copy = calibration;
+    // A file saved under an older, lower floor gets the current one.
+    for (const auto kind : {KnockKind::Together, KnockKind::Surface, KnockKind::Headset})
+        if (auto& entry = copy[kind]) entry->peak = std::max(entry->peak, Calibrator::floor(kind));
     const auto approach = [&](KnockKind kind, const KindCalibration& entry) {
         detector.min_approach[static_cast<int>(kind)] = entry.approach;
     };

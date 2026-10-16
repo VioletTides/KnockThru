@@ -60,7 +60,9 @@ double Calibrator::weakest() const {
     return *std::min_element(peaks_.begin(), peaks_.end());
 }
 
-double Calibrator::floor(KnockKind kind) { return kind == KnockKind::Surface ? 50.0 : 20.0; }
+double Calibrator::floor(KnockKind kind) {
+    return kind == KnockKind::Surface ? 50.0 : kind == KnockKind::Together ? 30.0 : 20.0;
+}
 
 double Calibrator::peak_threshold(KnockKind kind, const std::vector<double>& peaks) {
     if (peaks.empty()) throw std::logic_error("No knocks recorded");

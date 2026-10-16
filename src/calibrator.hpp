@@ -13,8 +13,9 @@ namespace knockthru {
 // thresholds for that kind:
 // - The spike threshold is 60 percent of the weakest knock's spike. Floors
 //   come from replaying tests/data: surface below 50 m/s^2 splits real
-//   doubles, and together or headset below 20 lets rebounds pass the
-//   fast_gap_s check and turn doubles into triples.
+//   doubles, and headset below 20 lets rebounds pass the fast_gap_s check
+//   and turn doubles into triples. Together below 30 lets the controllers
+//   bumping while you fit the straps form a double (the straps recording).
 // - The approach threshold is 55 percent of the second slowest recorded
 //   approach. Approach speed varies less than the spike between similar
 //   knocks, and slow movement falls below it.

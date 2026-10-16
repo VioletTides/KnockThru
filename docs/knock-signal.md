@@ -97,7 +97,7 @@ Approach speed also shows how hard a knock was more steadily than the spike. The
 
 Each calibrated knock kind gets two thresholds. Together and headset knocks have their own spike thresholds (`confirmed_peak` and `headset_knock_peak`), so calibrating one does not change the other.
 
-- The spike threshold is 60 percent of the weakest recorded spike, at least 50 m/s² for surface knocks and 20 for together and headset knocks.
+- The spike threshold is 60 percent of the weakest recorded spike, at least 50 m/s² for surface knocks, 30 for together knocks, and 20 for headset knocks. A calibration file saved under a lower floor loads with the current one. "Strap fitting" below explains the together floor.
 - The approach threshold (`min_approach`) is 55 percent of the second slowest recorded approach. An earlier build had a sensitivity slider from 30 to 80 percent. In the replays, anything stricter than 55 percent only lost real doubles. 30 percent matched 55 percent on surface and headset knocks and did a little better on together knocks (22 against 20 right in `mixed`), but it leaves less margin against movement that the recordings lack. The walkthrough uses 55 percent and has no slider.
 
 A sequence needs its fastest knock to reach the approach threshold. Two other ways of applying it failed on the recordings:
@@ -109,10 +109,21 @@ The test calibrates each kind on its own recording, applies it, and replays ever
 
 | Kind | Spike | Approach | Doubles | `mixed` right |
 |---|---|---|---|---|
-| together | 20 | 0.37 | 20 | 20 |
+| together | 31 | 0.24 | 19 | 21 |
 | surface | 56 | 0.56 | 18 | 22 |
 | headset | 20 | 0.20 | 22 | 22 |
 
-Every row has no actions in `play` and `noise` and no wrong actions in `mixed`. With default settings, the recordings give 20 together, 18 surface, and 22 headset doubles, and 22 right in `mixed`.
+Every row has no actions in `play`, `noise`, and `straps`, and no wrong actions in `mixed`. With default settings, the recordings give 20 together, 18 surface, and 22 headset doubles, and 22 right in `mixed`.
+
+## Strap fitting
+
+`tests/data/straps.csv.gz` is 21 s from a 40 minute `knockthru --detect` session in Into the Radius 2 on 2026-10-16. In it, the wearer fits the strap on each controller, and the controllers bump each other 19 times in 5 s. The rest of the session had 18.7 minutes of play with no actions.
+
+- The bumps count as together knocks at 20 to 45 m/s², with approach speeds of 0.16 to 0.64 m/s.
+- The wearer's together calibration had set the spike threshold to 20, from calibration knocks as soft as 20 m/s². At that threshold, the first two bumps (25 and 28 m/s², 287 ms apart) turned passthrough on.
+- The next bump came 594 ms after the second, too late to make the burst too long.
+- Approach speed and distance from the headset do not separate the bumps from real knocks. Real together knocks in `fast` sit 0.22 to 0.45 m from the headset, and the bumps sat 0.21 to 0.41 m away.
+
+The together floor is 30 m/s². At 30, `straps` gives no action with that calibration, and the calibrated replay above keeps 19 together doubles. The default `confirmed_peak` of 40 already gives no action in `straps`. Headset knocks keep the floor of 20.
 
 Background: [ST design tip DT0101](https://www.st.com/resource/en/design_tip/dt0101-setting-up-singletap-and-doubletap-recognition-with-sts-mems-accelerometers-stmicroelectronics.pdf) and [NXP AN3919](https://www.nxp.com/docs/en/application-note/AN3919.pdf) describe threshold, pulse width, quiet time, and latency windows for accelerometer double-tap detection.
