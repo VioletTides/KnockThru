@@ -24,6 +24,17 @@ curl -fsSL https://github.com/VioletTides/KnockThru/releases/latest/download/ins
 
 The script downloads the latest release and checks its SHA-256. It unpacks the release to `~/KnockThru`, adds KnockThru to your Steam library, and starts it. Run it again to reinstall. If SteamVR does not answer, go back to Gaming mode and launch KnockThru once from **Library → Non-Steam**.
 
+### Install with Frameloader
+
+[Frameloader](https://www.frameloader.com) runs on macOS, Windows, and Linux.
+
+1. Do step 1 of Setup.
+2. Pair Frameloader with the Frame, as its README describes.
+3. Drop the Linux ARM64 ZIP from the releases page onto Frameloader.
+4. Change **Library ID** to `KnockThru`, so a later reinstall replaces this copy. Then select **Install to Frame**.
+
+Frameloader starts KnockThru, which registers with SteamVR and turns on autostart.
+
 ## Knocks
 
 | Knock | What counts |
