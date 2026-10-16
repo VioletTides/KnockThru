@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 
 namespace knockthru {
 namespace {
@@ -46,35 +47,41 @@ void KnockDetector::push(Device device, double t, const Vec3& position, const Ve
     while (!history.empty() && history.front().t < t - kKeep) history.pop_front();
 }
 
+// History is sorted by time, so each lookup starts with a binary search.
+KnockDetector::History::const_iterator KnockDetector::first_from(const History& history, double t) {
+    return std::lower_bound(history.begin(), history.end(), t, [](const Sample& s, double t) { return s.t < t; });
+}
+
 const KnockDetector::Sample* KnockDetector::nearest(const History& history, double t) {
-    const Sample* best = nullptr;
-    for (const auto& sample : history)
-        if (!best || std::abs(sample.t - t) < std::abs(best->t - t)) best = &sample;
-    return best;
+    if (history.empty()) return nullptr;
+    const auto after = first_from(history, t);
+    if (after == history.begin()) return &*after;
+    const auto before = std::prev(after);
+    // The earlier sample wins a tie.
+    if (after == history.end() || std::abs(before->t - t) <= std::abs(after->t - t)) return &*before;
+    return &*after;
 }
 
 double KnockDetector::mean_speed(const History& history, double from, double to) {
     double sum = 0;
     int count = 0;
-    for (const auto& sample : history)
-        if (sample.t >= from && sample.t <= to) {
-            sum += norm(sample.velocity);
-            ++count;
-        }
+    for (auto it = first_from(history, from); it != history.end() && it->t <= to; ++it) {
+        sum += norm(it->velocity);
+        ++count;
+    }
     return count ? sum / count : 0;
 }
 
 double KnockDetector::max_speed(const History& history, double from, double to) {
     double fastest = 0;
-    for (const auto& sample : history)
-        if (sample.t >= from && sample.t <= to) fastest = std::max(fastest, norm(sample.velocity));
+    for (auto it = first_from(history, from); it != history.end() && it->t <= to; ++it)
+        fastest = std::max(fastest, norm(it->velocity));
     return fastest;
 }
 
 double KnockDetector::peak_in(const History& history, double from, double to) {
     double peak = 0;
-    for (const auto& sample : history)
-        if (sample.t >= from && sample.t <= to) peak = std::max(peak, sample.accel);
+    for (auto it = first_from(history, from); it != history.end() && it->t <= to; ++it) peak = std::max(peak, it->accel);
     return peak;
 }
 
@@ -164,8 +171,10 @@ std::optional<KnockEvent> KnockDetector::poll(double now) {
     for (const auto device : {Device::Left, Device::Right}) {
         const auto& history = history_[index(device)];
         auto& judged = judged_until_[index(device)];
-        for (std::size_t i = 0; i < history.size(); ++i) {
-            if (history[i].t <= judged || history[i].t > horizon) continue;
+        // Samples up to `judged` were judged by an earlier call.
+        auto i = static_cast<std::size_t>(std::upper_bound(history.begin(), history.end(), judged,
+            [](double t, const Sample& s) { return t < s.t; }) - history.begin());
+        for (; i < history.size() && history[i].t <= horizon; ++i) {
             if (auto knock = judge(device, i)) found.push_back(*knock);
             judged = history[i].t;
         }
