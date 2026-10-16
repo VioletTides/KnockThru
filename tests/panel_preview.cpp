@@ -434,7 +434,6 @@ int main(int argc, char** argv) {
     broken.room_view_error = "Turn on CEF Remote Debugging in the Frame's Developer settings.";
     broken.opaque = false;
     panel.render(broken).write_png(out / "panel-broken.png");
-    broken.dashboard_changed = true;
     broken.room_view_error = "A Steam update moved the Room View button. Update KnockThru in Settings.";
     panel.render(broken).write_png(out / "panel-dashboard-changed.png");
 

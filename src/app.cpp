@@ -238,6 +238,7 @@ private:
 
     std::future<RoomViewResult> room_view_job_;
     bool room_view_job_toggles_ = false;
+    bool dashboard_changed_ = false; // the last Room View read did not find the button, so the log has it
     std::future<void> tint_job_;
 
     std::atomic<bool> cancel_downloads_{false};
@@ -733,14 +734,14 @@ void App::collect_jobs(double t) {
             if (state_.room_view != result.on && panel_) panel_->invalidate();
             state_.room_view = result.on;
             state_.room_view_error.clear();
-            state_.dashboard_changed = false;
+            dashboard_changed_ = false;
             if (!result.message.empty()) show(result.message);
         } catch (const DashboardChanged& error) {
             // Logged once per change, with the SteamVR version, for bug reports.
-            if (!state_.dashboard_changed)
+            if (!dashboard_changed_)
                 log(std::string(error.what()) + ". SteamVR " + steamvr_version() +
                     ". A Steam update may have changed the dashboard.");
-            state_.dashboard_changed = true;
+            dashboard_changed_ = true;
             state_.room_view.reset();
             state_.room_view_error = "A Steam update moved the Room View button. Update KnockThru in Settings.";
             if (toggled) {

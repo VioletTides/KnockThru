@@ -61,7 +61,6 @@ struct UpdateNotice {
 struct PanelState {
     std::optional<bool> room_view;   // unknown until the first debug port read
     std::string room_view_error;     // why Room View cannot be read or changed
-    bool dashboard_changed = false;  // the Room View button is missing, likely after a Steam update
     std::optional<bool> opaque;      // Room View style, unknown without SteamVR
     bool busy = false;               // a Room View change is in progress
     bool paused = false;
