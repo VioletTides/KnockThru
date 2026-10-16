@@ -4,7 +4,10 @@
 #include "report_server.hpp"
 #include "update.hpp"
 
+#include <atomic>
 #include <chrono>
+#include <functional>
+#include <thread>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -189,6 +192,51 @@ int main() {
         const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
         ::close(fd);
         check(seconds < 2, "the report server stops within 2 s while a phone stalls: " + std::to_string(seconds) + " s");
+    }
+
+    {
+        // Canceling stops a running program, a download that hangs, and an install, quickly.
+        const auto timed = [](const std::function<void()>& body) {
+            const auto start = std::chrono::steady_clock::now();
+            body();
+            return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        };
+        std::atomic<bool> cancel{false};
+        std::thread canceler([&] { usleep(200000); cancel = true; });
+        int code = 0;
+        const double slept = timed([&] { code = run_program({"sleep", "30"}, &cancel); });
+        canceler.join();
+        check(code == -2 && slept < 1, "cancel stops a running program: " + std::to_string(slept) + " s");
+
+        // 10.255.255.1 never answers, so curl would wait out its 20 s timeout.
+        setenv("KNOCKTHRU_UPDATE_MANIFEST", "http://10.255.255.1/knockthru.framedrop.json", 1);
+        cancel = false;
+        std::thread canceler2([&] { usleep(300000); cancel = true; });
+        bool canceled = false;
+        const double fetched = timed([&] {
+            try {
+                fetch_latest_release(root / "work-cancel", &cancel);
+            } catch (const Canceled&) {
+                canceled = true;
+            } catch (const std::exception&) {
+            }
+        });
+        canceler2.join();
+        unsetenv("KNOCKTHRU_UPDATE_MANIFEST");
+        check(canceled && fetched < 2 && !fs::exists(root / "work-cancel"),
+            "cancel stops a hanging download and cleans up: " + std::to_string(fetched) + " s");
+
+        write(root / "install-cancel" / "knockthru", "old");
+        cancel = true;
+        bool install_canceled = false;
+        try {
+            install_release({"0.9.0", "http://10.255.255.1/knockthru-0.9.0-linux-arm64.zip", std::string(64, '0')},
+                root / "install-cancel", root / "work-cancel", &cancel);
+        } catch (const Canceled&) {
+            install_canceled = true;
+        }
+        check(install_canceled && read(root / "install-cancel" / "knockthru") == "old",
+            "a canceled install changes nothing");
     }
 
     check(run_program({"true"}) == 0 && run_program({"false"}) == 1, "run_program returns exit codes");

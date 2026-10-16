@@ -835,9 +835,17 @@ int run() {
     std::future<RoomViewResult> room_view_job;
     bool room_view_job_toggles = false;
     std::future<void> tint_job;
+    // Downloads stop when run() returns, so quitting SteamVR never waits on one. The
+    // futures below wait for their jobs when destroyed, and the guard after them runs
+    // first, because C++ destroys locals in reverse order.
+    std::atomic<bool> cancel_downloads{false};
     std::future<knockthru::Release> check_job;
     bool check_is_automatic = false; // the weekly check, which never shows errors
     std::future<void> install_job;
+    struct CancelOnExit {
+        std::atomic<bool>& flag;
+        ~CancelOnExit() { flag = true; }
+    } cancel_on_exit{cancel_downloads};
     std::optional<knockthru::Release> latest; // the newer release a check found
     const auto update_work = knockthru::user_directory() / "update";
     state.version = kVersion;
@@ -962,8 +970,8 @@ int run() {
                 save_app_state();
                 check_is_automatic = true;
                 log("Weekly update check");
-                check_job = std::async(std::launch::async, [update_work] {
-                    return knockthru::fetch_latest_release(update_work);
+                check_job = std::async(std::launch::async, [update_work, cancel = &cancel_downloads] {
+                    return knockthru::fetch_latest_release(update_work, cancel);
                 });
             }
             if (const auto now_stamp = config_stamp(); now_stamp != stamp) {
@@ -1052,16 +1060,16 @@ int run() {
                     if (check_job.valid() || install_job.valid()) break;
                     check_is_automatic = false;
                     state.update = {knockthru::UpdateView::Status::Checking, "", ""};
-                    check_job = std::async(std::launch::async, [update_work] {
-                        return knockthru::fetch_latest_release(update_work);
+                    check_job = std::async(std::launch::async, [update_work, cancel = &cancel_downloads] {
+                        return knockthru::fetch_latest_release(update_work, cancel);
                     });
                     break;
                 case PanelCommand::InstallUpdate:
                     if (!latest || check_job.valid() || install_job.valid()) break;
                     log("Installing KnockThru " + latest->version + " from " + latest->url);
                     state.update.status = knockthru::UpdateView::Status::Installing;
-                    install_job = std::async(std::launch::async, [release = *latest, update_work] {
-                        knockthru::install_release(release, install_directory(), update_work);
+                    install_job = std::async(std::launch::async, [release = *latest, update_work, cancel = &cancel_downloads] {
+                        knockthru::install_release(release, install_directory(), update_work, cancel);
                     });
                     break;
                 case PanelCommand::ShowReport: {

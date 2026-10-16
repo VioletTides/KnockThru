@@ -1,6 +1,8 @@
 #pragma once
 
+#include <atomic>
 #include <filesystem>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -30,9 +32,15 @@ Release parse_manifest(const std::string& text, bool allow_local = false);
 std::string sha256_file(const std::filesystem::path& path);
 std::string sha256(const std::string& data);
 
+// Thrown when a download or unpack stops because `cancel` was set.
+struct Canceled : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
 // Runs a program found on PATH, without a shell, and waits for it. Its output
-// goes to /dev/null. Returns the exit code, or -1 if it could not start.
-int run_program(const std::vector<std::string>& args);
+// goes to /dev/null. Returns the exit code, or -1 if it could not start. When
+// `cancel` becomes true, stops the program within about 50 ms and returns -2.
+int run_program(const std::vector<std::string>& args, const std::atomic<bool>* cancel = nullptr);
 
 // Starts a program in its own session and returns without waiting, so it
 // outlives this process. Throws if it could not start.
@@ -42,12 +50,14 @@ void start_detached(const std::vector<std::string>& args);
 // Throws a readable message on failure. The environment variable
 // KNOCKTHRU_UPDATE_MANIFEST replaces the GitHub URL, for testing a release
 // before it is published. A file:// manifest may then point at a file:// ZIP.
-Release fetch_latest_release(const std::filesystem::path& work);
+Release fetch_latest_release(const std::filesystem::path& work, const std::atomic<bool>* cancel = nullptr);
 
 // Downloads the release ZIP, checks its SHA-256, unpacks it, and replaces the
 // files in `install_directory`. `work` holds the download and is deleted after.
+// `cancel` stops the download and the unpack, which throw Canceled and change
+// nothing. The file swap after them is never canceled, so it never stops halfway.
 void install_release(const Release& release, const std::filesystem::path& install_directory,
-                     const std::filesystem::path& work);
+                     const std::filesystem::path& work, const std::atomic<bool>* cancel = nullptr);
 
 // Copies every file in `staging` into `install`, keeping the folder layout. Each
 // file is first written beside its target under a temporary name, then renamed

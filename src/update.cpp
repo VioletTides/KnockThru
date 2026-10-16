@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <csignal>
 #include <cstdlib>
 #include <cstdint>
 #include <fcntl.h>
@@ -136,10 +137,12 @@ int last_status(const fs::path& headers) {
 // Downloads `url` to `path` with curl, and turns failures into readable messages.
 // The HTTP status comes from the response headers, because curl's exit code for
 // an HTTP error differs between versions: 22 on Arch Linux's curl, 56 on the Frame's.
-void download(const std::string& url, const fs::path& path, int seconds, const std::string& missing) {
+void download(const std::string& url, const fs::path& path, int seconds, const std::string& missing,
+              const std::atomic<bool>* cancel) {
     const auto headers = path.string() + ".headers";
     const int code = run_program({"curl", "--silent", "--location", "--max-time", std::to_string(seconds),
-                                  "--dump-header", headers, "--output", path.string(), url});
+                                  "--dump-header", headers, "--output", path.string(), url}, cancel);
+    if (code == -2) throw Canceled("Download canceled");
     const int status = last_status(headers);
     std::error_code ignored;
     fs::remove(headers, ignored);
@@ -203,7 +206,7 @@ std::string sha256(const std::string& data) {
 
 std::string sha256_file(const fs::path& path) { return sha256(read_file(path)); }
 
-int run_program(const std::vector<std::string>& args) {
+int run_program(const std::vector<std::string>& args, const std::atomic<bool>* cancel) {
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
@@ -215,8 +218,23 @@ int run_program(const std::vector<std::string>& args) {
     posix_spawn_file_actions_destroy(&actions);
     if (error != 0) return -1;
     int status = 0;
-    while (waitpid(pid, &status, 0) < 0)
-        if (errno != EINTR) return -1;
+    if (cancel) {
+        // Polls instead of blocking, so a cancel can stop the program.
+        for (;;) {
+            const pid_t done = ::waitpid(pid, &status, WNOHANG);
+            if (done == pid) break;
+            if (done < 0 && errno != EINTR) return -1;
+            if (*cancel) {
+                ::kill(pid, SIGTERM);
+                while (::waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+                return -2;
+            }
+            ::usleep(50000);
+        }
+    } else {
+        while (::waitpid(pid, &status, 0) < 0)
+            if (errno != EINTR) return -1;
+    }
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
@@ -243,14 +261,14 @@ void start_detached(const std::vector<std::string>& args) {
     // The child runs on after this process exits. Its exit status is never read.
 }
 
-Release fetch_latest_release(const fs::path& work) {
+Release fetch_latest_release(const fs::path& work, const std::atomic<bool>* cancel) {
     fs::remove_all(work);
     fs::create_directories(work);
     const auto path = work / "knockthru.framedrop.json";
     const char* override_url = std::getenv("KNOCKTHRU_UPDATE_MANIFEST");
     const std::string url = override_url && *override_url ? override_url : kLatestManifestUrl;
     try {
-        download(url, path, 20, "No KnockThru release is published on GitHub yet");
+        download(url, path, 20, "No KnockThru release is published on GitHub yet", cancel);
         const auto release = parse_manifest(read_file(path), url.rfind("file://", 0) == 0);
         fs::remove_all(work);
         return release;
@@ -261,17 +279,19 @@ Release fetch_latest_release(const fs::path& work) {
     }
 }
 
-void install_release(const Release& release, const fs::path& install_directory, const fs::path& work) {
+void install_release(const Release& release, const fs::path& install_directory, const fs::path& work,
+                     const std::atomic<bool>* cancel) {
     fs::remove_all(work);
     fs::create_directories(work);
     try {
         const auto zip = work / "release.zip";
-        download(release.url, zip, 180, "The release ZIP is missing on GitHub");
+        download(release.url, zip, 180, "The release ZIP is missing on GitHub", cancel);
         if (sha256_file(zip) != release.sha256)
             throw std::runtime_error("The downloaded ZIP does not match its SHA-256. Nothing changed.");
         const auto staging = work / "files";
         fs::create_directories(staging);
-        const int code = run_program({"unzip", "-q", "-o", zip.string(), "-d", staging.string()});
+        const int code = run_program({"unzip", "-q", "-o", zip.string(), "-d", staging.string()}, cancel);
+        if (code == -2) throw Canceled("Unpack canceled");
         if (code == -1 || code == 127) throw std::runtime_error("unzip is missing on this system");
         if (code != 0) throw std::runtime_error("Cannot unpack the release ZIP, unzip exit code " + std::to_string(code));
         replace_files(staging, install_directory);
