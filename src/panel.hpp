@@ -60,6 +60,7 @@ enum class PanelCommand {
     Calibrate,          // starts recording a kind, or records it again
     CancelCalibration,
     SaveCalibration,
+    Navigate,           // a button that only changes the screen, such as Back
 };
 
 struct PanelClick {

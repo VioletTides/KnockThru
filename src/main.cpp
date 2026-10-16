@@ -4,6 +4,7 @@
 #include "overlay_texture.hpp"
 #include "panel.hpp"
 #include "room_view.hpp"
+#include "sound.hpp"
 #include "style.hpp"
 
 #include <json.hpp>
@@ -622,6 +623,11 @@ int run() {
         stamp = config_stamp();
         if (!calibrator) detector = knockthru::KnockDetector(config.detector);
     };
+    // SteamVR's dashboard click. Steam already clicks when the Room View button
+    // is pressed, so a double knock and the panel's Room View button stay silent.
+    const auto play_click = [&] {
+        if (config.sounds) knockthru::play_click();
+    };
     const auto read_room_view = [&] {
         if (room_view_job.valid()) return;
         const knockthru::RoomView room_view(config.debug_port);
@@ -680,6 +686,8 @@ int run() {
 
         if (t >= next_slow_check) {
             next_slow_check = t + 2;
+            // Keeps the click stream open while the panel shows, so a press clicks at once.
+            if (config.sounds && panel && panel->visible()) knockthru::prepare_click();
             // Restyles the bar icon while the dashboard is open, in case the bar page
             // reloaded. If this fails, the icon stays undimmed. The classic icon has no tint.
             if (vr::VROverlay()->IsDashboardVisible() &&
@@ -725,10 +733,12 @@ int run() {
             bool shown = false;
             for (const auto& click : panel->poll(shown)) {
                 using knockthru::PanelCommand;
+                if (click.command != PanelCommand::RoomView) play_click();
                 const auto kind_name = std::string(knockthru::to_string(click.kind));
                 switch (click.command) {
                 case PanelCommand::RoomView: toggle_room_view(""); break;
                 case PanelCommand::Style: toggle_style(""); break;
+                case PanelCommand::Navigate: break;
                 case PanelCommand::Pause:
                     if (save([&] { knockthru::save_paused(!config.paused); }))
                         show(config.paused ? "KnockThru off" : "KnockThru on");
@@ -790,6 +800,7 @@ int run() {
                 }
             }
             if (shown) {
+                if (config.sounds) knockthru::prepare_click();
                 read_room_view();
                 try {
                     state.opaque = knockthru::read_style() == knockthru::RoomViewStyle::Opaque;
@@ -802,6 +813,8 @@ int run() {
         for (const auto& sample : poses.take()) detector.push(sample.device, sample.t, sample.position, sample.velocity);
         const auto knock_event = detector.poll(t);
         const auto knocks = detector.take_knocks();
+        // Opens the click stream on the first knock, so it is ready if a triple knock follows.
+        if (config.sounds && !config.paused && !knocks.empty()) knockthru::prepare_click();
 
         if (calibrator && calibration && calibration->phase == Phase::Recording) {
             for (const auto& knock : knocks) calibrator->hear(knock);
@@ -857,7 +870,9 @@ int run() {
             } else if (config.blocked_apps.count(state.app_key)) {
                 log("Ignored" + what + ": knocks are off in " + state.app_key);
             } else if (knock_event->count == 3) {
-                haptics.buzz(toggle_style(what) ? 2 : 3, t);
+                const bool changed = toggle_style(what);
+                if (changed) play_click();
+                haptics.buzz(changed ? 2 : 3, t);
             } else if (toggle_room_view(what)) {
                 // Buzz now, because the switch can take a second. A failure buzzes 3 times later.
                 haptics.buzz(1, t);

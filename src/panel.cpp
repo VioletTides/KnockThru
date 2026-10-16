@@ -518,7 +518,7 @@ std::optional<PanelClick> Panel::click(float x, float y) {
             screen_ = *target.go_to;
             if (target.learn) learn_kind_ = *target.learn;
         }
-        return target.click;
+        return target.click ? target.click : PanelClick{PanelCommand::Navigate};
     }
     return std::nullopt;
 }

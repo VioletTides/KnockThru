@@ -63,6 +63,9 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
         } else if (key == "classic_bar_icon") {
             if (!value.is_boolean()) fail("classic_bar_icon must be true or false");
             config.classic_bar_icon = value.get<bool>();
+        } else if (key == "sounds") {
+            if (!value.is_boolean()) fail("sounds must be true or false");
+            config.sounds = value.get<bool>();
         } else if (key == "debug_port") {
             if (!value.is_number_integer()) fail("debug_port must be a whole number");
             config.debug_port = value.get<int>();
