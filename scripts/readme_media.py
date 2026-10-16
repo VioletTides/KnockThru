@@ -137,41 +137,41 @@ def keyframes(t, keys):
     return keys[-1][1]
 
 
-def knock_times(taps, start=FIRST_KNOCK):
-    return [start + i * KNOCK_GAP for i in range(taps)]
+def knock_times(count, start=FIRST_KNOCK):
+    return [start + i * KNOCK_GAP for i in range(count)]
 
 
-def knock_motion(t, taps, start=FIRST_KNOCK):
+def knock_motion(t, count, start=FIRST_KNOCK):
     """Returns how far the controller is from the contact point, from 0 (touching) to 1 (rest).
 
     Each knock pulls back a little, speeds up into the contact, and bounces off
     with a slowing rebound. After the last knock it settles back to rest.
     """
-    hits = knock_times(taps, start)
-    keys = [(hits[0] - 0.3, 1.0, ease_in_out), (hits[0] - 0.13, 1.18, ease_in_out), (hits[0], 0.0, ease_in)]
-    for hit in hits[1:]:
-        keys += [(hit - KNOCK_GAP / 2, 0.55, ease_out), (hit, 0.0, ease_in)]
-    keys.append((hits[-1] + 0.35, 1.0, ease_out_back))
+    contacts = knock_times(count, start)
+    keys = [(contacts[0] - 0.3, 1.0, ease_in_out), (contacts[0] - 0.13, 1.18, ease_in_out), (contacts[0], 0.0, ease_in)]
+    for contact in contacts[1:]:
+        keys += [(contact - KNOCK_GAP / 2, 0.55, ease_out), (contact, 0.0, ease_in)]
+    keys.append((contacts[-1] + 0.35, 1.0, ease_out_back))
     return keyframes(t, keys)
 
 
-def impact(t, taps, start=FIRST_KNOCK):
-    """Returns how far the latest impact has played, from 0 (just hit) to 1 (faded), or None."""
-    past = [hit for hit in knock_times(taps, start) if hit <= t < hit + 0.3]
+def impact(t, count, start=FIRST_KNOCK):
+    """Returns how far the latest impact has played, from 0 (the moment of contact) to 1 (faded), or None."""
+    past = [contact for contact in knock_times(count, start) if contact <= t < contact + 0.3]
     return (t - past[-1]) / 0.3 if past else None
 
 
 def pass_at(t):
     """Returns (knocks, time within the pass, pass length) for a time in the loop."""
-    for taps, length in PASSES:
+    for count, length in PASSES:
         if t < length:
-            return taps, t, length
+            return count, t, length
         t -= length
     return PASSES[-1][0], PASSES[-1][1], PASSES[-1][1]
 
 
-def action_time(taps):
-    return knock_times(taps)[-1] + WAIT
+def action_time(count):
+    return knock_times(count)[-1] + WAIT
 
 
 def pass_fade(lt, length, edge=0.25):
@@ -226,13 +226,13 @@ def hero(panel_dir):
         panels[name] = flat
     big, small = font(34, bold=True), font(22)
 
-    def frame(t, state, after, taps, buzzes, before=None):
+    def frame(t, state, after, count, buzzes, before=None):
         """One frame of a scene. state is (panel, caption, detail). after is the state once the knocks act.
 
         At the action the panel cross-fades. The old caption fades out, then the new one rises in.
         """
-        action = knock_times(taps)[-1] + WAIT if taps else None
-        fade = ease_in_out((t - action) / 0.3) if taps else 0.0
+        action = knock_times(count)[-1] + WAIT if count else None
+        fade = ease_in_out((t - action) / 0.3) if count else 0.0
         image = Image.new("RGB", (width, caption_height + panel_height), BACKGROUND)
         panel = panels[state[0]] if fade == 0 else Image.blend(panels[state[0]], panels[after[0]], fade)
         image.paste(panel, (0, caption_height))
@@ -247,19 +247,19 @@ def hero(panel_dir):
         rise = 8 * (1 - ease_out(shown)) if rising else 0
         draw.text((40, 34 + rise), caption[1], font=big, fill=mix(TEXT, shown))
         draw.text((40, 86 + rise), caption[2], font=small, fill=mix(DIM, shown))
-        gap = knock_motion(t, taps) if taps else 1.0
-        played = impact(t, taps) if taps else None
-        shake = buzz(t, action, buzzes) if taps else 0.0
+        gap = knock_motion(t, count) if count else 1.0
+        played = impact(t, count) if count else None
+        shake = buzz(t, action, buzzes) if count else 0.0
         knock_pair(image, draw, width - 150, 50, 120, gap, played, 26, scale=0.8, shake=shake)
         return image
 
     frames = []
 
-    def scene(state, duration, after=None, taps=0, buzzes=0, before=None):
-        frames.extend(frame(i / FPS, state, after or state, taps, buzzes, before) for i in range(seconds(duration)))
+    def scene(state, duration, after=None, count=0, buzzes=0, before=None):
+        frames.extend(frame(i / FPS, state, after or state, count, buzzes, before) for i in range(seconds(duration)))
 
     off = ("off", "You're in VR", "Passthrough is off.")
-    knock_on = ("off", "Knock twice", "Tap your controllers together.")
+    knock_on = ("off", "Knock twice", "Knock your controllers together.")
     on = ("on", "Your room appears", "Passthrough on, see-through style.")
     knock_style = ("on", "Knock three times", "Switch the style.")
     opaque = ("opaque", "Only the room", "Opaque style hides the game.")
@@ -267,8 +267,8 @@ def hero(panel_dir):
     see_through = ("on", "See-through again", "Passthrough on, see-through style.")
     knock_off = ("on", "Knock twice", "Back to the game.")
 
-    def knock_scene(before, state, after, taps, buzzes, hold):
-        scene(state, knock_times(taps)[-1] + WAIT + hold, after, taps, buzzes, before)
+    def knock_scene(before, state, after, count, buzzes, hold):
+        scene(state, knock_times(count)[-1] + WAIT + hold, after, count, buzzes, before)
 
     scene(off, 1.0)
     knock_scene(off, knock_on, on, 2, 1, 1.8)
@@ -288,18 +288,18 @@ def knock_kinds():
     titles = {2: "Knock twice: Room View turns on or off", 3: "Knock three times: the style switches"}
     frames = []
     for i in range(seconds(LOOP)):
-        taps, t, length = pass_at(i / FPS)
+        count, t, length = pass_at(i / FPS)
         image = Image.new("RGB", (cell * 3, height + header), BACKGROUND)
         draw = ImageDraw.Draw(image)
         shown = pass_fade(t, length)
-        w = draw.textlength(titles[taps], font=title)
-        draw.text(((cell * 3 - w) / 2, 14 + 6 * (1 - shown)), titles[taps], font=title, fill=mix(TEXT, shown))
+        w = draw.textlength(titles[count], font=title)
+        draw.text(((cell * 3 - w) / 2, 14 + 6 * (1 - shown)), titles[count], font=title, fill=mix(TEXT, shown))
 
         cards = Image.new("RGB", (cell * 3, height), BACKGROUND)
         draw = ImageDraw.Draw(cards)
         for c in range(3):
             draw.rounded_rectangle([c * cell + 10, 10, c * cell + cell - 10, height - 10], radius=18, fill=SURFACE)
-        gap, played, shake = knock_motion(t, taps), impact(t, taps), buzz(t, action_time(taps), taps - 1)
+        gap, played, shake = knock_motion(t, count), impact(t, count), buzz(t, action_time(count), count - 1)
 
         # Controllers together.
         knock_pair(cards, draw, cell // 2, 95, 150, gap, played, 30, shake=shake, base=SURFACE)
@@ -311,7 +311,7 @@ def knock_kinds():
               angle=round(165 - 12 * gap))
         draw.rectangle([cx - 130, table_y, cx + 130, table_y + 16], fill=TABLE)
 
-        # The left controller taps the left side of the headset.
+        # The left controller count the left side of the headset.
         cx, cy, hw, h = 2 * cell + cell // 2, 110, 160, 130
         hx = cx + 70  # headset center
         edge = hx - hw / 2
@@ -320,7 +320,7 @@ def knock_kinds():
         place(cards, "controller-left", edge - head_radius(h) * 0.95 - 30 * gap + shake, cy, h,
               angle=round(-30 - 8 * gap))
 
-        for c, text in enumerate(("Controllers together", "Controller on a surface", "Tap on the headset")):
+        for c, text in enumerate(("Controllers together", "Controller on a surface", "Knock on the headset")):
             w = draw.textlength(text, font=label)
             draw.text((c * cell + (cell - w) / 2, 248), text, font=label, fill=TEXT)
         image.paste(cards, (0, header))
@@ -341,10 +341,10 @@ def timing():
     def x_at(t):
         return left + (right - left) * t / span
 
-    def strip(now, taps):
-        knocks = knock_times(taps)
-        action = action_time(taps)
-        next_knock, done, buzzed = words[taps]
+    def strip(now, count):
+        knocks = knock_times(count)
+        action = action_time(count)
+        next_knock, done, buzzed = words[count]
         image = Image.new("RGB", (width, height), BACKGROUND)
         draw = ImageDraw.Draw(image)
         for k in range(round(span * 10) + 1):  # a tick every 0.1 s
@@ -385,7 +385,7 @@ def timing():
             shown = ease_out((now - action) / 0.3)
             slide = 12 * (1 - shown)
             draw.text((x + 26 - slide, axis_y - 44), done, font=bold, fill=mix(ACCENT, shown), anchor="lm")
-            draw.text((x + 26 - slide + buzz(now, action, taps - 1) * 1.5, axis_y - 14), buzzed,
+            draw.text((x + 26 - slide + buzz(now, action, count - 1) * 1.5, axis_y - 14), buzzed,
                       font=small, fill=mix(DIM, shown), anchor="lm")
 
         # Playhead: a light line with a small marker on top, until the action.
@@ -398,8 +398,8 @@ def timing():
     frames = []
     empty = strip(0.0, 2)
     for i in range(seconds(LOOP)):
-        taps, now, length = pass_at(i / FPS)
-        image = strip(now, taps)
+        count, now, length = pass_at(i / FPS)
+        image = strip(now, count)
         if now > length - 0.3:  # each pass fades to an empty strip before the next
             image = Image.blend(image, empty, ease_in_out((now - (length - 0.3)) / 0.3))
         frames.append(image)
