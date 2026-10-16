@@ -22,6 +22,7 @@ namespace {
 namespace fs = std::filesystem;
 
 constexpr const char* kClick = "deck_ui_misc_10.wav";
+constexpr float kGain = 0.25f;
 
 // SteamVR's copy of the click, or Steam's copy of the same file.
 fs::path click_file() {
@@ -66,6 +67,13 @@ std::optional<Clip> load_clip(const fs::path& path) {
         at += 8 + size + (size & 1);
     }
     if (!pcm16 || clip.samples.empty()) return {};
+    // Steam's UI plays its sounds at a quarter of full gain on the Frame.
+    for (size_t at = 0; at + 2 <= clip.samples.size(); at += 2) {
+        int16_t sample;
+        std::memcpy(&sample, clip.samples.data() + at, 2);
+        sample = static_cast<int16_t>(sample * kGain);
+        std::memcpy(clip.samples.data() + at, &sample, 2);
+    }
     return clip;
 }
 
