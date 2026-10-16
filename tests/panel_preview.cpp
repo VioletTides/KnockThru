@@ -334,7 +334,7 @@ void readme_report(const std::filesystem::path& dir) {
     rec.click();
     rec.play(state, 0.3);
     rec.aim(rest.first, rest.second); // out of the way while the phone works
-    rec.play(state, 14.0);
+    rec.play(state, 16.0);
     rec.aim(951, 627); // Done
     rec.play(state, 1.1);
     rec.click();

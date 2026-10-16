@@ -180,13 +180,13 @@ scripts/build-arm64.sh
 node scripts/package.mjs --build-dir build-arm64 --version 0.1.0
 ```
 
-README images (needs Pillow, ffmpeg, and Chromium, after the host build):
+README images (needs Pillow, numpy, ffmpeg, and Chromium, after the host build):
 
 ```sh
 python3 scripts/readme_media.py
 ```
 
-The controller and headset sprites in `images/cad/` come from Valve's CAD files. To render them again, download the STEP files from [Valve's Steam Frame repository](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) into one folder, then run this (needs cadquery and opencv-python, and takes about 2 minutes):
+The controller and headset sprites in `images/cad/` come from Valve's CAD files. To render them again, download the STEP files from [Valve's Steam Frame repository](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) into one folder, then run this (needs cadquery and opencv-python, and takes about 12 minutes):
 
 ```sh
 python3 scripts/cad_sprites.py <CAD folder>

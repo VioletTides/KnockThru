@@ -3,7 +3,7 @@
 
 Usage: python3 scripts/readme_media.py [--build-dir build]
 
-Needs Pillow, ffmpeg, Chromium, and a host build with the panel_preview target.
+Needs Pillow, numpy, ffmpeg, Chromium, and a host build with the panel_preview target.
 """
 import argparse
 import math
@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -631,34 +632,51 @@ def report_phone(panel_dir):
     return phone
 
 
-# The report GIF: the panel's report card, then the headset taken off, seen from the face side,
-# with the card in both lenses. The phone comes up to a lens to scan the code, then goes
-# through the phone page and the issue form beside it. Times are seconds after the Report click.
-TAKE_OFF = (0.8, 1.6)       # the panel zooms out into the left lens
-PHONE_TO_LENS = (1.6, 2.4)  # the phone moves over the left lens
-PHONE_BACK = (4.2, 4.8)     # and back beside the headset once the link opens
-STORY_START = 1.4           # the phone story's time 0, so its link tap lands while at the lens
-PUT_ON = (13.4, 14.2)       # the view zooms back into the panel
+# The report GIF: the panel's report card, then the headset taken off and turned around, with
+# the card in both lenses. The phone comes up to a lens to scan the code, then goes through the
+# phone page and the issue form beside it. Times are seconds after the Report click.
+TAKE_OFF = (0.8, 1.3)       # the panel shrinks away and the headset appears, front first
+TURN = (1.3, 2.5)           # the headset turns to show its lenses
+PHONE_TO_LENS = (2.6, 3.4)  # the phone moves over the left lens
+STORY_START = 2.9           # the phone story's time 0, so its link tap lands while at the lens
+PHONE_BACK = (5.7, 6.3)     # the phone goes back beside the headset once the link opens
+PUT_ON = (15.0, 15.8)       # the view zooms into the left lens and back to the panel
+LENS = (20, 24, 32)         # the lens glass color in images/cad/headset-turn/, from cad_sprites.py
 
 
-def lens_holes(sprite):
-    """The two lens holes in headset-back.png: the transparent regions the body encloses, as
-    (center x, center y, radius), left first."""
-    alpha = sprite.getchannel("A").point(lambda a: 255 if a < 128 else 0)
-    holes = []
-    seen = Image.new("L", alpha.size, 0)
-    w, h = alpha.size
-    for y in range(h // 4, 3 * h // 4, 8):  # scan the middle band for enclosed openings
-        for x in range(0, w, 8):
-            if alpha.getpixel((x, y)) and not seen.getpixel((x, y)):
-                region = alpha.copy()
-                ImageDraw.floodfill(region, (x, y), 128)
-                mask = region.point(lambda v: 255 if v == 128 else 0)
-                seen.paste(255, mask=mask)
-                left, top, right, bottom = mask.getbbox()
-                if left > 0 and top > 0 and right < w and bottom < h:  # enclosed, not the outside
-                    holes.append(((left + right) / 2, (top + bottom) / 2, (right - left) / 2))
-    return sorted(holes)[:2]
+def lens_regions(sprite):
+    """The visible lens glass in a turn frame, as one (mask, box) per lens, left first."""
+    pixels = np.asarray(sprite)
+    glass = (np.abs(pixels[..., :3].astype(int) - LENS).sum(-1) < 40) & (pixels[..., 3] > 128)
+    columns = np.nonzero(glass.any(0))[0]
+    if not len(columns):
+        return []
+    # Lenses are separate runs of columns. Two runs when both show, one when only one does.
+    splits = np.nonzero(np.diff(columns) > 2)[0]
+    runs = np.split(columns, splits + 1)
+    regions = []
+    for run in runs:
+        part = np.zeros_like(glass)
+        part[:, run[0]:run[-1] + 1] = glass[:, run[0]:run[-1] + 1]
+        rows = np.nonzero(part.any(1))[0]
+        regions.append((Image.fromarray((part * 255).astype(np.uint8)), (run[0], rows[0], run[-1] + 1, rows[-1] + 1)))
+    return regions
+
+
+def headset_frame(sprite, content, size):
+    """A turn frame with content shown in each visible lens. Each lens shows the whole content,
+    squeezed sideways as the lens turns away."""
+    image = Image.new("RGB", sprite.size, BACKGROUND)
+    image.paste(sprite, (0, 0), sprite)
+    full_width = None
+    for mask, (left, top, right, bottom) in lens_regions(sprite):
+        height = bottom - top
+        width = right - left
+        shown = content.resize((max(1, width), max(1, round(height * content.height / content.width))), Image.LANCZOS)
+        screen = Image.new("RGB", sprite.size, (8, 9, 11))
+        screen.paste(shown, (left, round((top + bottom) / 2 - shown.height / 2)))
+        image.paste(screen, (0, 0), mask)
+    return image.resize(size, Image.LANCZOS)
 
 
 def report_gif(panel_dir):
@@ -675,71 +693,63 @@ def report_gif(panel_dir):
     add_pointer(frames, pointer, clicks, scale)  # before the lenses, so it shows inside them
 
     phone = report_phone(panel_dir)
-    sprite = Image.open(IMAGES / "cad" / "headset-back.png").convert("RGBA")
-    holes = lens_holes(sprite)
+    turn = [Image.open(path).convert("RGBA") for path in sorted((IMAGES / "cad" / "headset-turn").glob("*.png"))]
     area_w, area_h = width, frames[0].height
-    head_w = 500
-    k = head_w / sprite.width  # sprite pixels to area pixels at rest
-    head_h = sprite.height * k
-    head_x, head_y = (area_w - head_w) / 2, (area_h - head_h) / 2 + 22  # below the caption
-    lens_c = [(head_x + x * k, head_y + y * k) for x, y, _ in holes]
-    lens_r = holes[0][2] * k * 0.9  # the screen sits inside the hole, behind the gap
-    zoom_max = math.hypot(area_w, area_h) / 2 / lens_r * 1.04  # one lens covers the whole area
+    k = min(520 / turn[0].width, (area_h - 70) / turn[0].height)
+    head_size = (round(turn[0].width * k), round(turn[0].height * k))
+    head_at = ((area_w - head_size[0]) // 2, (area_h - head_size[1]) // 2 + 22)  # below the caption
+    lens_box = lens_regions(turn[-1])[0][1]
+    lens_center = (head_at[0] + (lens_box[0] + lens_box[2]) / 2 * k, head_at[1] + (lens_box[1] + lens_box[3]) / 2 * k)
+    lens_size = (lens_box[2] - lens_box[0]) * k
     caption = font(22, bold=True)
 
-    def headset_view(content, e):
-        """The headset from the face side, zoomed out by e (0: the left lens fills the area, 1: at rest)."""
-        z = zoom_max + (1 - zoom_max) * e
-        ax = area_w / 2 + (lens_c[0][0] - area_w / 2) * e
-        ay = area_h / 2 + (lens_c[0][1] - area_h / 2) * e
-        place = lambda x, y: (ax + z * (x - lens_c[0][0]), ay + z * (y - lens_c[0][1]))
+    def left_side(t, panel):
+        take_off = ease_in_out((t - TAKE_OFF[0]) / (TAKE_OFF[1] - TAKE_OFF[0]))
+        if take_off <= 0:
+            return panel
+        put_on = ease_in_out((t - PUT_ON[0]) / (PUT_ON[1] - PUT_ON[0]))
+        angle = ease_in_out((t - TURN[0]) / (TURN[1] - TURN[0]))
+        sprite = turn[round(angle * (len(turn) - 1))]
         view = Image.new("RGB", (area_w, area_h), BACKGROUND)
-        shown = content.resize((max(1, round(area_w * z / zoom_max)), max(1, round(area_h * z / zoom_max))),
-                               Image.LANCZOS)
-        r = lens_r * z
-        for cx, cy in lens_c:
-            px, py = place(cx, cy)
-            lens = Image.new("RGB", (round(2 * r), round(2 * r)), (8, 9, 11))
-            lens.paste(shown, (round(r - shown.width / 2), round(r - shown.height / 2)))
-            mask = Image.new("L", lens.size, 0)
-            ImageDraw.Draw(mask).ellipse([0, 0, lens.width - 1, lens.height - 1], fill=255)
-            view.paste(lens, (round(px - r), round(py - r)), mask)
-        hx, hy = place(head_x, head_y)
-        size = (round(sprite.width * k * z), round(sprite.height * k * z))
-        # Crop before scaling up, so a deep zoom stays cheap.
-        left, top = max(0.0, -hx) / (k * z), max(0.0, -hy) / (k * z)
-        right = min(sprite.width, (area_w - hx) / (k * z))
-        bottom = min(sprite.height, (area_h - hy) / (k * z))
-        if right > left and bottom > top:
-            piece = sprite.crop((math.floor(left), math.floor(top), math.ceil(right), math.ceil(bottom)))
-            piece = piece.resize((round(piece.width * k * z), round(piece.height * k * z)), Image.LANCZOS)
-            view.paste(piece, (round(hx + math.floor(left) * k * z), round(hy + math.floor(top) * k * z)), piece)
+        grow = 1.12 - 0.12 * take_off  # the headset settles into place as it appears
+        size = (round(head_size[0] * grow), round(head_size[1] * grow))
+        head = headset_frame(sprite, panel, size)
+        view.paste(head, (round(area_w / 2 - size[0] / 2), round(head_at[1] + head_size[1] / 2 - size[1] / 2)))
+        draw = ImageDraw.Draw(view)
+        shown = ease_in_out((t - TURN[1] + 0.2) / 0.4) * clamp(1 - (t - PUT_ON[0]) / 0.3)
+        draw.text((area_w / 2, 30 + 6 * (1 - shown)), "Take off the headset. Scan either lens with your phone.",
+                  font=caption, fill=mix(TEXT, shown), anchor="mm")
+        if take_off < 1:  # the panel shrinks away as the headset comes off
+            small = panel.resize((round(area_w * (1 - 0.4 * take_off)), round(area_h * (1 - 0.4 * take_off))), Image.LANCZOS)
+            under = Image.new("RGB", (area_w, area_h), BACKGROUND)
+            under.paste(small, ((area_w - small.width) // 2, (area_h - small.height) // 2))
+            view = Image.blend(under, view, take_off)
+        if put_on > 0:  # zoom into the left lens, and through it back to the panel
+            zoom = 1 + (area_w / lens_size * 1.3 - 1) * put_on
+            cx = lens_center[0] + (area_w / 2 - lens_center[0]) * put_on
+            cy = lens_center[1] + (area_h / 2 - lens_center[1]) * put_on
+            box = (lens_center[0] - cx / zoom, lens_center[1] - cy / zoom,
+                   lens_center[0] + (area_w - cx) / zoom, lens_center[1] + (area_h - cy) / zoom)
+            view = view.resize((area_w, area_h), Image.LANCZOS, box=box)
+            view = Image.blend(view, panel, ease_in_out((put_on - 0.4) / 0.6))
         return view
 
     phone_slot = None
     out = []
     for i, frame in enumerate(frames):
         t = (i - report_click) / FPS
-        off = ease_in_out((t - TAKE_OFF[0]) / (TAKE_OFF[1] - TAKE_OFF[0])) \
-            - ease_in_out((t - PUT_ON[0]) / (PUT_ON[1] - PUT_ON[0]))
-        left = frame if off <= 0 else headset_view(frame, off)
-        if off > 0:
-            draw = ImageDraw.Draw(left)
-            shown = ease_in_out((t - TAKE_OFF[1]) / 0.4) * clamp(1 - (t - PUT_ON[0]) / 0.3)
-            draw.text((area_w / 2, 30 + 6 * (1 - shown)),
-                      "Take off the headset. Scan either lens with your phone.",
-                      font=caption, fill=mix(TEXT, shown), anchor="mm")
+        left = left_side(t, frame)
         full = phone(t - STORY_START)
         hand = full
         if phone_slot is None:
-            size = (20 + width + 36 + hand.width + 24, max(area_h, hand.height) + 40)
+            size = (20 + width + 36 + full.width + 24, max(area_h, full.height) + 40)
             origin = (20, (size[1] - area_h) // 2)
-            phone_slot = (20 + width + 36, (size[1] - hand.height) // 2)
+            phone_slot = (20 + width + 36, (size[1] - full.height) // 2)
             # Over the lens, held a little farther away: the camera view, in the upper half
             # of the screen, sits on the left lens.
             near = 0.72
-            phone_lens = (round(origin[0] + lens_c[0][0] - hand.width * near / 2),
-                          round(origin[1] + lens_c[0][1] - hand.height * near * 0.42))
+            phone_lens = (round(origin[0] + lens_center[0] - full.width * near / 2),
+                          round(origin[1] + lens_center[1] - full.height * near * 0.42))
         image = Image.new("RGB", size, BACKGROUND)
         image.paste(left, origin)
         go = ease_in_out((t - PHONE_TO_LENS[0]) / (PHONE_TO_LENS[1] - PHONE_TO_LENS[0])) \
@@ -749,7 +759,6 @@ def report_gif(panel_dir):
         if go > 0:
             factor = 1 + (near - 1) * go
             hand = full.resize((round(full.width * factor), round(full.height * factor)), Image.LANCZOS)
-        if go > 0:  # a soft shadow while it is held up
             shadow = Image.new("RGBA", hand.size, (0, 0, 0, 0))
             shadow.putalpha(hand.getchannel("A").point(lambda a: round(a * 0.5 * go)))
             image.paste((0, 0, 0), (round(x) + 10, round(y) + 14), shadow.filter(ImageFilter.GaussianBlur(14)))
@@ -757,7 +766,6 @@ def report_gif(panel_dir):
         out.append(image)
     loop_fade(out)
     write_gif(out, IMAGES / "report.gif", step=2)
-
 
 # Knock kinds: three small loops side by side, on the shared timeline.
 
