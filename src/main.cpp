@@ -329,6 +329,15 @@ int detect(double seconds, const std::string& save_path) {
     return 0;
 }
 
+std::string thresholds(const knockthru::KindCalibration& calibration) {
+    char line[128];
+    std::snprintf(line, sizeof line, "spike %.0f m/s^2, approach %.2f m/s", calibration.peak, calibration.approach);
+    return line;
+}
+
+// "double" or "triple".
+const char* sequence_name(const knockthru::KnockEvent& event) { return event.count == 3 ? "triple" : "double"; }
+
 // Asks for knocks of one kind over the terminal and saves a new threshold.
 int calibrate(const std::string& kind_name) {
     const auto kind = knockthru::parse_knock_kind(kind_name);
@@ -364,10 +373,7 @@ int calibrate(const std::string& kind_name) {
     }
     if (!calibrator.done())
         throw std::runtime_error("Calibration stopped after " + std::to_string(calibrator.count()) + " knocks. Nothing saved.");
-    const auto saved = calibrator.save();
-    char thresholds[96];
-    std::snprintf(thresholds, sizeof thresholds, "spike %.0f m/s^2, approach %.2f m/s", saved.peak, saved.approach);
-    std::cout << "Thresholds for " << kind_name << " set to " << thresholds << " in "
+    std::cout << "Thresholds for " << kind_name << " set to " << thresholds(calibrator.save()) << " in "
               << (knockthru::user_directory() / "calibration.json").string()
               << ". A running KnockThru picks it up within 2 s.\n";
     return 0;
@@ -752,12 +758,6 @@ struct RoomViewResult {
     std::string message; // empty for a plain read
 };
 
-std::string thresholds(const knockthru::KindCalibration& calibration) {
-    char line[128];
-    std::snprintf(line, sizeof line, "spike %.0f m/s^2, approach %.2f m/s", calibration.peak, calibration.approach);
-    return line;
-}
-
 // One line for the log: how each knock heard while recording ended.
 std::string heard_summary(const knockthru::Calibrator& calibrator) {
     using Heard = knockthru::Calibrator::Heard;
@@ -892,6 +892,11 @@ int run() {
         const auto had = updated_from->empty() ? "" : " You had version " + *updated_from + ".";
         state.update_notice = knockthru::UpdateNotice{false, std::string("You now have version ") + kVersion + "." + had};
     }
+    const auto start_check = [&] {
+        check_job = std::async(std::launch::async, [update_work, cancel = &cancel_downloads] {
+            return knockthru::fetch_latest_release(update_work, cancel);
+        });
+    };
     double restart_started = -1; // when this process asked knockthru-ctl to restart into the new version
     // The new files stay in place when a restart fails, so Settings keeps its Restart button.
     const auto restart_failed = [&](const std::string& version) {
@@ -945,6 +950,13 @@ int run() {
         const knockthru::RoomView room_view(config.debug_port);
         room_view_job_toggles = false;
         room_view_job = std::async(std::launch::async, [room_view] { return RoomViewResult{room_view.active(), ""}; });
+    };
+    const auto read_opaque = [&] {
+        try {
+            state.opaque = knockthru::read_style() == knockthru::RoomViewStyle::Opaque;
+        } catch (const std::exception&) {
+            state.opaque.reset();
+        }
     };
     const auto toggle_room_view = [&](const std::string& why) {
         if (room_view_job.valid() && room_view_job_toggles) {
@@ -1021,9 +1033,7 @@ int run() {
                 save_app_state();
                 check_is_automatic = true;
                 log("Daily update check");
-                check_job = std::async(std::launch::async, [update_work, cancel = &cancel_downloads] {
-                    return knockthru::fetch_latest_release(update_work, cancel);
-                });
+                start_check();
             }
             if (const auto now_stamp = config_stamp(); now_stamp != stamp) {
                 stamp = now_stamp;
@@ -1036,11 +1046,7 @@ int run() {
             }
             if (panel && panel->visible()) {
                 read_room_view(); // Room View can also change from the bar or the side button
-                try {
-                    state.opaque = knockthru::read_style() == knockthru::RoomViewStyle::Opaque;
-                } catch (const std::exception&) {
-                    state.opaque.reset();
-                }
+                read_opaque();
             }
             // FrameDrop updates delete the install directory, then copy the new
             // one. A binary gone for 15 s means the app was removed.
@@ -1111,9 +1117,7 @@ int run() {
                     if (check_job.valid() || install_job.valid()) break;
                     check_is_automatic = false;
                     state.update = {knockthru::UpdateView::Status::Checking, "", ""};
-                    check_job = std::async(std::launch::async, [update_work, cancel = &cancel_downloads] {
-                        return knockthru::fetch_latest_release(update_work, cancel);
-                    });
+                    start_check();
                     break;
                 case PanelCommand::RestartForUpdate:
                     if (state.update.status != knockthru::UpdateView::Status::Installed) break;
@@ -1255,11 +1259,7 @@ int run() {
             if (shown) {
                 if (config.sounds) knockthru::prepare_click();
                 read_room_view();
-                try {
-                    state.opaque = knockthru::read_style() == knockthru::RoomViewStyle::Opaque;
-                } catch (const std::exception&) {
-                    state.opaque.reset();
-                }
+                read_opaque();
             }
         }
 
@@ -1278,7 +1278,7 @@ int run() {
             }
             if (knock_event) {
                 std::snprintf(line, sizeof line, "%6.2f s  %s %s knock", knock_event->t - recording->start,
-                    knock_event->count == 3 ? "triple" : "double", knockthru::to_string(knock_event->kind));
+                    sequence_name(*knock_event), knockthru::to_string(knock_event->kind));
                 recording->heard.push_back(line);
             }
             state.recording_knocks = static_cast<int>(knocks.size()) + state.recording_knocks;
@@ -1351,14 +1351,14 @@ int run() {
             if (knock_event) {
                 const bool passed = knock_event->kind == calibrator->kind() && knock_event->count == 2;
                 calibration->trial_passed = passed;
-                calibration->trial_heard = std::string("a ") + (knock_event->count == 3 ? "triple " : "double ") +
+                calibration->trial_heard = std::string("a ") + sequence_name(*knock_event) + " " +
                     knockthru::to_string(knock_event->kind) + " knock";
                 calibration->trial_t = t;
                 log(std::string("Try step heard ") + calibration->trial_heard + (passed ? ": passed" : ": missed"));
                 haptics.buzz(passed ? 1 : 3, t);
             }
         } else if (!calibrator && knock_event) {
-            const std::string what = std::string(" (") + (knock_event->count == 3 ? "triple " : "double ") +
+            const std::string what = std::string(" (") + sequence_name(*knock_event) + " " +
                 knockthru::to_string(knock_event->kind) + " knock)";
             // The tour's knock steps act even when paused or off in this game, so the user can practice.
             // Only while the panel shows them, so a tour left open never overrides the settings in a game.
