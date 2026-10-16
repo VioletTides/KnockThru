@@ -43,13 +43,14 @@ def font(size, bold=False):
     return ImageFont.truetype(str(FONTS / name), size)
 
 
-def write_gif(frames, path):
-    """Writes RGB frames to a looping GIF with a palette made for them."""
+def write_gif(frames, path, step=1):
+    """Writes RGB frames to a looping GIF with a palette made for them. step 2 keeps every
+    other frame, at half the frame rate, for a long GIF."""
     with tempfile.TemporaryDirectory() as tmp:
-        for i, frame in enumerate(frames):
+        for i, frame in enumerate(frames[::step]):
             frame.save(f"{tmp}/{i:04d}.png")
         subprocess.run(
-            ["ffmpeg", "-loglevel", "error", "-y", "-framerate", str(FPS), "-i", f"{tmp}/%04d.png",
+            ["ffmpeg", "-loglevel", "error", "-y", "-framerate", str(FPS / step), "-i", f"{tmp}/%04d.png",
              "-filter_complex", "split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none",
              "-loop", "0", str(path)],
             check=True)
@@ -313,53 +314,27 @@ def pointer_dot(image, x, y, press, ring, scale=1.0):
     image.alpha_composite(dot, (round(x - out / 2), round(y - out / 2)))
 
 
-def walkthrough(frames_dir, name, phone=None, qr=None):
-    """Turns a panel_preview frame sequence with a pointer log into images/NAME.gif.
-
-    phone, if given, draws a phone beside the panel: phone(i, clicks) returns an RGBA image.
-    qr is a box in panel pixels to blur while the report card shows, so nobody scans it."""
-    width = 640
-    scale = width / 1200
+def load_walkthrough(frames_dir, width):
+    """Reads a panel_preview frame sequence: its cuts, clicks, pointer log, and the frames at `width`."""
     marks = dict(line.split(maxsplit=1) if " " in line else (line, "")
                  for line in (frames_dir / "marks.txt").read_text().splitlines())
     cuts = [int(n) for n in marks["cuts"].split()]
     clicks = [int(n) for n in marks["clicks"].split()]
     pointer = [tuple(map(float, line.split())) for line in (frames_dir / "pointer.txt").read_text().splitlines()]
-    count = len(pointer)
-
-    panel_height = round(770 * width / 1200)
-    if phone:
-        sample = phone(0, clicks)
-        size = (20 + width + 36 + sample.width + 24, max(panel_height, sample.height) + 40)
-    else:
-        size = (width, panel_height)
-    origin = (20 if phone else 0, (size[1] - panel_height) // 2)
-    blur_from, blur_to = (clicks[-2], clicks[-1] + seconds(0.6)) if qr else (0, -1)
-
     frames = []
-    for i, path in enumerate(sorted(frames_dir.glob("*.png"))):
-        image = Image.open(path).convert("RGBA").resize((width, panel_height), Image.LANCZOS)
-        flat = Image.new("RGB", size, BACKGROUND)
-        flat.paste(image, origin, mask=image)
-        if blur_from <= i <= blur_to:
-            box = tuple(round(v * scale) + o for v, o in zip(qr, origin * 2))
-            flat.paste(hide_qr(flat.crop(box)), box)
-        if phone:
-            side = phone(i, clicks)
-            flat.paste(side, (20 + width + 36, (size[1] - side.height) // 2), side)
+    for path in sorted(frames_dir.glob("*.png")):
+        image = Image.open(path).convert("RGBA").resize((width, round(770 * width / 1200)), Image.LANCZOS)
+        flat = Image.new("RGB", image.size, BACKGROUND)
+        flat.paste(image, mask=image)
         frames.append(flat)
-    # Where the clock skips ahead, and at the loop back to the start, cross-fade instead of cutting.
-    fade = seconds(0.4)
-    for cut in cuts:
-        before = frames[cut - 1]
-        for k in range(fade):
-            frames[cut + k] = Image.blend(before, frames[cut + k], ease_in_out((k + 1) / (fade + 1)))
-    for k in range(fade):
-        i = count - fade + k  # stops one step short, so the first frame finishes the fade
-        frames[i] = Image.blend(frames[i], frames[0], ease_in_out((k + 1) / (fade + 1)))
+    return cuts, clicks, pointer, frames
 
-    # The pointer goes on after the fades, so it never doubles. A hand held out drifts a little.
-    # Each drift wave fits a whole number of times into the loop, so the loop has no jump.
+
+def add_pointer(frames, pointer, clicks, scale):
+    """Draws the pointer on each frame. A hand held out drifts a little. Each drift wave fits a
+    whole number of times into the loop, so the loop has no jump."""
+    count = len(frames)
+
     def wave(i, per_second, phase=0.0):
         cycles = max(1, round(count / FPS * per_second))
         return math.sin(2 * math.pi * cycles * i / count + phase)
@@ -373,9 +348,32 @@ def walkthrough(frames_dir, name, phone=None, qr=None):
         press = 1 - since[0] / 8 if since else (1 - before[0] / 4 if before else 0)
         ring = since[0] / 8 if since else None
         image = frame.convert("RGBA")
-        pointer_dot(image, x * scale + origin[0], y * scale + origin[1], press, ring, scale)
+        pointer_dot(image, x * scale, y * scale, press, ring, scale)
         frames[i] = image.convert("RGB")
+
+
+def loop_fade(frames):
+    """Cross-fades the last 0.4 s into the first frame, stopping one step short, so the loop has no cut."""
+    fade = seconds(0.4)
+    for k in range(fade):
+        i = len(frames) - fade + k
+        frames[i] = Image.blend(frames[i], frames[0], ease_in_out((k + 1) / (fade + 1)))
+
+
+def walkthrough(frames_dir, name):
+    """Turns a panel_preview frame sequence with a pointer log into images/NAME.gif."""
+    width = 640
+    cuts, clicks, pointer, frames = load_walkthrough(frames_dir, width)
+    # Where the clock skips ahead, cross-fade instead of cutting.
+    fade = seconds(0.4)
+    for cut in cuts:
+        before = frames[cut - 1]
+        for k in range(fade):
+            frames[cut + k] = Image.blend(before, frames[cut + k], ease_in_out((k + 1) / (fade + 1)))
+    loop_fade(frames)
+    add_pointer(frames, pointer, clicks, width / 1200)  # after the fades, so it never doubles
     write_gif(frames, IMAGES / f"{name}.gif")
+
 
 # Report card: its sample QR code gets blurred in the GIF, so nobody scans it.
 
@@ -541,7 +539,7 @@ def issue_form(report, title, what, pasted, pressed):
 
 
 def report_phone(panel_dir):
-    """Returns phone(i, clicks) for walkthrough(): the phone's half of the report GIF."""
+    """Returns phone(t): the phone at t seconds into its story, which starts with the camera open."""
     frames_dir = panel_dir / "report"
     with tempfile.TemporaryDirectory() as tmp:
         page_html = panel_dir / "readme-phone.html"
@@ -622,8 +620,7 @@ def report_phone(panel_dir):
     ImageDraw.Draw(mask).rounded_rectangle([0, 0, screen_w - 1, screen_h - 1], radius - bezel, fill=255)
     island = round(phone_w * 0.28)
 
-    def phone(i, clicks):
-        t = (i - clicks[1]) / FPS if len(clicks) > 1 else -1.0
+    def phone(t):
         screen = screen_at(max(t, -1.0)).convert("RGB").resize((screen_w, screen_h), Image.LANCZOS)
         image = body.copy()
         image.paste(screen, (bezel, bezel), mask)
@@ -632,6 +629,134 @@ def report_phone(panel_dir):
         return image
 
     return phone
+
+
+# The report GIF: the panel's report card, then the headset taken off, seen from the face side,
+# with the card in both lenses. The phone comes up to a lens to scan the code, then goes
+# through the phone page and the issue form beside it. Times are seconds after the Report click.
+TAKE_OFF = (0.8, 1.6)       # the panel zooms out into the left lens
+PHONE_TO_LENS = (1.6, 2.4)  # the phone moves over the left lens
+PHONE_BACK = (4.2, 4.8)     # and back beside the headset once the link opens
+STORY_START = 1.4           # the phone story's time 0, so its link tap lands while at the lens
+PUT_ON = (13.4, 14.2)       # the view zooms back into the panel
+
+
+def lens_holes(sprite):
+    """The two lens holes in headset-back.png: the transparent regions the body encloses, as
+    (center x, center y, radius), left first."""
+    alpha = sprite.getchannel("A").point(lambda a: 255 if a < 128 else 0)
+    holes = []
+    seen = Image.new("L", alpha.size, 0)
+    w, h = alpha.size
+    for y in range(h // 4, 3 * h // 4, 8):  # scan the middle band for enclosed openings
+        for x in range(0, w, 8):
+            if alpha.getpixel((x, y)) and not seen.getpixel((x, y)):
+                region = alpha.copy()
+                ImageDraw.floodfill(region, (x, y), 128)
+                mask = region.point(lambda v: 255 if v == 128 else 0)
+                seen.paste(255, mask=mask)
+                left, top, right, bottom = mask.getbbox()
+                if left > 0 and top > 0 and right < w and bottom < h:  # enclosed, not the outside
+                    holes.append(((left + right) / 2, (top + bottom) / 2, (right - left) / 2))
+    return sorted(holes)[:2]
+
+
+def report_gif(panel_dir):
+    width = 640
+    scale = width / 1200
+    cuts, clicks, pointer, frames = load_walkthrough(panel_dir / "report", width)
+    report_click, done_click = clicks[-2], clicks[-1]
+    card = Image.open(panel_dir / "readme-report.png").convert("RGBA")
+    flat = Image.new("RGB", card.size, BACKGROUND)
+    flat.paste(card, mask=card)
+    qr = tuple(round(v * scale) for v in qr_box(flat))
+    for i in range(report_click, min(done_click + seconds(0.6), len(frames))):
+        frames[i].paste(hide_qr(frames[i].crop(qr)), qr)
+    add_pointer(frames, pointer, clicks, scale)  # before the lenses, so it shows inside them
+
+    phone = report_phone(panel_dir)
+    sprite = Image.open(IMAGES / "cad" / "headset-back.png").convert("RGBA")
+    holes = lens_holes(sprite)
+    area_w, area_h = width, frames[0].height
+    head_w = 500
+    k = head_w / sprite.width  # sprite pixels to area pixels at rest
+    head_h = sprite.height * k
+    head_x, head_y = (area_w - head_w) / 2, (area_h - head_h) / 2 + 22  # below the caption
+    lens_c = [(head_x + x * k, head_y + y * k) for x, y, _ in holes]
+    lens_r = holes[0][2] * k * 0.9  # the screen sits inside the hole, behind the gap
+    zoom_max = math.hypot(area_w, area_h) / 2 / lens_r * 1.04  # one lens covers the whole area
+    caption = font(22, bold=True)
+
+    def headset_view(content, e):
+        """The headset from the face side, zoomed out by e (0: the left lens fills the area, 1: at rest)."""
+        z = zoom_max + (1 - zoom_max) * e
+        ax = area_w / 2 + (lens_c[0][0] - area_w / 2) * e
+        ay = area_h / 2 + (lens_c[0][1] - area_h / 2) * e
+        place = lambda x, y: (ax + z * (x - lens_c[0][0]), ay + z * (y - lens_c[0][1]))
+        view = Image.new("RGB", (area_w, area_h), BACKGROUND)
+        shown = content.resize((max(1, round(area_w * z / zoom_max)), max(1, round(area_h * z / zoom_max))),
+                               Image.LANCZOS)
+        r = lens_r * z
+        for cx, cy in lens_c:
+            px, py = place(cx, cy)
+            lens = Image.new("RGB", (round(2 * r), round(2 * r)), (8, 9, 11))
+            lens.paste(shown, (round(r - shown.width / 2), round(r - shown.height / 2)))
+            mask = Image.new("L", lens.size, 0)
+            ImageDraw.Draw(mask).ellipse([0, 0, lens.width - 1, lens.height - 1], fill=255)
+            view.paste(lens, (round(px - r), round(py - r)), mask)
+        hx, hy = place(head_x, head_y)
+        size = (round(sprite.width * k * z), round(sprite.height * k * z))
+        # Crop before scaling up, so a deep zoom stays cheap.
+        left, top = max(0.0, -hx) / (k * z), max(0.0, -hy) / (k * z)
+        right = min(sprite.width, (area_w - hx) / (k * z))
+        bottom = min(sprite.height, (area_h - hy) / (k * z))
+        if right > left and bottom > top:
+            piece = sprite.crop((math.floor(left), math.floor(top), math.ceil(right), math.ceil(bottom)))
+            piece = piece.resize((round(piece.width * k * z), round(piece.height * k * z)), Image.LANCZOS)
+            view.paste(piece, (round(hx + math.floor(left) * k * z), round(hy + math.floor(top) * k * z)), piece)
+        return view
+
+    phone_slot = None
+    out = []
+    for i, frame in enumerate(frames):
+        t = (i - report_click) / FPS
+        off = ease_in_out((t - TAKE_OFF[0]) / (TAKE_OFF[1] - TAKE_OFF[0])) \
+            - ease_in_out((t - PUT_ON[0]) / (PUT_ON[1] - PUT_ON[0]))
+        left = frame if off <= 0 else headset_view(frame, off)
+        if off > 0:
+            draw = ImageDraw.Draw(left)
+            shown = ease_in_out((t - TAKE_OFF[1]) / 0.4) * clamp(1 - (t - PUT_ON[0]) / 0.3)
+            draw.text((area_w / 2, 30 + 6 * (1 - shown)),
+                      "Take off the headset. Scan either lens with your phone.",
+                      font=caption, fill=mix(TEXT, shown), anchor="mm")
+        full = phone(t - STORY_START)
+        hand = full
+        if phone_slot is None:
+            size = (20 + width + 36 + hand.width + 24, max(area_h, hand.height) + 40)
+            origin = (20, (size[1] - area_h) // 2)
+            phone_slot = (20 + width + 36, (size[1] - hand.height) // 2)
+            # Over the lens, held a little farther away: the camera view, in the upper half
+            # of the screen, sits on the left lens.
+            near = 0.72
+            phone_lens = (round(origin[0] + lens_c[0][0] - hand.width * near / 2),
+                          round(origin[1] + lens_c[0][1] - hand.height * near * 0.42))
+        image = Image.new("RGB", size, BACKGROUND)
+        image.paste(left, origin)
+        go = ease_in_out((t - PHONE_TO_LENS[0]) / (PHONE_TO_LENS[1] - PHONE_TO_LENS[0])) \
+            - ease_in_out((t - PHONE_BACK[0]) / (PHONE_BACK[1] - PHONE_BACK[0]))
+        x = phone_slot[0] + (phone_lens[0] - phone_slot[0]) * go
+        y = phone_slot[1] + (phone_lens[1] - phone_slot[1]) * go
+        if go > 0:
+            factor = 1 + (near - 1) * go
+            hand = full.resize((round(full.width * factor), round(full.height * factor)), Image.LANCZOS)
+        if go > 0:  # a soft shadow while it is held up
+            shadow = Image.new("RGBA", hand.size, (0, 0, 0, 0))
+            shadow.putalpha(hand.getchannel("A").point(lambda a: round(a * 0.5 * go)))
+            image.paste((0, 0, 0), (round(x) + 10, round(y) + 14), shadow.filter(ImageFilter.GaussianBlur(14)))
+        image.paste(hand, (round(x), round(y)), hand)
+        out.append(image)
+    loop_fade(out)
+    write_gif(out, IMAGES / "report.gif", step=2)
 
 
 # Knock kinds: three small loops side by side, on the shared timeline.
@@ -776,10 +901,7 @@ def main():
         hero(Path(tmp))
         walkthrough(Path(tmp) / "calibrate", "calibrate")
         walkthrough(Path(tmp) / "update", "update")
-        card = Image.open(Path(tmp) / "readme-report.png").convert("RGBA")
-        flat = Image.new("RGB", card.size, BACKGROUND)
-        flat.paste(card, mask=card)
-        walkthrough(Path(tmp) / "report", "report", phone=report_phone(Path(tmp)), qr=qr_box(flat))
+        report_gif(Path(tmp))
     knock_kinds()
     timing()
 

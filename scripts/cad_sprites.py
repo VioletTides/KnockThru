@@ -193,6 +193,21 @@ def headset_sprite(depth, ids):
     return compose(body, np.zeros_like(body))
 
 
+def headset_back_sprite(depth, ids):
+    """The headset from the face side: the body, with the two lenses cut out behind a gap,
+    so a drawing can show the screen through them."""
+    sil = depth > -1e8
+    u, c = np.unique(ids[sil], return_counts=True)
+    glass = np.isin(ids, u[np.argsort(c)[-2:]]).astype(np.uint8)  # the two lens faces are the largest
+    contours, _ = cv2.findContours(glass, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    lenses = np.zeros_like(glass)
+    for contour in sorted(contours, key=cv2.contourArea)[-2:]:
+        (x, y), r = cv2.minEnclosingCircle(contour)
+        cv2.circle(lenses, (round(x), round(y)), round(r), 1, -1)
+    body = sil & ~cv2.dilate(lenses, disk(61)).astype(bool)
+    return compose(body, np.zeros_like(body))
+
+
 def compose(body, accent):
     rgba = np.zeros(body.shape + (4,), np.uint8)
     rgba[body] = (*INK[::-1], 255)  # cv2 writes BGRA
@@ -216,6 +231,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     jobs = [(name, step, (0, 0, 1), (0, 1, 0), controller_sprite) for name, step in CONTROLLERS.items()]
     jobs.append(("headset-front", HEADSET, None, None, headset_sprite))
+    jobs.append(("headset-back", HEADSET, (0, 0, -1), (0, 1, 0), headset_back_sprite))
     for name, step, toward, up, make in jobs:
         print(name, flush=True)
         depth, ids = render(cad / step, toward, up)

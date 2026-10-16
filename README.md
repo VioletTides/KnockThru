@@ -80,10 +80,10 @@ To check right away, press **Check for updates** in Settings. Updating through F
 
 You can send a bug report from the headset with your phone. You need a GitHub account.
 
-![Reporting a problem: Report in Settings opens a card with a QR code. A phone scans it, opens the report page, copies the report, and fills in a GitHub issue](images/report.gif)
+![Reporting a problem: Report in Settings opens a card with a QR code. With the headset off, a phone scans the code through a lens, opens the report page, copies the report, and fills in a GitHub issue](images/report.gif)
 
 1. Open **Settings** in the KnockThru tab and press **Report**.
-2. Hold your phone up to a lens and scan the QR code. Your phone must be on the same Wi-Fi as the Frame.
+2. Take off the headset. Hold your phone up to either lens and scan the QR code. Your phone must be on the same Wi-Fi as the Frame.
 3. On your phone, tap **Copy report and open GitHub**.
 4. Paste the report, say what went wrong, and tap **Create**.
 
