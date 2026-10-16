@@ -5,6 +5,7 @@
 
 #include <array>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace knockthru {
@@ -110,5 +111,8 @@ private:
     void finish_burst();
     std::vector<double> peaks_, speeds_;
 };
+
+// The spike and approach thresholds as one line, for the log and the terminal.
+std::string thresholds_text(const KindCalibration& calibration);
 
 } // namespace knockthru

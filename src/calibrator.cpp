@@ -3,6 +3,7 @@
 #include "config.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <stdexcept>
 
 namespace knockthru {
@@ -100,6 +101,12 @@ KindCalibration Calibrator::save() const {
     calibration[kind_] = result();
     save_calibration(calibration);
     return *calibration[kind_];
+}
+
+std::string thresholds_text(const KindCalibration& calibration) {
+    char line[128];
+    std::snprintf(line, sizeof line, "spike %.0f m/s^2, approach %.2f m/s", calibration.peak, calibration.approach);
+    return line;
 }
 
 } // namespace knockthru

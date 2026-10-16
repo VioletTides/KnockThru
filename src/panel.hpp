@@ -4,6 +4,7 @@
 #include "knock_detector.hpp"
 
 #include <array>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -60,7 +61,6 @@ struct UpdateNotice {
 struct PanelState {
     std::optional<bool> room_view;   // unknown until the first debug port read
     std::string room_view_error;     // why Room View cannot be read or changed
-    bool dashboard_changed = false;  // the Room View button is missing, likely after a Steam update
     std::optional<bool> opaque;      // Room View style, unknown without SteamVR
     bool busy = false;               // a Room View change is in progress
     bool paused = false;
@@ -168,8 +168,12 @@ private:
     std::optional<View> view_;
     std::optional<TourView::Step> tour_step_; // the tour step on screen, so each step rises in
     double view_t_ = 0;
+    std::map<std::pair<int, IconStyle>, Canvas> icons_; // drawn icons by size and style
 
+    const Canvas& icon(int size, IconStyle style);
     bool hovered(Rect rect) const;
+    float paragraph(Font& font, const std::string& text, float x, float y, float size, float leading, float width,
+                    int max_lines, Color color);
     void header(const std::string& title);
     void main_screen(const PanelState& state);
     void pick_screen(const PanelState& state);

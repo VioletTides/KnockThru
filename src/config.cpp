@@ -43,6 +43,8 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
     const auto fail = [&](const std::string& what) {
         throw std::runtime_error(path.string() + ": " + what);
     };
+    const std::map<std::string, bool*> flags{{"paused", &config.paused}, {"classic_bar_icon", &config.classic_bar_icon},
+        {"sounds", &config.sounds}, {"tour_done", &config.tour_done}, {"check_updates", &config.check_updates}};
     for (const auto& [key, value] : file.items()) {
         if (key == "knock_types") {
             if (!value.is_array()) fail("knock_types must be a list");
@@ -59,21 +61,9 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
                 if (!app.is_string()) fail("blocked_apps must be a list of app keys");
                 config.blocked_apps.insert(app.get<std::string>());
             }
-        } else if (key == "paused") {
-            if (!value.is_boolean()) fail("paused must be true or false");
-            config.paused = value.get<bool>();
-        } else if (key == "classic_bar_icon") {
-            if (!value.is_boolean()) fail("classic_bar_icon must be true or false");
-            config.classic_bar_icon = value.get<bool>();
-        } else if (key == "sounds") {
-            if (!value.is_boolean()) fail("sounds must be true or false");
-            config.sounds = value.get<bool>();
-        } else if (key == "tour_done") {
-            if (!value.is_boolean()) fail("tour_done must be true or false");
-            config.tour_done = value.get<bool>();
-        } else if (key == "check_updates") {
-            if (!value.is_boolean()) fail("check_updates must be true or false");
-            config.check_updates = value.get<bool>();
+        } else if (const auto flag = flags.find(key); flag != flags.end()) {
+            if (!value.is_boolean()) fail(key + " must be true or false");
+            *flag->second = value.get<bool>();
         } else if (key == "debug_port") {
             if (!value.is_number_integer()) fail("debug_port must be a whole number");
             config.debug_port = value.get<int>();

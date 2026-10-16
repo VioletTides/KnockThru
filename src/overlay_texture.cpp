@@ -211,7 +211,6 @@ struct OverlayTexture::Impl {
         }
 
         VkCommandPoolCreateInfo pool_info{};
-
         pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         pool_info.queueFamilyIndex = family;
@@ -290,7 +289,6 @@ void OverlayTexture::show(vr::VROverlayHandle_t overlay, const std::uint8_t* rgb
     check(v.EndCommandBuffer(v.commands), "end");
 
     VkSubmitInfo submit{};
-
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &v.commands;

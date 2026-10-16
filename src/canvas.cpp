@@ -138,7 +138,25 @@ void Canvas::rounded_rect(Rect rect, float radius, Color color) {
             if (c >= 1) break;
             blend(right, y, color, c);
         }
-        for (int x = left; x <= right; ++x) blend(x, y, color, 1);
+        fill_span(y, left, right + 1, color);
+    }
+}
+
+void Canvas::fill_span(int y, int from, int to, Color color) {
+    if (y < 0 || y >= height_) return;
+    from = std::max(from, 0);
+    to = std::min(to, width_);
+    if (color.a != 255) {
+        for (int x = from; x < to; ++x) blend(x, y, color, 1);
+        return;
+    }
+    // An opaque color replaces what is under it.
+    auto* p = &pixels_[(static_cast<std::size_t>(y) * width_ + from) * 4];
+    for (int x = from; x < to; ++x, p += 4) {
+        p[0] = color.r;
+        p[1] = color.g;
+        p[2] = color.b;
+        p[3] = 255;
     }
 }
 
@@ -213,8 +231,9 @@ void Canvas::arc(float cx, float cy, float inner, float outer, float from, float
     }
 }
 
-float Canvas::measure(Font& font, const std::string& utf8, float size) {
-    const auto text = decode_utf8(utf8);
+float Canvas::measure(Font& font, const std::string& utf8, float size) { return measure(font, decode_utf8(utf8), size); }
+
+float Canvas::measure(Font& font, const std::u32string& text, float size) {
     float width = 0;
     for (std::size_t i = 0; i < text.size(); ++i) {
         width += font.glyph(text[i], size).advance;
@@ -269,12 +288,12 @@ std::vector<std::string> Canvas::wrap(Font& font, const std::string& utf8, float
 }
 
 void Canvas::text(Font& font, const std::string& utf8, float x, float y, float size, Color color, Align align) {
-    const float width = measure(font, utf8, size);
+    const auto text = decode_utf8(utf8);
+    const float width = measure(font, text, size);
     if (align == Align::Center) x -= width / 2;
     if (align == Align::Right) x -= width;
     // Centers the cap height on y. Cap height is about 0.7 of the pixel size.
     const float baseline = y + size * 0.36f;
-    const auto text = decode_utf8(utf8);
     float pen = x;
     for (std::size_t i = 0; i < text.size(); ++i) {
         const auto& glyph = font.glyph(text[i], size);

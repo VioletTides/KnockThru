@@ -95,6 +95,7 @@ private:
     std::optional<Knock> judge(Device device, std::size_t index) const;
     void add(const Knock& knock);
     std::optional<KnockEvent> finish_sequence();
+    static History::const_iterator first_from(const History& history, double t);
     static const Sample* nearest(const History& history, double t);
     static double peak_in(const History& history, double from, double to);
     static double mean_speed(const History& history, double from, double to);
