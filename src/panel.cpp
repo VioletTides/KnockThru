@@ -147,9 +147,6 @@ void Panel::passthrough_tile(Rect rect, const PanelState& state) {
             canvas_.text(regular_, line, x, y, 26, kText);
             y += 36;
         }
-    } else {
-        const std::string hint = on ? "Select to turn off" : "Select to turn on";
-        canvas_.text(regular_, hint, x, rect.y + rect.h - 48, 26, on ? kText : kDim);
     }
     targets_.push_back({rect, PanelClick{PanelCommand::RoomView}, std::nullopt});
 }
