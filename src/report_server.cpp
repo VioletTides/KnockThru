@@ -11,6 +11,7 @@
 
 #include <chrono>
 #include <fstream>
+#include <iterator>
 #include <random>
 #include <sstream>
 #include <stdexcept>
@@ -79,7 +80,10 @@ std::string local_address() {
     return !found.empty() ? found : preferred.empty() ? fallback : "";
 }
 
-std::string report_page(const std::string& report, const std::string& issue_link, const std::string& download) {
+std::string report_page(const std::string& report, const std::string& issue_link, const std::string& download,
+                        const std::string& recording) {
+    const std::string attach = recording.empty() ? "" :
+        "<li><a href=\"" + html_escape(recording) + "\" download>Download the knock recording</a> and attach it to the issue.</li>\n";
     return R"HTML(<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KnockThru bug report</title>
@@ -112,7 +116,7 @@ details{margin-top:24px;color:var(--dim)}
 <ol>
 <li>Sign in to GitHub if it asks.</li>
 <li>Paste into the <b>Report</b> box.</li>
-<li>Say what went wrong, then tap <b>Create</b>.</li>
+)HTML" + attach + R"HTML(<li>Say what went wrong, then tap <b>Create</b>.</li>
 </ol>
 <p>Copy didn't work? <a href=")HTML" + html_escape(download) + R"HTML(" download>Download the report</a> and attach it instead.</p>
 <details><summary>See the report</summary><textarea id="report" readonly>)HTML" +
@@ -147,7 +151,7 @@ document.getElementById("go").addEventListener("click", async () => {
 }
 
 ReportServer::ReportServer(std::string report, std::string issue_link)
-    : report_(std::move(report)) {
+    : report_(std::move(report)), issue_link_(std::move(issue_link)) {
     const auto address = local_address();
     if (address.empty()) throw std::runtime_error("The Frame is not on a network");
     std::random_device random;
@@ -167,9 +171,18 @@ ReportServer::ReportServer(std::string report, std::string issue_link)
         ::close(listener_);
         throw std::runtime_error("Cannot listen for phones");
     }
-    page_ = report_page(report_, issue_link, "/" + token_ + "/report/knockthru-report.txt");
     url_ = "http://" + address + ":" + std::to_string(ntohs(bind_address.sin_port)) + "/" + token_;
     thread_ = std::thread([this] { loop(); });
+}
+
+void ReportServer::set_report(std::string report) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    report_ = std::move(report);
+}
+
+void ReportServer::set_recording(std::filesystem::path recording) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    recording_ = std::move(recording);
 }
 
 ReportServer::~ReportServer() {
@@ -203,11 +216,28 @@ void ReportServer::answer(int client) {
     std::istringstream line(request.substr(0, request.find("\r\n")));
     std::string method, path;
     line >> method >> path;
+    std::string report;
+    std::filesystem::path recording;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        report = report_;
+        recording = recording_;
+    }
+    const auto base = "/" + token_ + "/report/";
+    std::error_code error;
+    const bool has_recording = !recording.empty() && std::filesystem::is_regular_file(recording, error);
     if (method == "GET" && path == "/" + token_) {
-        send_all(client, response("200 OK", "text/html; charset=utf-8", page_));
-    } else if (method == "GET" && path == "/" + token_ + "/report/knockthru-report.txt") {
-        send_all(client, response("200 OK", "text/plain; charset=utf-8", report_,
+        const auto page = report_page(report, issue_link_, base + "knockthru-report.txt",
+            has_recording ? base + "knockthru-knocks.csv.gz" : "");
+        send_all(client, response("200 OK", "text/html; charset=utf-8", page));
+    } else if (method == "GET" && path == base + "knockthru-report.txt") {
+        send_all(client, response("200 OK", "text/plain; charset=utf-8", report,
             "Content-Disposition: attachment; filename=\"knockthru-report.txt\"\r\n"));
+    } else if (method == "GET" && path == base + "knockthru-knocks.csv.gz" && has_recording) {
+        std::ifstream file(recording, std::ios::binary);
+        const std::string data{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+        send_all(client, response("200 OK", "application/gzip", data,
+            "Content-Disposition: attachment; filename=\"knockthru-knocks.csv.gz\"\r\n"));
     } else {
         send_all(client, response("404 Not Found", "text/plain", "Not found\n"));
     }

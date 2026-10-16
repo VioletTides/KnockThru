@@ -552,11 +552,28 @@ void Panel::report_card(const PanelState& state) {
         for (std::size_t k = 0; k < lines.size(); ++k) canvas_.text(regular_, lines[k], x + 64, y + k * 40, 28, kText);
         y += 40 * lines.size() + 36;
     }
-    const std::string hint = state.report_full ? "Hold the phone up to a lens. It must be on the same Wi-Fi as the Frame."
-                                               : "Hold the phone up to a lens. The Frame is offline, so save the report below to attach it.";
+    const std::string hint = state.report_full ? "Hold the phone up to a lens. Use the Frame's Wi-Fi."
+                                               : "The Frame is offline. Save the report below to attach it.";
     for (const auto& line : canvas_.wrap(regular_, hint, 26, text_w, 3)) {
         canvas_.text(regular_, line, x, y, 26, kDim);
         y += 36;
+    }
+
+    // Knock problems need the motion itself, so the report can carry a recording.
+    const Rect record{x, card.y + 420, 240, 64};
+    const bool recording = state.recording_left >= 0;
+    const std::string record_label = recording ? "Recording " + std::to_string(state.recording_left) + " s"
+        : state.recorded ? "Record again" : "Record knocks";
+    button(record, record_label, PanelClick{PanelCommand::RecordKnocks}, std::nullopt, false, !recording);
+    std::string record_note = "Knocks missed or wrong? Record 20 s of them.";
+    if (recording) record_note = "Knock the way that goes wrong. Heard " + std::to_string(state.recording_knocks) + " so far.";
+    else if (state.recorded) record_note = state.report_full ? "Recording added. Your phone offers it as a download."
+                                                             : "Recording saved as knockthru-knocks.csv.gz.";
+    const float record_x = record.x + record.w + 24;
+    float ry = record.y + record.h / 2 - 16;
+    for (const auto& line : canvas_.wrap(regular_, record_note, 24, text_w - record.w - 24, 2)) {
+        canvas_.text(regular_, line, record_x, ry, 24, kDim);
+        ry += 32;
     }
 
     // The code on white with a 4-module quiet zone, in whole pixels per module.

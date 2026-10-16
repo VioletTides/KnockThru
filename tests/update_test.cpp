@@ -120,6 +120,17 @@ int main() {
             "report server serves the report file");
         const auto base = server.url().substr(0, server.url().rfind('/'));
         check(get(base + "/0000000000000000", other) == 22, "report server refuses a wrong token");
+        check(read(page).find("knock recording") == std::string::npos, "report page has no recording link without one");
+        check(get(server.url() + "/report/knockthru-knocks.csv.gz", other) == 22, "report server has no recording yet");
+        server.set_report("newer report\n");
+        const auto recording = root / "knocks.csv.gz";
+        write(recording, "gz bytes");
+        server.set_recording(recording);
+        check(get(server.url(), page) == 0 && read(page).find("Download the knock recording") != std::string::npos &&
+                  read(page).find("newer report") != std::string::npos,
+            "report page shows a new report and the recording link");
+        check(get(server.url() + "/report/knockthru-knocks.csv.gz", other) == 0 && read(other) == "gz bytes",
+            "report server serves the recording");
     }
 
     check(run_program({"true"}) == 0 && run_program({"false"}) == 1, "run_program returns exit codes");

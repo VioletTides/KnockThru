@@ -194,6 +194,11 @@ int main(int argc, char** argv) {
     settings_panel.click(1050, 542); // Report on the Something wrong? row
     settings_panel.render(update, std::nullopt, 0);
     settings_panel.render(update).write_png(out / "panel-report.png");
+    update.recording_left = 14;
+    update.recording_knocks = 3;
+    settings_panel.render(update).write_png(out / "panel-report-recording.png");
+    update.recording_left = -1;
+    update.recorded = true;
     update.report_saved = "/home/steamos/knockthru-report.txt";
     settings_panel.render(update).write_png(out / "panel-report-saved.png");
     update.report_saved.clear();

@@ -477,6 +477,45 @@ std::string os_name() {
     return name;
 }
 
+fs::path recording_path() {
+    const auto home = std::getenv("HOME");
+    return fs::path(home && *home ? home : "/tmp") / "knockthru-knocks.csv.gz";
+}
+
+// 20 s of headset and controller motion, in the tests/data CSV format, for a knock bug report.
+struct KnockRecording {
+    static constexpr double kSeconds = 20;
+    double start = 0;
+    std::vector<PoseThread::Sample> samples;
+    std::vector<std::string> heard; // one line per knock and action, for the report
+};
+
+// Writes the recording as ~/knockthru-knocks.csv.gz and its summary as knocks.txt.
+// The angular velocity columns are zero, because the detector does not read them.
+void write_recording(const KnockRecording& recording) {
+    const auto csv = knockthru::user_directory() / "knocks.csv";
+    {
+        std::ofstream out(csv, std::ios::trunc);
+        out << kCsvHeader;
+        static constexpr std::array<const char*, 3> names{"hmd", "left", "right"};
+        char line[256];
+        for (const auto& s : recording.samples) {
+            std::snprintf(line, sizeof line, "%.6f,%s,1,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,0,0,0\n", s.t - recording.start,
+                names[static_cast<int>(s.device)], s.position[0], s.position[1], s.position[2], s.velocity[0], s.velocity[1],
+                s.velocity[2]);
+            out << line;
+        }
+        if (!out) throw std::runtime_error("Cannot write " + csv.string());
+    }
+    if (knockthru::run_program({"gzip", "-f", csv.string()}) != 0) throw std::runtime_error("gzip could not compress the recording");
+    fs::copy_file(csv.string() + ".gz", recording_path(), fs::copy_options::overwrite_existing);
+    fs::remove(csv.string() + ".gz");
+    std::ofstream summary(knockthru::user_directory() / "knocks.txt", std::ios::trunc);
+    summary << "Recorded " << recording.samples.size() << " samples over " << KnockRecording::kSeconds << " s. Heard "
+            << recording.heard.size() << " knocks and actions:\n";
+    for (const auto& line : recording.heard) summary << line << "\n";
+}
+
 fs::path report_path() {
     const auto home = std::getenv("HOME");
     return fs::path(home && *home ? home : "/tmp") / "knockthru-report.txt";
@@ -517,6 +556,12 @@ std::string report_text(bool vr, const std::string& room_view) {
     }
     out << "Room View: " << room_view << "\n";
     const auto user = knockthru::user_directory();
+    // The summary of the last knock recording, if it is under an hour old.
+    std::error_code age_error;
+    const auto knocks = user / "knocks.txt";
+    if (fs::exists(knocks, age_error) &&
+        fs::file_time_type::clock::now() - fs::last_write_time(knocks, age_error) < std::chrono::hours(1))
+        out << "\n== Knock recording, knockthru-knocks.csv.gz ==\n" << tail(knocks, 200);
     for (const auto* name : {"config.json", "calibration.json"})
         out << "\n== " << (user / name).string() << " ==\n" << tail(user / name, 400);
     out << "\n== " << (user / "application.log").string() << ", last 300 lines ==\n" << tail(user / "application.log", 300);
@@ -796,6 +841,8 @@ int run() {
     const auto binary = executable();
 
     std::string last_error; // for the report link
+    std::optional<KnockRecording> recording; // while the report card records knocks
+    std::future<void> recording_job;         // writes a finished recording
     std::unique_ptr<knockthru::ReportServer> report_server; // while the report card shows
     const auto room_view_text = [&]() -> std::string {
         return !state.room_view_error.empty() ? state.room_view_error
@@ -1027,6 +1074,15 @@ int run() {
                     state.report_error.clear();
                     break;
                 }
+                case PanelCommand::RecordKnocks:
+                    if (recording || recording_job.valid()) break;
+                    recording.emplace();
+                    recording->start = t;
+                    recording->samples.reserve(70000);
+                    state.recording_knocks = 0;
+                    state.recorded = false;
+                    log("Recording knocks for a bug report");
+                    break;
                 case PanelCommand::CloseReport:
                     report_server.reset();
                     break;
@@ -1113,9 +1169,51 @@ int run() {
             }
         }
 
-        for (const auto& sample : poses.take()) detector.push(sample.device, sample.t, sample.position, sample.velocity);
+        for (const auto& sample : poses.take()) {
+            detector.push(sample.device, sample.t, sample.position, sample.velocity);
+            if (recording) recording->samples.push_back(sample);
+        }
         const auto knock_event = detector.poll(t);
         const auto knocks = detector.take_knocks();
+        if (recording) {
+            char line[160];
+            for (const auto& knock : knocks) {
+                std::snprintf(line, sizeof line, "%6.2f s  %s knock, peak %.0f m/s^2", knock.t - recording->start,
+                    knockthru::to_string(knock.kind), knock.peak);
+                recording->heard.push_back(line);
+            }
+            if (knock_event) {
+                std::snprintf(line, sizeof line, "%6.2f s  %s %s knock", knock_event->t - recording->start,
+                    knock_event->count == 3 ? "triple" : "double", knockthru::to_string(knock_event->kind));
+                recording->heard.push_back(line);
+            }
+            state.recording_knocks = static_cast<int>(knocks.size()) + state.recording_knocks;
+            const double left = KnockRecording::kSeconds - (t - recording->start);
+            state.recording_left = static_cast<int>(std::ceil(std::max(left, 0.0)));
+            if (left <= 0) {
+                state.recording_left = -1;
+                log("Recorded " + std::to_string(recording->samples.size()) + " samples and " +
+                    std::to_string(recording->heard.size()) + " knocks and actions");
+                recording_job = std::async(std::launch::async, [finished = std::move(*recording)] { write_recording(finished); });
+                recording.reset();
+            }
+            if (panel) panel->invalidate();
+        }
+        if (recording_job.valid() && recording_job.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            try {
+                recording_job.get();
+                state.recorded = true;
+                log("Knock recording saved to " + recording_path().string());
+                if (report_server) {
+                    report_server->set_report(knockthru::fit_report(report_text(true, room_view_text())));
+                    report_server->set_recording(recording_path());
+                }
+            } catch (const std::exception& error) {
+                state.report_error = std::string("recording not saved: ") + error.what();
+                log(std::string("Knock recording not saved: ") + error.what());
+            }
+            if (panel) panel->invalidate();
+        }
         // Opens the click stream on the first knock, so it is ready if a triple knock follows.
         if (config.sounds && !config.paused && !knocks.empty()) knockthru::prepare_click();
 

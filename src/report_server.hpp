@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <filesystem>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -12,8 +14,10 @@ std::string local_address();
 
 // The phone page: the report in a box, and one button that copies it and
 // opens `issue_link`, the prefilled GitHub form. `download` is the path of
-// the report as a file. `issue_link` must be URL-encoded, so it has no quotes.
-std::string report_page(const std::string& report, const std::string& issue_link, const std::string& download);
+// the report as a file. `recording` is the path of the knock recording, or
+// empty for none. `issue_link` must be URL-encoded, so it has no quotes.
+std::string report_page(const std::string& report, const std::string& issue_link, const std::string& download,
+                        const std::string& recording = "");
 
 // Serves one report to phones on the same network, so a QR code can carry a
 // short link instead of the report. Paths need a random token, and the server
@@ -29,11 +33,18 @@ public:
     // http://address:port/token, the page link for the QR code.
     const std::string& url() const { return url_; }
 
+    // Replaces the report, for one that gained a knock recording summary.
+    void set_report(std::string report);
+    // Offers a gzipped knock recording on the page. The file is read when a phone asks for it.
+    void set_recording(std::filesystem::path recording);
+
 private:
     void loop();
     void answer(int client);
 
-    std::string report_, page_, url_, token_;
+    std::mutex mutex_; // guards report_ and recording_, which the app sets while phones read them
+    std::string report_, issue_link_, url_, token_;
+    std::filesystem::path recording_;
     int listener_ = -1;
     std::atomic<bool> stop_{false};
     std::thread thread_;

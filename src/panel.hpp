@@ -71,7 +71,10 @@ struct PanelState {
     std::string report_url;          // the GitHub issue link the report card shows as a QR code
     bool report_full = false;        // report_url is the headset's page with the full report
     std::string report_saved;        // where Save report file wrote the report, empty before
-    std::string report_error;        // why Save report file failed
+    std::string report_error;        // why Save to headset or the recording failed
+    int recording_left = -1;         // seconds left in a knock recording, -1 when none runs
+    int recording_knocks = 0;        // knocks heard so far in the recording
+    bool recorded = false;           // a knock recording is ready for the report
     std::string message;
     bool message_is_error = false;
 };
@@ -96,6 +99,7 @@ enum class PanelCommand {
     ShowReport,         // starts the report page for the report card's QR code
     CloseReport,
     SaveReport,         // writes the full report to the home folder
+    RecordKnocks,       // records 20 s of controller motion for the report
 };
 
 struct PanelClick {
