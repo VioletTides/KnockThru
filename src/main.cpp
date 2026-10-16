@@ -930,7 +930,9 @@ int run() {
             const std::string what = std::string(" (") + (knock_event->count == 3 ? "triple " : "double ") +
                 knockthru::to_string(knock_event->kind) + " knock)";
             // The tour's knock steps act even when paused or off in this game, so the user can practice.
-            const bool practicing = tour && (tour->step == Step::Double || tour->step == Step::Triple);
+            // Only while the panel shows them, so a tour left open never overrides the settings in a game.
+            const bool practicing = tour && (tour->step == Step::Double || tour->step == Step::Triple) && panel &&
+                panel->visible();
             if (config.paused && !practicing) {
                 log("Ignored" + what + ": paused");
             } else if (config.blocked_apps.count(state.app_key) && !practicing) {

@@ -111,7 +111,7 @@ public:
     static void draw_icon(Canvas& canvas, IconStyle style = IconStyle::Tile);
 
 private:
-    enum class Screen { Main, Settings, Reset, Pick, Learn };
+    enum class Screen { Main, Settings, Reset, Pick, Learn, SkipTour };
     // What is on screen, for transitions: a screen, a calibration phase, or the tour.
     enum class View { Main, Settings, Reset, Pick, Learn, Record, Try, Tour };
     struct Target {
@@ -146,7 +146,8 @@ private:
     void tour_screen(const PanelState& state, const TourView& tour);
     void tour_knock_step(const PanelState& state, const TourView& tour);
     void tour_buttons(bool first, bool last, bool complete);
-    void reset_confirm();
+    void confirm_card(const std::string& title, const std::string& text, const std::string& cancel, Screen cancel_to,
+                      const std::string& confirm, PanelClick confirm_click, bool danger);
     void steps(int current, int total);
     void check_mark(float cx, float cy, float radius, float pop);
     void knock_scene(KnockKind kind, Rect box, float t, int knocks);

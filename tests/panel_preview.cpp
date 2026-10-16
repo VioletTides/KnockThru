@@ -85,7 +85,7 @@ void calibration(const std::filesystem::path& out, const PanelState& idle) {
     shot(panel, state, 81, out / "calibrate-saved-kind-off.png");
 }
 
-// The tour's five steps, with the knock steps before and after their knock.
+// The tour's six steps, with the knock and calibrate steps before and after they finish.
 void tour(const std::filesystem::path& out, const PanelState& idle) {
     Panel panel(KNOCKTHRU_FONTS);
     PanelState state = idle;
@@ -115,6 +115,16 @@ void tour(const std::filesystem::path& out, const PanelState& idle) {
     shot(panel, state, 70, out / "tour-5-triple-heard.png");
     state.tour->step = TourView::Step::Done;
     shot(panel, state, 80, out / "tour-6-done.png");
+    state.tour->step = TourView::Step::Triple;
+    panel.render(state, std::nullopt, 89);
+    panel.click(856, 692); // Skip opens the confirm card
+    shot(panel, state, 90, out / "tour-skip-confirm.png");
+    panel.click(388, 496); // Keep going
+    state.tour->step = TourView::Step::Kinds;
+    state.enabled = {false, false, false};
+    state.message = "Settings not saved: Cannot write config.json";
+    state.message_is_error = true;
+    shot(panel, state, 100, out / "tour-2-kinds-none.png");
 }
 
 int main(int argc, char** argv) {

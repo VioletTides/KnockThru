@@ -472,7 +472,7 @@ void Panel::settings_screen(const PanelState& state) {
     canvas_.text(bold_, "Settings", kMargin + 172, 68, 38, kText);
     const float top = 128, w = kWidth - 2 * kMargin, row = 112;
     canvas_.rounded_rect({kMargin, top, w, 5 * row}, kRadius, kSurface);
-    button_row({kMargin, top, w, row}, "Knocks getting missed?", "Calibrate to learn how hard you knock", "Calibrate",
+    button_row({kMargin, top, w, row}, "Knocks getting missed?", "KnockThru learns how hard you knock", "Calibrate",
         std::nullopt, Screen::Pick, false, false);
     switch_row({kMargin, top + row, w, row}, PanelClick{PanelCommand::Sounds}, state.sounds, "Sounds",
         "Click on a triple knock and on buttons", true, true);
@@ -488,33 +488,31 @@ void Panel::settings_screen(const PanelState& state) {
     if (state.message_is_error) message(state, top + 5 * row + 50);
 }
 
-// The factory reset confirm, a card over the settings screen. Only its buttons respond.
-void Panel::reset_confirm() {
+// A confirm card over the screen below it. Only its two buttons respond.
+void Panel::confirm_card(const std::string& title, const std::string& text, const std::string& cancel, Screen cancel_to,
+                         const std::string& confirm, PanelClick confirm_click, bool danger) {
     targets_.clear();
     canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
     const Rect card{220, 190, kWidth - 440, 390};
     canvas_.rounded_rect(card, kRadius, kSurface);
-    canvas_.text(bold_, "Reset KnockThru?", card.x + 48, card.y + 72, 38, kText);
+    canvas_.text(bold_, title, card.x + 48, card.y + 72, 38, kText);
     float y = card.y + 140;
-    for (const auto& line : canvas_.wrap(regular_,
-             "This deletes your settings, blocked games, and calibration. The tour starts again afterward.", 28,
-             card.w - 96, 3)) {
+    for (const auto& line : canvas_.wrap(regular_, text, 28, card.w - 96, 3)) {
         canvas_.text(regular_, line, card.x + 48, y, 28, kText);
         y += 40;
     }
     const float by = card.y + card.h - 48 - 72;
-    button({card.x + 48, by, 220, 72}, "Cancel", std::nullopt, Screen::Settings);
-    button({card.x + card.w - 48 - 220, by, 220, 72}, "Reset", PanelClick{PanelCommand::FactoryReset}, Screen::Main, true,
-        true, true);
+    button({card.x + 48, by, 240, 72}, cancel, std::nullopt, cancel_to);
+    button({card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, Screen::Main, true, true, danger);
 }
 
 // Back and Next along the bottom, with Skip. The first step has Skip and Start, the last Back and Done.
-// Next stays off until the step is complete. Skip always works and ends the tour.
+// Next stays off until the step is complete. Skip always works, after a confirm card.
 void Panel::tour_buttons(bool first, bool last, bool complete) {
     const float y = 656, h = 72;
     const Rect go{kWidth - kMargin - 200, y, 200, h};
     if (first) {
-        button({kMargin, y, 180, h}, "Skip", PanelClick{PanelCommand::TourSkip}, std::nullopt);
+        button({kMargin, y, 180, h}, "Skip", std::nullopt, Screen::SkipTour);
         button(go, "Start", PanelClick{PanelCommand::TourNext}, std::nullopt, true);
         return;
     }
@@ -523,7 +521,7 @@ void Panel::tour_buttons(bool first, bool last, bool complete) {
         button(go, "Done", PanelClick{PanelCommand::TourSkip}, std::nullopt, true);
         return;
     }
-    button({go.x - 24 - 160, y, 160, h}, "Skip", PanelClick{PanelCommand::TourSkip}, std::nullopt);
+    button({go.x - 24 - 160, y, 160, h}, "Skip", std::nullopt, Screen::SkipTour);
     button(go, "Next", PanelClick{PanelCommand::TourNext}, std::nullopt, true, complete);
 }
 
@@ -543,13 +541,21 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
     const float x = box.x + box.w + 48, w = kWidth - kMargin - x;
     float y = 190;
     for (const auto& line : canvas_.wrap(bold_,
-             triple ? "Knock three times to switch translucent and opaque" : "Knock twice to switch passthrough", 36, w, 2)) {
+             triple ? "Knock three times to switch between translucent and opaque" : "Knock twice to switch passthrough", 36, w, 2)) {
         canvas_.text(bold_, line, x, y, 36, kText);
         y += 48;
     }
     y += 4;
-    for (const auto& line : canvas_.wrap(regular_,
-             "Any knock works: controllers together, a controller on a table, or a controller on the headset.", 28, w, 3)) {
+    // Lists only the kinds left on, since the others do nothing.
+    static constexpr const char* kWays[3] = {"controllers together", "a controller on a table", "a controller on the headset"};
+    std::vector<std::string> ways;
+    for (int k = 0; k < 3; ++k)
+        if (state.enabled[k]) ways.push_back(kWays[k]);
+    std::string list;
+    for (std::size_t i = 0; i < ways.size(); ++i)
+        list += (i == 0 ? "" : i + 1 == ways.size() ? (ways.size() == 2 ? " or " : ", or ") : ", ") + ways[i];
+    const std::string how = ways.size() > 1 ? "Any of these work: " + list + "." : "Use " + list + ".";
+    for (const auto& line : canvas_.wrap(regular_, how, 28, w, 3)) {
         canvas_.text(regular_, line, x, y, 28, kDim);
         y += 40;
     }
@@ -600,7 +606,7 @@ void Panel::tour_screen(const PanelState& state, const TourView& tour) {
         canvas_.draw(icon, (kWidth - 152) / 2, 150);
         canvas_.text(bold_, "Welcome to KnockThru", cx, 370, 48, kText, Align::Center);
         canvas_.text(regular_, "Knock to switch passthrough, without the side button.", cx, 440, 30, kDim, Align::Center);
-        canvas_.text(regular_, "This tour takes about a minute.", cx, 484, 30, kDim, Align::Center);
+        canvas_.text(regular_, "This tour takes a few minutes.", cx, 484, 30, kDim, Align::Center);
         tour_buttons(true, false, true);
         break;
     }
@@ -616,6 +622,8 @@ void Panel::tour_screen(const PanelState& state, const TourView& tour) {
         for (int k = 0; k < 3; ++k)
             switch_row({kMargin, 136 + k * 112.0f, w, 112}, PanelClick{PanelCommand::Kind, static_cast<KnockKind>(k)},
                 state.enabled[k], kKindTitles[k], kKindOnce[k], true, k > 0);
+        if (!state.enabled[0] && !state.enabled[1] && !state.enabled[2])
+            canvas_.text(regular_, "Turn on at least one knock to continue.", kMargin, 530, 28, kError);
         tour_buttons(false, false, state.enabled[0] || state.enabled[1] || state.enabled[2]);
         break;
     }
@@ -650,7 +658,9 @@ void Panel::tour_screen(const PanelState& state, const TourView& tour) {
         tour_buttons(false, true, true);
         break;
     }
-    if (state.message_is_error) message(state, 600);
+    // Errors go in the strip under the buttons, which every step leaves clear.
+    if (state.message_is_error)
+        canvas_.text(regular_, canvas_.fit(regular_, state.message, 24, kWidth - 2 * kMargin), kMargin, 748, 24, kError);
 }
 
 const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<float, float>> hover, double now) {
@@ -683,13 +693,18 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
         view = View::Tour;
         tour_step = state.tour->step;
         tour_screen(state, *state.tour);
+        if (screen_ == Screen::SkipTour)
+            confirm_card("Skip the tour?", "You can replay it any time from Settings.", "Keep going", Screen::Main,
+                "Skip", PanelClick{PanelCommand::TourSkip}, false);
     } else if (screen_ == Screen::Main) {
         main_screen(state);
     } else if (screen_ == Screen::Settings) {
         settings_screen(state);
     } else if (screen_ == Screen::Reset) {
         settings_screen(state);
-        reset_confirm();
+        confirm_card("Reset KnockThru?",
+            "This deletes your settings, blocked games, and calibration. The tour starts again afterward.", "Cancel",
+            Screen::Settings, "Reset", PanelClick{PanelCommand::FactoryReset}, true);
     } else if (screen_ == Screen::Pick) {
         pick_screen(state);
     } else {
