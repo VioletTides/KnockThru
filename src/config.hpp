@@ -19,6 +19,16 @@ struct AppConfig {
     bool classic_bar_icon = false; // the dashboard bar icon in the logo colors, without Steam's tint
     bool sounds = true; // SteamVR's click on a triple knock and on panel buttons
     bool tour_done = false; // the first-run tour finished or skipped
+    bool check_updates = true; // look for a new release on GitHub once a week
+};
+
+// What KnockThru remembers between runs that is not a setting, in
+// ~/.config/knockthru/state.json. A missing or unreadable file gives defaults.
+struct AppState {
+    std::string steamvr_version;  // the SteamVR version at the last start
+    std::string steamvr_since;    // the date KnockThru first saw that version, YYYY-MM-DD
+    std::string steamvr_previous; // the version before it, empty if none
+    long long last_update_check = 0; // Unix time of the last automatic update check
 };
 
 // One knock kind's calibration.
@@ -58,6 +68,13 @@ void save_tour_done(bool done);
 // Factory reset: deletes the user config.json and calibration.json. Keeps
 // application.log and the SteamVR registration files.
 void reset_user_settings();
+
+AppState load_state();
+void save_state(const AppState& state);
+
+// Records `version` as the running SteamVR version on `today` (YYYY-MM-DD).
+// Returns the previous version when it changed, or an empty string.
+std::string note_steamvr_version(AppState& state, const std::string& version, const std::string& today);
 
 Calibration load_calibration();
 void save_calibration(const Calibration& calibration);

@@ -210,7 +210,13 @@ void Panel::knocks_row(Rect rect, const PanelState& state) {
 
 void Panel::main_screen(const PanelState& state) {
     header("KnockThru");
-    button({kMargin + 500 - 160, 36, 160, 64}, "Settings", std::nullopt, Screen::Settings);
+    const Rect settings{kMargin + 500 - 160, 36, 160, 64};
+    button(settings, "Settings", std::nullopt, Screen::Settings);
+    // A dot on Settings when an update is ready, ringed in the background color so it reads on any fill.
+    if (state.update.status == UpdateView::Status::Available) {
+        canvas_.circle(settings.x + settings.w - 6, settings.y + 6, 13, kBackground);
+        canvas_.circle(settings.x + settings.w - 6, settings.y + 6, 9, kAccent);
+    }
     const float left_w = 500;
     passthrough_tile({kMargin, 128, left_w, 340}, state);
     style_control({kMargin, 500, left_w, 170}, state);

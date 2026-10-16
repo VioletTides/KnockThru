@@ -440,6 +440,13 @@ int uninstall(bool purge) {
     return 0;
 }
 
+std::string today() {
+    const auto now = std::time(nullptr);
+    char date[16];
+    std::strftime(date, sizeof date, "%F", std::localtime(&now));
+    return date;
+}
+
 std::string steamvr_version() {
     const char* version = vr::VRSystem() ? vr::VRSystem()->GetRuntimeVersion() : nullptr;
     return version && *version ? version : "unknown";
@@ -490,6 +497,10 @@ std::string report_text(bool vr, const std::string& room_view) {
     if (vr) {
         auto* apps = vr::VRApplications();
         out << "SteamVR: " << steamvr_version() << "\n";
+        const auto remembered = knockthru::load_state();
+        if (!remembered.steamvr_since.empty())
+            out << "SteamVR seen since: " << remembered.steamvr_since
+                << (remembered.steamvr_previous.empty() ? "" : ", before that " + remembered.steamvr_previous) << "\n";
         out << "Registered with SteamVR: " << (apps->IsApplicationInstalled(kAppKey) ? "yes" : "no") << "\n";
         out << "Starts with SteamVR: " << (apps->GetApplicationAutoLaunch(kAppKey) ? "yes" : "no") << "\n";
         const auto pid = apps->GetApplicationProcessId(kAppKey);
@@ -692,6 +703,21 @@ int run() {
     log(std::string("KnockThru ") + kVersion + " starting");
     VrSession session(vr::VRApplication_Overlay, true);
     log("SteamVR " + steamvr_version());
+    // A SteamVR update is the usual cause when Room View control breaks, so the log marks each one.
+    auto app_state = knockthru::load_state();
+    const auto save_app_state = [&] {
+        try {
+            knockthru::save_state(app_state);
+        } catch (const std::exception& error) {
+            log(std::string("State not saved: ") + error.what());
+        }
+    };
+    {
+        const auto before = app_state.steamvr_version;
+        const auto previous = knockthru::note_steamvr_version(app_state, steamvr_version(), today());
+        if (!previous.empty()) log("SteamVR changed from " + previous + " to " + app_state.steamvr_version);
+        if (app_state.steamvr_version != before) save_app_state();
+    }
 
     const auto pid = static_cast<uint32_t>(getpid());
     std::array<char, vr::k_unMaxApplicationKeyLength> key{};
@@ -760,6 +786,7 @@ int run() {
     bool room_view_job_toggles = false;
     std::future<void> tint_job;
     std::future<knockthru::Release> check_job;
+    bool check_is_automatic = false; // the weekly check, which never shows errors
     std::future<void> install_job;
     std::optional<knockthru::Release> latest; // the newer release a check found
     const auto update_work = knockthru::user_directory() / "update";
@@ -874,6 +901,19 @@ int run() {
             }
             state.app_key = scene_app_key();
             state.app_name = app_name(state.app_key);
+            // The weekly check waits a minute after start, for the Wi-Fi. It fails quietly.
+            const auto now_epoch = static_cast<long long>(std::time(nullptr));
+            if (config.check_updates && t > 60 && !check_job.valid() && !install_job.valid() &&
+                state.update.status == knockthru::UpdateView::Status::Idle &&
+                now_epoch - app_state.last_update_check >= 7 * 24 * 3600) {
+                app_state.last_update_check = now_epoch;
+                save_app_state();
+                check_is_automatic = true;
+                log("Weekly update check");
+                check_job = std::async(std::launch::async, [update_work] {
+                    return knockthru::fetch_latest_release(update_work);
+                });
+            }
             if (const auto now_stamp = config_stamp(); now_stamp != stamp) {
                 stamp = now_stamp;
                 try {
@@ -953,6 +993,7 @@ int run() {
                     break;
                 case PanelCommand::CheckUpdate:
                     if (check_job.valid() || install_job.valid()) break;
+                    check_is_automatic = false;
                     state.update = {knockthru::UpdateView::Status::Checking, "", ""};
                     check_job = std::async(std::launch::async, [update_work] {
                         return knockthru::fetch_latest_release(update_work);
@@ -1191,11 +1232,17 @@ int run() {
                 const bool newer = knockthru::compare_versions(release.version, kVersion) > 0;
                 if (newer) latest = release;
                 else latest.reset();
-                state.update = {newer ? UpdateStatus::Available : UpdateStatus::Current, release.version, ""};
+                // An automatic check that finds nothing leaves the header as it was.
+                if (newer || !check_is_automatic)
+                    state.update = {newer ? UpdateStatus::Available : UpdateStatus::Current, release.version, ""};
                 log("Update check: " + release.version + (newer ? " is available" : " is the latest"));
             } catch (const std::exception& error) {
-                state.update = {UpdateStatus::Failed, "", error.what()};
-                show(std::string("Update check failed: ") + error.what(), true);
+                if (check_is_automatic) {
+                    log(std::string("Weekly update check failed: ") + error.what());
+                } else {
+                    state.update = {UpdateStatus::Failed, "", error.what()};
+                    show(std::string("Update check failed: ") + error.what(), true);
+                }
             }
             if (panel) panel->invalidate();
         }

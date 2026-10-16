@@ -139,6 +139,10 @@ int main(int argc, char** argv) {
     idle.message = "Passthrough off (double together knock)";
     panel.render(idle, std::make_pair(900.0f, 300.0f)).write_png(out / "panel-idle.png");
 
+    PanelState ready = idle;
+    ready.update = {UpdateView::Status::Available, "0.2.0", ""};
+    panel.render(ready).write_png(out / "panel-update-ready.png");
+
     PanelState busy = idle;
     busy.room_view = true;
     busy.opaque = true;

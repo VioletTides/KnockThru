@@ -55,6 +55,27 @@ int main() {
     check(fs::exists(user / "application.log"), "reset keeps application.log");
     const auto after = load_config(install);
     check(!after.tour_done && !after.paused, "settings are back to defaults after reset");
+    check(after.check_updates, "the weekly update check is on by default");
+
+    {
+        AppState state = load_state();
+        check(state.steamvr_version.empty() && state.last_update_check == 0, "state defaults without a file");
+        check(note_steamvr_version(state, "2.18.2", "2026-10-15").empty() && state.steamvr_since == "2026-10-15",
+            "the first SteamVR version is not a change");
+        check(note_steamvr_version(state, "2.18.2", "2026-10-16").empty() && state.steamvr_since == "2026-10-15",
+            "the same SteamVR version is not a change");
+        check(note_steamvr_version(state, "2.19.0", "2026-10-20") == "2.18.2" && state.steamvr_previous == "2.18.2" &&
+                  state.steamvr_since == "2026-10-20",
+            "a new SteamVR version reports the old one");
+        state.last_update_check = 1792000000;
+        save_state(state);
+        const auto loaded = load_state();
+        check(loaded.steamvr_version == "2.19.0" && loaded.steamvr_previous == "2.18.2" &&
+                  loaded.last_update_check == 1792000000,
+            "state survives a save and load");
+        std::ofstream(user / "state.json") << "not json";
+        check(load_state().steamvr_version.empty(), "a damaged state file gives defaults");
+    }
 
     fs::remove_all(root);
     std::cout << (failures ? std::to_string(failures) + " failed\n" : "all passed\n");
