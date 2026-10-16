@@ -730,9 +730,13 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
     canvas_.text(bold_, triple ? "Knock three times" : "Knock twice", kMargin, 68, 38, kText);
     const Rect box{kMargin, 128, 420, 500};
     canvas_.rounded_rect(box, kRadius, kSurface);
-    // The scene shows each knock kind in turn, one per loop.
+    // The scene shows each knock kind left on in turn, one per loop.
+    std::vector<KnockKind> shown;
+    for (int k = 0; k < 3; ++k)
+        if (state.enabled[k]) shown.push_back(static_cast<KnockKind>(k));
+    if (shown.empty()) shown = {KnockKind::Together, KnockKind::Surface, KnockKind::Headset};
     const double loop = 2.6;
-    const auto kind = static_cast<KnockKind>(static_cast<int>(now_ / loop) % 3);
+    const auto kind = shown[static_cast<std::size_t>(now_ / loop) % shown.size()];
     knock_scene(kind, {box.x + 20, box.y + 40, box.w - 40, 340}, static_cast<float>(std::fmod(now_, loop)), triple ? 3 : 2);
     canvas_.text(bold_, kKindTitles[static_cast<int>(kind)], box.x + box.w / 2, box.y + 440, 28, kText, Align::Center);
 
