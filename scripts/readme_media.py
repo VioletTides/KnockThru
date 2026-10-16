@@ -36,6 +36,7 @@ HAIRLINE = (46, 50, 58)
 TEXT = (236, 238, 241)
 DIM = (150, 156, 168)
 ACCENT = (58, 145, 232)
+ERROR = (240, 110, 100)
 TABLE = (120, 92, 70)
 
 
@@ -43,6 +44,9 @@ def font(size, bold=False):
     name = "NotoSans-SemiBold.ttf" if bold else "NotoSans-Regular.ttf"
     return ImageFont.truetype(str(FONTS / name), size)
 
+
+# Panel colors that each keep an exact palette entry in every GIF.
+KEEP_COLORS = (ERROR,)
 
 CORNER = 18  # rounded GIF corners, in pixels, so each GIF reads as a card on light and dark pages
 
@@ -58,11 +62,17 @@ def write_gif(frames, path, step=1):
     with tempfile.TemporaryDirectory() as tmp:
         for i, frame in enumerate(frames):
             frame.save(f"{tmp}/{i:04d}.png")
-        opaque = Path(tmp) / "opaque.gif"
+        # A small label, like the red Reset, has too few pixels to win a palette entry and comes out
+        # mustard. One extra frame of each such color, seen only by palettegen, gives it its own entry.
+        for k, color in enumerate(KEEP_COLORS):
+            Image.new("RGB", frames[0].size, color).save(f"{tmp}/{len(frames) + k:04d}.png")
+        palette_png, opaque = Path(tmp) / "palette.png", Path(tmp) / "opaque.gif"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", f"{tmp}/%04d.png",
+                        "-vf", "palettegen=max_colors=127", str(palette_png)], check=True)
         subprocess.run(
             ["ffmpeg", "-loglevel", "error", "-y", "-framerate", str(FPS / step), "-i", f"{tmp}/%04d.png",
-             "-filter_complex", "split[a][b];[a]palettegen=max_colors=127[p];[b][p]paletteuse=dither=none",
-             str(opaque)],
+             "-i", str(palette_png), "-filter_complex", "[0][1]paletteuse=dither=none",
+             "-frames:v", str(len(frames)), str(opaque)],
             check=True)
         decoded = Image.open(opaque)
         colored = []
