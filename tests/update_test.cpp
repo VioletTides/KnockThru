@@ -15,6 +15,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <sstream>
 #include <string>
 
 #include <arpa/inet.h>
@@ -247,9 +248,11 @@ int main() {
                                              out.string() + "'"});
         for (int i = 0; i < 50 && read(out).find('\n') == std::string::npos; ++i) usleep(20000);
         usleep(100000);
-        const auto listing = read(out);
-        check(listing.find(std::to_string(held) + "\n") == std::string::npos,
-            "start_detached closes inherited descriptors");
+        // Whole lines only: the session ID on the last line can end in the same digits.
+        std::istringstream lines(read(out));
+        bool inherited = false;
+        for (std::string line; std::getline(lines, line);) inherited = inherited || line == std::to_string(held);
+        check(!inherited, "start_detached closes inherited descriptors");
         ::close(held);
     }
 
