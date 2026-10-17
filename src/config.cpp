@@ -123,8 +123,6 @@ void update_user_config(const std::string& key, const json& value) {
 
 void save_paused(bool paused) { update_user_config("paused", paused); }
 
-void save_classic_bar_icon(bool classic) { update_user_config("classic_bar_icon", classic); }
-
 void save_knock_types(const std::array<bool, 3>& enabled) {
     json kinds = json::array();
     for (int k = 0; k < 3; ++k)

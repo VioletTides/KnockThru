@@ -593,14 +593,6 @@ void App::handle_click(const PanelClick& click, double t) {
             log(std::string("Bug report not saved: ") + error.what());
         }
         break;
-    case PanelCommand::BarIcon:
-        if (save([&] { save_classic_bar_icon(!config_.classic_bar_icon); })) {
-            show(config_.classic_bar_icon ? "Classic bar icon on" : "Classic bar icon off");
-            // The icon image changes this frame. Restyle the bar now, not at the
-            // next 2 s check, so the old tint never shows over the new icon.
-            next_slow_check_ = 0;
-        }
-        break;
     case PanelCommand::Kind: {
         auto enabled = config_.detector.enabled;
         enabled[kind] = !enabled[kind];
@@ -866,7 +858,6 @@ void App::draw_panel(double t) {
     if (!panel_) return;
     state_.busy = room_view_job_.valid() && room_view_job_toggles_;
     state_.paused = config_.paused;
-    state_.classic_bar_icon = config_.classic_bar_icon;
     state_.sounds = config_.sounds;
     state_.tour = tour_;
     panel_->set_bar_icon(config_.classic_bar_icon);
@@ -907,7 +898,7 @@ void App::run_test_command(const std::string& line, double t, std::deque<Knock>&
                            std::optional<KnockEvent>& event) {
     static const std::map<std::string, PanelCommand> commands{{"RoomView", PanelCommand::RoomView},
         {"Style", PanelCommand::Style}, {"Pause", PanelCommand::Pause}, {"Kind", PanelCommand::Kind},
-        {"BlockApp", PanelCommand::BlockApp}, {"BarIcon", PanelCommand::BarIcon}, {"Calibrate", PanelCommand::Calibrate},
+        {"BlockApp", PanelCommand::BlockApp}, {"Calibrate", PanelCommand::Calibrate},
         {"CancelCalibration", PanelCommand::CancelCalibration}, {"SaveCalibration", PanelCommand::SaveCalibration},
         {"Sounds", PanelCommand::Sounds}, {"StartTour", PanelCommand::StartTour}, {"TourNext", PanelCommand::TourNext},
         {"TourBack", PanelCommand::TourBack}, {"TourSkip", PanelCommand::TourSkip},

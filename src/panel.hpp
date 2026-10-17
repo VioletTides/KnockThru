@@ -64,7 +64,6 @@ struct PanelState {
     std::optional<bool> opaque;      // Room View style, unknown without SteamVR
     bool busy = false;               // a Room View change is in progress
     bool paused = false;
-    bool classic_bar_icon = false;   // the bar icon in the logo colors
     bool sounds = true;              // SteamVR's click on a triple knock and on panel buttons
     std::array<bool, 3> enabled{true, true, true}; // per KnockKind
     std::string app_key, app_name;   // the running game, empty when none
@@ -94,7 +93,7 @@ enum class IconStyle {
 };
 
 enum class PanelCommand {
-    RoomView, Style, Pause, Kind, BlockApp, BarIcon,
+    RoomView, Style, Pause, Kind, BlockApp,
     Calibrate,          // starts recording a kind, or records it again
     CancelCalibration,
     SaveCalibration,

@@ -487,21 +487,18 @@ void Panel::settings_screen(const PanelState& state) {
     canvas_.text(bold_, "Settings", kMargin + 172, 68, 38, kText);
     update_control(state);
     const float top = 128, w = kWidth - 2 * kMargin, row = 92;
-    canvas_.rounded_rect({kMargin, top, w, 6 * row}, kRadius, kSurface);
+    canvas_.rounded_rect({kMargin, top, w, 5 * row}, kRadius, kSurface);
     button_row({kMargin, top, w, row}, "Knocks getting missed?", "KnockThru learns how hard you knock", "Calibrate",
         std::nullopt, Screen::Pick, false, false);
     switch_row({kMargin, top + row, w, row}, PanelClick{PanelCommand::Sounds}, state.sounds, "Sounds",
         "Click on a triple knock and on buttons", true, true);
-    switch_row({kMargin, top + 2 * row, w, row}, PanelClick{PanelCommand::BarIcon}, state.classic_bar_icon,
-        "Classic bar icon", "Show the logo colors in the dashboard bar", true, true);
-    canvas_.draw(icon(64, state.classic_bar_icon ? IconStyle::BarColor : IconStyle::BarWhite), static_cast<int>(kMargin + w - 24 - 80 - 40 - 64), static_cast<int>(top + 2 * row + (row - 64) / 2));
-    button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "Learn the knocks again", "Replay",
+    button_row({kMargin, top + 2 * row, w, row}, "Guided tour", "Learn the knocks again", "Replay",
         PanelClick{PanelCommand::StartTour}, std::nullopt, false);
-    button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
+    button_row({kMargin, top + 3 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
         PanelClick{PanelCommand::ShowReport}, Screen::Report, false);
-    button_row({kMargin, top + 5 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset", std::nullopt,
+    button_row({kMargin, top + 4 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset", std::nullopt,
         Screen::Reset, true);
-    if (state.message_is_error) message(state, top + 6 * row + 40);
+    if (state.message_is_error) message(state, top + 5 * row + 40);
 }
 
 // The version and the update button, at the top right of Settings.
