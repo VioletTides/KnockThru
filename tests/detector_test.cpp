@@ -110,7 +110,8 @@ DetectorConfig test_config() {
         {"min_approach_together", &config.min_approach[0]}, {"min_approach_surface", &config.min_approach[1]},
         {"min_approach_headset", &config.min_approach[2]},
         {"max_speed_after", &config.max_speed_after}, {"surface_speed_after", &config.surface_speed_after},
-        {"max_speed_before", &config.max_speed_before}, {"same_spot", &config.same_spot},
+        {"max_speed_before", &config.max_speed_before}, {"surface_speed_before", &config.surface_speed_before},
+        {"same_spot", &config.same_spot},
         {"min_gap_s", &config.min_gap_s}, {"fast_gap_s", &config.fast_gap_s}, {"max_gap_s", &config.max_gap_s},
         {"quiet_before_s", &config.quiet_before_s}};
     std::stringstream list(set);
@@ -225,6 +226,16 @@ void replay_tests() {
     check(surface["surfacex2"] >= 16, "surface: at least 16 surface doubles");
     auto headset = replay("headset");
     check(headset["headsetx2"] >= 15, "headset: at least 15 headset doubles");
+    // Doubles and triples knocked on a leg with each hand, headset worn. At
+    // surface_speed_before 1.8 most right-hand knocks were lost, giving 9 actions.
+    auto leg = replay("leg");
+    check(leg["surfacex2"] + leg["surfacex3"] >= 14 && total(leg) == leg["surfacex2"] + leg["surfacex3"],
+        "leg: at least 14 surface actions, nothing else");
+    // About 40 doubles knocked on a leg, a few seconds apart, mostly with the
+    // right hand. At same_spot 0.03, 20 counted.
+    auto leg_doubles = replay("leg-doubles");
+    check(leg_doubles["surfacex2"] >= 23 && total(leg_doubles) == leg_doubles["surfacex2"],
+        "leg-doubles: at least 23 surface doubles, nothing else");
     check(total(replay("play")) == 0, "play: no actions");
     check(total(replay("noise")) == 0, "noise: no actions");
     // The controllers bumping while the wearer fit the strap on each one, in Into the Radius 2.

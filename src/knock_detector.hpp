@@ -25,8 +25,9 @@ struct DetectorConfig {
     double max_speed_after = 0.4;  // m/s, 30 ms after the spike
     double surface_speed_after = 0.55; // m/s, table knocks rebound
     double max_speed_before = 1.8; // m/s, 30 ms before the spike
+    double surface_speed_before = 2.2; // m/s, knocks on a leg come in faster
     double together_distance = 0.15; // m, controller separation for a together knock
-    double same_spot = 0.03;       // m, surface knocks in one sequence must land this close
+    double same_spot = 0.06;       // m, surface knocks in one sequence must land this close. Leg knocks spread more than desk knocks.
     double merge_s = 0.08;         // spikes closer than this are one knock (bounces)
     double min_gap_s = 0.15;       // closer surface knocks are table bounces
     double fast_gap_s = 0.105;     // closer together or headset knocks are rebounds

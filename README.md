@@ -52,6 +52,8 @@ Any of these three knocks works. Use the same kind for every knock in a set.
 
 ![Three ways to knock: knock the controllers together, knock one controller on a table, or knock on the headset. Each one knocks twice, then three times](images/knock-kinds.gif)
 
+A surface knock also works on your leg. Keep the controller where the headset cameras can see it, because knocks out of view get missed more often.
+
 Pause for a moment, then knock at a steady pace. After your last knock, KnockThru waits a moment in case another one follows.
 
 ![Timeline: two knocks, a wait of about 0.4 seconds, then passthrough turns on and both controllers buzz. Then three knocks, the same wait, and the style switches with two buzzes](images/timing.gif)

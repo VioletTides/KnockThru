@@ -116,7 +116,7 @@ std::optional<Knock> KnockDetector::judge(Device device, std::size_t i) const {
     if (sample.accel < threshold) return std::nullopt;
     const auto* before = nearest(history, sample.t - 0.03);
     const auto* after = nearest(history, sample.t + 0.03);
-    if (!before || !after || norm(before->velocity) >= config_.max_speed_before ||
+    if (!before || !after || norm(before->velocity) >= (surface ? config_.surface_speed_before : config_.max_speed_before) ||
         norm(after->velocity) >= (surface ? config_.surface_speed_after : config_.max_speed_after))
         return std::nullopt;
     return knock;
