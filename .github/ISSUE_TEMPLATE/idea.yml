@@ -1,0 +1,15 @@
+name: Idea
+description: Suggest a feature or a change to KnockThru
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like KnockThru to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: When would you use it?
+      description: What you were doing when you wanted it, such as the game or the knock kind.
