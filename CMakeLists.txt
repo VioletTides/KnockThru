@@ -14,7 +14,7 @@ endif()
 include(cmake/OpenVRLoader.cmake)
 find_package(Threads REQUIRED)
 
-add_library(knockthru_core STATIC src/knock_detector.cpp src/config.cpp src/calibrator.cpp src/update.cpp src/report.cpp src/report_server.cpp src/room_view.cpp)
+add_library(knockthru_core STATIC src/knock_detector.cpp src/knock_actions.cpp src/config.cpp src/calibrator.cpp src/update.cpp src/report.cpp src/report_server.cpp src/room_view.cpp)
 target_include_directories(knockthru_core PUBLIC src third_party/json)
 target_compile_options(knockthru_core PRIVATE -Wall -Wextra -Wpedantic)
 
@@ -24,7 +24,7 @@ target_include_directories(knockthru_ui SYSTEM PRIVATE third_party/stb third_par
 target_link_libraries(knockthru_ui PUBLIC knockthru_core)
 target_compile_options(knockthru_ui PRIVATE -Wall -Wextra -Wpedantic)
 
-add_executable(knockthru src/main.cpp src/app.cpp src/steamvr.cpp src/poses.cpp src/diagnostics.cpp src/install.cpp src/style.cpp src/sound.cpp src/overlay_texture.cpp)
+add_executable(knockthru src/main.cpp src/app.cpp src/steamvr.cpp src/poses.cpp src/diagnostics.cpp src/install.cpp src/perf_overlay.cpp src/style.cpp src/sound.cpp src/overlay_texture.cpp)
 target_include_directories(knockthru SYSTEM PRIVATE third_party/vulkan/include)
 target_link_libraries(knockthru PRIVATE knockthru_core knockthru_ui openvr_loader Threads::Threads ${CMAKE_DL_LIBS})
 target_compile_definitions(knockthru PRIVATE KNOCKTHRU_VERSION="${PROJECT_VERSION}")

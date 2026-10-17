@@ -352,7 +352,7 @@ void readme_report(const std::filesystem::path& dir) {
     rec.play(state, 1.1);
     rec.click();
     rec.play(state, 0.5);
-    rec.aim(1050, 450); // Report on the Something wrong? row
+    rec.aim(1050, 542); // Report on the Something wrong? row
     rec.play(state, 1.3);
     rec.click();
     rec.play(state, 0.3);
@@ -391,7 +391,7 @@ int readme(const std::filesystem::path& out) {
     report_panel.render(report, std::nullopt, 40);
     report_panel.click(460, 60); // Settings
     report_panel.render(report, std::nullopt, 41);
-    report_panel.click(1050, 450); // Report on the Something wrong? row
+    report_panel.click(1050, 542); // Report on the Something wrong? row
     shot(report_panel, report, 43, out / "readme-report.png");
     // The page the phone opens from the QR code, as the headset serves it.
     std::ofstream(out / "readme-phone.html") << report_page(
@@ -403,6 +403,23 @@ int readme(const std::filesystem::path& out) {
     readme_report(out / "report");
     std::cout << "Wrote README panel states to " << out << "\n";
     return 0;
+}
+
+// Knock actions: the defaults, picking the performance graph for thrice, and a
+// config.json that gives kinds different actions. The state changes as the app would.
+void knock_actions(const std::filesystem::path& out, PanelState state) {
+    state.message.clear();
+    Panel panel(KNOCKTHRU_FONTS);
+    panel.render(state, std::nullopt, 60);
+    panel.click(460, 60); // Settings on the main screen
+    shot(panel, state, 61, out / "panel-settings-actions.png");
+    panel.click(1050, 266); // Change on the Knock actions row
+    shot(panel, state, 62, out / "actions-default.png", std::make_pair(885.0f, 400.0f));
+    panel.click(885, 400); // Performance graph under Knock thrice
+    state.knock_actions.set_all(3, KnockAction::PerfGraph);
+    shot(panel, state, 63, out / "actions-changed.png");
+    state.knock_actions.set(KnockKind::Headset, 2, KnockAction::None);
+    shot(panel, state, 64, out / "actions-kinds-differ.png");
 }
 
 int main(int argc, char** argv) {
@@ -490,7 +507,7 @@ int main(int argc, char** argv) {
     update.message_is_error = false;
     update.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
     update.report_full = true;
-    settings_panel.click(1050, 450); // Report on the Something wrong? row
+    settings_panel.click(1050, 542); // Report on the Something wrong? row
     settings_panel.render(update, std::nullopt, 0);
     settings_panel.render(update).write_png(out / "panel-report.png");
     update.recording_left = 14;
@@ -506,10 +523,11 @@ int main(int argc, char** argv) {
                         "&steamvr=2.18.2&passthrough=on";
     settings_panel.render(update).write_png(out / "panel-report-offline.png");
     settings_panel.click(900, 638); // Done
-    settings_panel.click(1050, 542); // Reset on the factory reset row
+    settings_panel.click(1050, 634); // Reset on the factory reset row
     settings_panel.render(idle, std::make_pair(800.0f, 500.0f)).write_png(out / "panel-reset-confirm.png");
 
     tour(out, idle);
+    knock_actions(out, idle);
 
     Canvas icon(256, 256);
     Panel::draw_icon(icon);
