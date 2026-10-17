@@ -61,10 +61,12 @@ Pause for a moment, then knock at a steady pace. After your last knock, KnockThr
 | You knock | What happens | You feel |
 | --- | --- | --- |
 | Twice | Passthrough turns on or off | One buzz |
-| Three times | The style switches between translucent and opaque. If passthrough is off, it stays off and opens in the new style next time | Two buzzes |
+| Thrice | The style switches between translucent and opaque. If passthrough is off, it stays off and opens in the new style next time | Two buzzes |
 | Four or more times, or mixed kinds | Nothing | Nothing |
 
-You also hear a click. Steam clicks when passthrough turns on or off, and KnockThru clicks when the style switches. To turn off KnockThru's click, use **Sounds** in Settings.
+Those are the defaults. To change what knocking twice or thrice does, open **Settings** and press **Change** on **Knock actions**. The choices are: switch passthrough, switch the style, show or hide SteamVR's performance graph, or do nothing. To give each kind of knock its own actions, set `knock_actions` in the [settings file](#for-tinkerers).
+
+You also hear a click. Steam clicks when passthrough turns on or off, and KnockThru clicks when the style or the performance graph switches. To turn off KnockThru's click, use **Sounds** in Settings.
 
 Three buzzes mean something went wrong. See [Something not working?](#something-not-working) below.
 
@@ -78,7 +80,7 @@ Open the SteamVR dashboard and pick the **KnockThru** tab to do everything by ha
 - **KnockThru On**: turns knocking off for a while without quitting the app.
 - **Controllers together**, **Controller on a surface**, **Knock on the headset**: pick which knock kinds count.
 - **Knocks in** your game: turns knocks off only in the game you're playing, for games where you knock things on purpose.
-- **Settings**: updates, Calibrate, Sounds, Guided tour, Report, and Factory reset.
+- **Settings**: updates, Calibrate, Knock actions, Sounds, Guided tour, Report, and Factory reset.
 
 ## Calibrate
 
@@ -149,7 +151,14 @@ Put your settings in `~/.config/knockthru/config.json`. This file survives updat
 - `debug_port`: the CEF Remote Debugging port. The default is 8080.
 - `classic_bar_icon`: `true` shows the dashboard bar icon in the logo colors. The default `false` shows the logo in grey, and white on hover, like Steam's own icons.
 - `check_updates`: `false` stops the daily update check. By default, KnockThru asks GitHub for the latest release once a day, a minute after it starts. **Check for updates** in Settings works either way.
-- `sounds`: `false` silences the click. By default, KnockThru plays SteamVR's dashboard click on a triple knock and on panel buttons. Steam already clicks when a double knock changes passthrough.
+- `sounds`: `false` silences the click. By default, KnockThru plays SteamVR's dashboard click when a knock switches the style or the performance graph, and on panel buttons. Steam already clicks when passthrough changes.
+- `knock_actions`: what each kind of knock does twice (`"2"`) and thrice (`"3"`): `passthrough`, `style`, `perf_graph`, or `none`. Kinds and counts you leave out keep their default. **Knock actions** in Settings writes this key, and sets every kind the same. For example, this makes knocking thrice on the headset show and hide the performance graph:
+
+  ```json
+  {
+    "knock_actions": { "headset": { "3": "perf_graph" } }
+  }
+  ```
 - `paused`: `true` while the **KnockThru On** switch is off. Knocks do nothing then.
 - `detector`: overrides for the knock detector's settings, such as `confirmed_peak` or `max_gap_s`. The comments in `src/knock_detector.hpp` describe each one. Calibration sets the peaks for you.
 - `tour_done`: `true` once the first-run tour is finished or skipped. Set it to `false` to see the tour the next time you open the KnockThru tab. Settings also has a Replay button.

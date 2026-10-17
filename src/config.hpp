@@ -1,5 +1,6 @@
 #pragma once
 
+#include "knock_actions.hpp"
 #include "knock_detector.hpp"
 
 #include <array>
@@ -20,6 +21,7 @@ struct AppConfig {
     bool sounds = true; // SteamVR's click on a triple knock and on panel buttons
     bool tour_done = false; // the first-run tour finished or skipped
     bool check_updates = true; // look for a new release on GitHub once a day
+    KnockActions knock_actions; // what each knock kind does twice and thrice
 };
 
 // What KnockThru remembers between runs that is not a setting, in
@@ -63,6 +65,8 @@ void save_paused(bool paused);
 void save_knock_types(const std::array<bool, 3>& enabled);
 void save_blocked_apps(const std::set<std::string>& apps);
 void save_sounds(bool sounds);
+// Writes the table, or removes the key when every action is the default.
+void save_knock_actions(const KnockActions& actions);
 void save_tour_done(bool done);
 
 // Factory reset: deletes the user config.json and calibration.json. Keeps

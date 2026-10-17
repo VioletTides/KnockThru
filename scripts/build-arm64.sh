@@ -20,7 +20,9 @@ sources=(
     src/diagnostics.cpp
     src/install.cpp
     src/knock_detector.cpp
+    src/knock_actions.cpp
     src/room_view.cpp
+    src/perf_overlay.cpp
     src/style.cpp
     src/sound.cpp
     src/config.cpp

@@ -64,6 +64,26 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
         } else if (const auto flag = flags.find(key); flag != flags.end()) {
             if (!value.is_boolean()) fail(key + " must be true or false");
             *flag->second = value.get<bool>();
+        } else if (key == "knock_actions") {
+            // {"surface": {"2": "passthrough", "3": "perf_graph"}}. Missing kinds and counts keep their default.
+            const auto bad = [&] {
+                fail("knock_actions maps together, surface, or headset to counts 2 and 3, each passthrough, style, "
+                     "perf_graph, or none");
+            };
+            if (!value.is_object()) bad();
+            config.knock_actions = {};
+            for (const auto& [kind_name, counts] : value.items()) {
+                const auto kind = parse_knock_kind(kind_name);
+                if (!kind || !counts.is_object()) bad();
+                for (const auto& [count_name, action_name] : counts.items()) {
+                    const auto action = action_name.is_string() ? parse_knock_action(action_name.get<std::string>())
+                                                                : std::nullopt;
+                    const bool known = std::find(kKnockCounts.begin(), kKnockCounts.end(),
+                                                 std::atoi(count_name.c_str())) != kKnockCounts.end();
+                    if (!action || !known || count_name != std::to_string(std::atoi(count_name.c_str()))) bad();
+                    config.knock_actions.set(*kind, std::atoi(count_name.c_str()), *action);
+                }
+            }
         } else if (key == "debug_port") {
             if (!value.is_number_integer()) fail("debug_port must be a whole number");
             config.debug_port = value.get<int>();
@@ -110,10 +130,12 @@ AppConfig load_config(const fs::path& install_directory) {
 
 namespace {
 
+// A null `value` removes the key.
 void update_user_config(const std::string& key, const json& value) {
     const auto path = user_directory() / "config.json";
     auto file = read_json(path);
-    file[key] = value;
+    if (value.is_null()) file.erase(key);
+    else file[key] = value;
     AppConfig check;
     merge(check, file, path); // never write a file that load_config would reject
     write_json(path, file);
@@ -133,6 +155,20 @@ void save_knock_types(const std::array<bool, 3>& enabled) {
 void save_blocked_apps(const std::set<std::string>& apps) { update_user_config("blocked_apps", apps); }
 
 void save_sounds(bool sounds) { update_user_config("sounds", sounds); }
+
+void save_knock_actions(const KnockActions& actions) {
+    if (actions.is_default()) {
+        update_user_config("knock_actions", nullptr);
+        return;
+    }
+    json table = json::object();
+    for (int k = 0; k < 3; ++k) {
+        const auto kind = static_cast<KnockKind>(k);
+        for (const int count : kKnockCounts)
+            table[to_string(kind)][std::to_string(count)] = to_string(actions.get(kind, count));
+    }
+    update_user_config("knock_actions", table);
+}
 
 void save_tour_done(bool done) { update_user_config("tour_done", done); }
 

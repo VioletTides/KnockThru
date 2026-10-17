@@ -8,7 +8,7 @@ The code is C++. Each part of the app lives in its own file pair under `src/`.
 
 1. **Reading motion.** A thread reads the headset and controller poses from SteamVR about once a millisecond (`src/poses.cpp`). Poses are only valid in SteamVR's standing tracking space on the Frame, so KnockThru reads them there.
 2. **Finding knocks.** The main loop feeds the poses to the knock detector (`src/knock_detector.cpp`). [How knock detection works](knock-detection.md) explains it.
-3. **Acting.** A double knock turns passthrough on or off. A triple knock switches its style. Both controllers buzz once for a double and twice for a triple. Three buzzes mean something failed.
+3. **Acting.** The action for each kind of knock and count comes from `knock_actions` in `config.json` (`src/knock_actions.cpp`). **Knock actions** in Settings sets every kind the same. By default, knocking twice turns passthrough on or off, and knocking thrice switches its style. The other actions show or hide SteamVR's performance graph, or do nothing. Both controllers buzz once after knocking twice, and two times after knocking thrice. Three buzzes mean something failed.
 
 Knocks do nothing while KnockThru is paused, or in a game where you turned knocks off.
 
@@ -19,6 +19,8 @@ KnockThru turns passthrough (Room View) on and off by pressing the Room View but
 The Steam client draws the dashboard bar as a web page, and it has a browser debug port (CEF Remote Debugging, port 8080 on the Frame). KnockThru connects to that port, finds the Room View button on the bar page, and clicks it (`src/room_view.cpp`). Then it reads the button's state back to check that passthrough really changed. This is why CEF Remote Debugging must be on in the Frame's Developer settings. The approach comes from [toorux/steam-frame-passthrough-toggle](https://github.com/toorux/steam-frame-passthrough-toggle).
 
 The style is simpler. Translucent and opaque are the SteamVR setting `camera.roomViewStyle`, 3 for translucent and 4 for opaque (`src/style.cpp`). KnockThru writes the setting and checks that SteamVR kept it. The values come from [KominoVR/frame-passthrough-shortcuts](https://github.com/KominoVR/frame-passthrough-shortcuts).
+
+The performance graph works the same way. It is the SteamVR setting `perfcheck.perfGraphInHMD` (`src/perf_overlay.cpp`), which Steam's Quick Access menu calls **Show Perf Overlay in VR**. It shows over games streamed from a PC too.
 
 If a Steam update moves the Room View button, KnockThru can't find it any more. The dashboard tab then says "A Steam update moved the Room View button. Update KnockThru in Settings."
 

@@ -1,6 +1,6 @@
 # KnockThru
 
-A double knock toggles Steam Frame passthrough (Room View). A triple knock switches Room View between translucent and opaque. The app runs on the Frame itself as a SteamVR overlay app.
+By default, a double knock toggles Steam Frame passthrough (Room View), and a triple knock switches Room View between translucent and opaque. `knock_actions` in `config.json` can give each kind of knock other actions (`src/knock_actions.*`). Knock actions in Settings sets every kind the same. The app runs on the Frame itself as a SteamVR overlay app.
 
 Read `docs/README.md` before you change knock detection, calibration, or how the app switches passthrough. It links one page for each.
 

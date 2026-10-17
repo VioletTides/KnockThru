@@ -8,6 +8,7 @@
 #include "knock_detector.hpp"
 #include "overlay_texture.hpp"
 #include "panel.hpp"
+#include "perf_overlay.hpp"
 #include "poses.hpp"
 #include "report.hpp"
 #include "report_server.hpp"
@@ -197,9 +198,10 @@ std::string heard_summary(const Calibrator& calibrator) {
     return line;
 }
 
-// The resident app. SteamVR starts it as a dashboard overlay. A double knock
-// turns Room View on or off, a triple knock switches translucent and opaque,
-// and the KnockThru dashboard tab has buttons for everything.
+// The resident app. SteamVR starts it as a dashboard overlay. Each knock kind
+// and count runs its action from knock_actions. By default, knocking twice turns
+// Room View on or off, and knocking thrice switches translucent and opaque. The
+// KnockThru dashboard tab has buttons for everything.
 class App {
 public:
     App();
@@ -240,6 +242,8 @@ private:
     void read_opaque();
     bool toggle_room_view(const std::string& why);
     bool toggle_style(const std::string& why);
+    bool toggle_perf_overlay(const std::string& why);
+    void run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t);
     bool save(const std::function<void()>& write);
     void start_check();
     void restart_failed(const std::string& version);
@@ -370,7 +374,12 @@ void App::load_haptics() {
 }
 
 void App::run() {
-    log("Ready. Double knock: Room View on or off. Triple knock: translucent or opaque.");
+    std::string actions;
+    for (const int count : kKnockCounts) {
+        const auto shared = config_.knock_actions.shared(count);
+        actions += std::string(" Knocking ") + count_word(count) + ": " + (shared ? to_string(*shared) : "different for each kind") + ".";
+    }
+    log("Ready." + actions);
     while (!stopping) {
         const double t = clock_.now();
         vr::VREvent_t event{};
@@ -487,6 +496,13 @@ void App::handle_click(const PanelClick& click, double t) {
     case PanelCommand::Sounds:
         if (save([&] { save_sounds(!config_.sounds); })) show(config_.sounds ? "Sounds on" : "Sounds off");
         break;
+    case PanelCommand::SetKnockAction: {
+        auto actions = config_.knock_actions;
+        actions.set_all(click.count, click.action);
+        if (save([&] { save_knock_actions(actions); }))
+            show(std::string("Knocking ") + count_word(click.count) + ": " + to_string(click.action));
+        break;
+    }
     case PanelCommand::StartTour: start_tour(); break;
     case PanelCommand::TourNext:
         if (tour_ && tour_->step != Step::Done) tour_->step = static_cast<Step>(static_cast<int>(tour_->step) + 1);
@@ -731,15 +747,10 @@ void App::handle_knocks(double t, const std::deque<Knock>& knocks, const std::op
         log("Ignored" + what + ": paused");
     } else if (config_.blocked_apps.count(state_.app_key) && !practicing) {
         log("Ignored" + what + ": knocks are off in " + state_.app_key);
-    } else if (event->count == 3) {
-        const bool changed = toggle_style(what);
-        if (changed) play_click();
-        haptics_.buzz(changed ? 2 : 3, t);
-        if (changed && tour_ && tour_->step == Step::Triple) tour_->triple_t = t;
-    } else if (toggle_room_view(what)) {
-        // Buzz now, because the switch can take a second. A failure buzzes 3 times later.
-        haptics_.buzz(1, t);
-        if (tour_ && tour_->step == Step::Double) tour_->double_t = t;
+    } else {
+        // The tour teaches the default actions, whatever Knock actions says.
+        run_action(practicing ? KnockActions::default_for(event->count) : config_.knock_actions.get(event->kind, event->count),
+            *event, what, t);
     }
 }
 
@@ -859,6 +870,7 @@ void App::draw_panel(double t) {
     state_.busy = room_view_job_.valid() && room_view_job_toggles_;
     state_.paused = config_.paused;
     state_.sounds = config_.sounds;
+    state_.knock_actions = config_.knock_actions;
     state_.tour = tour_;
     panel_->set_bar_icon(config_.classic_bar_icon);
     state_.enabled = config_.detector.enabled;
@@ -1035,6 +1047,48 @@ bool App::toggle_room_view(const std::string& why) {
         return RoomViewResult{on, std::string("Passthrough ") + (on ? "on" : "off") + why};
     });
     return true;
+}
+
+// Runs a knock action. Success buzzes once after knocking twice, and two times after knocking thrice.
+// A failure buzzes 3 times.
+void App::run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t) {
+    const int buzzes = event.count - 1;
+    const auto tick_tour = [&] {
+        if (!tour_) return;
+        if (tour_->step == Step::Double && event.count == 2) tour_->double_t = t;
+        if (tour_->step == Step::Triple && event.count == 3) tour_->triple_t = t;
+    };
+    switch (action) {
+    case KnockAction::Passthrough:
+        if (toggle_room_view(why)) {
+            // Buzz now, because the switch can take a second. A failure buzzes 3 times later.
+            haptics_.buzz(buzzes, t);
+            tick_tour();
+        }
+        return;
+    case KnockAction::Style:
+    case KnockAction::PerfGraph: {
+        // Steam clicks when passthrough switches, so KnockThru clicks only for these.
+        const bool changed = action == KnockAction::Style ? toggle_style(why) : toggle_perf_overlay(why);
+        if (changed) play_click();
+        haptics_.buzz(changed ? buzzes : 3, t);
+        if (changed) tick_tour();
+        return;
+    }
+    case KnockAction::None:
+        log("Ignored" + why + ": Knock actions says do nothing");
+        return;
+    }
+}
+
+bool App::toggle_perf_overlay(const std::string& why) {
+    try {
+        show(std::string("Performance graph ") + (knockthru::toggle_perf_overlay() ? "on" : "off") + why);
+        return true;
+    } catch (const std::exception& error) {
+        show(std::string("Performance graph not changed: ") + error.what(), true);
+        return false;
+    }
 }
 
 bool App::toggle_style(const std::string& why) {

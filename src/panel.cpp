@@ -487,18 +487,82 @@ void Panel::settings_screen(const PanelState& state) {
     canvas_.text(bold_, "Settings", kMargin + 172, 68, 38, kText);
     update_control(state);
     const float top = 128, w = kWidth - 2 * kMargin, row = 92;
-    canvas_.rounded_rect({kMargin, top, w, 5 * row}, kRadius, kSurface);
+    canvas_.rounded_rect({kMargin, top, w, 6 * row}, kRadius, kSurface);
     button_row({kMargin, top, w, row}, "Knocks getting missed?", "KnockThru learns how hard you knock", "Calibrate",
         std::nullopt, Screen::Pick, false, false);
-    switch_row({kMargin, top + row, w, row}, PanelClick{PanelCommand::Sounds}, state.sounds, "Sounds",
-        "Click on a triple knock and on buttons", true, true);
-    button_row({kMargin, top + 2 * row, w, row}, "Guided tour", "Learn the knocks again", "Replay",
+    button_row({kMargin, top + row, w, row}, "Knock actions", "What knocking twice or thrice does", "Change",
+        std::nullopt, Screen::Actions, false);
+    switch_row({kMargin, top + 2 * row, w, row}, PanelClick{PanelCommand::Sounds}, state.sounds, "Sounds",
+        "Click on knocks and on buttons", true, true);
+    button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "Learn the knocks again", "Replay",
         PanelClick{PanelCommand::StartTour}, std::nullopt, false);
-    button_row({kMargin, top + 3 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
+    button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
         PanelClick{PanelCommand::ShowReport}, Screen::Report, false);
-    button_row({kMargin, top + 4 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset", std::nullopt,
+    button_row({kMargin, top + 5 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset", std::nullopt,
         Screen::Reset, true);
-    if (state.message_is_error) message(state, top + 5 * row + 40);
+    if (state.message_is_error) message(state, top + 6 * row + 40);
+}
+
+// Knock twice and Knock thrice side by side, each a list of actions where one press picks.
+void Panel::actions_screen(const PanelState& state) {
+    button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Settings);
+    canvas_.text(bold_, "Knock actions", kMargin + 172, 68, 38, kText);
+    const float gap = 20, w = (kWidth - 2 * kMargin - gap) / kKnockCounts.size();
+    bool differ = false;
+    for (std::size_t i = 0; i < kKnockCounts.size(); ++i) {
+        action_list({kMargin + i * (w + gap), 128, w, 0}, state, kKnockCounts[i]);
+        differ = differ || !state.knock_actions.shared(kKnockCounts[i]);
+    }
+    // config.json can give each kind its own actions. The lists then pick nothing, and a press sets every kind.
+    const std::string note = differ ? "Your config.json gives knock kinds different actions. A choice here sets them all."
+                                    : "Every kind of knock gets these actions. To set kinds apart, edit config.json.";
+    if (state.message_is_error) message(state, 600);
+    else canvas_.text(regular_, note, kMargin, 620, 26, kDim);
+}
+
+namespace {
+
+// The names the action lists show.
+const char* action_name(KnockAction action) {
+    switch (action) {
+    case KnockAction::Passthrough: return "Show or hide the room";
+    case KnockAction::Style: return "Translucent or opaque";
+    case KnockAction::PerfGraph: return "Performance graph";
+    case KnockAction::None: return "Do nothing";
+    }
+    return "";
+}
+
+} // namespace
+
+// A card titled "Knock twice" or "Knock thrice" with one row per action. The
+// current action is filled, with a check mark, and the default says so. `rect`
+// gives the position and width.
+void Panel::action_list(Rect rect, const PanelState& state, int count) {
+    const float title_h = 66, row = 84;
+    canvas_.rounded_rect({rect.x, rect.y, rect.w, title_h + kKnockActionList.size() * row + 8}, kRadius, kSurface);
+    canvas_.text(bold_, std::string("Knock ") + count_word(count), rect.x + 24, rect.y + 38, 30, kText);
+    const auto current = state.knock_actions.shared(count);
+    for (std::size_t i = 0; i < kKnockActionList.size(); ++i) {
+        const auto action = kKnockActionList[i];
+        const Rect option{rect.x + 8, rect.y + title_h + i * row, rect.w - 16, row - 8};
+        const bool selected = current == action;
+        if (selected) canvas_.rounded_rect(option, kRadius, kActive);
+        else if (hovered(option)) canvas_.rounded_rect(option, kRadius, kSurfaceHover);
+        const float cy = option.y + option.h / 2;
+        const auto name = action_name(action);
+        canvas_.text(bold_, name, option.x + 18, cy, 27, kText);
+        if (action == KnockActions::default_for(count))
+            canvas_.text(regular_, "(default)", option.x + 18 + canvas_.measure(bold_, name, 27) + 10, cy, 22,
+                selected ? kText : kDim);
+        if (selected) check_mark(option.x + option.w - 18 - 20, cy, 20, 1);
+        else {
+            PanelClick click{PanelCommand::SetKnockAction};
+            click.count = count;
+            click.action = action;
+            targets_.push_back({option, click});
+        }
+    }
 }
 
 // The version and the update button, at the top right of Settings.
@@ -865,7 +929,8 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
     const bool tour_on_screen = state.tour && screen_ != Screen::Learn;
 
     View view = screen_ == Screen::Main ? View::Main : screen_ == Screen::Settings ? View::Settings
-        : screen_ == Screen::Reset ? View::Reset : screen_ == Screen::Report ? View::Report : screen_ == Screen::Pick ? View::Pick : View::Learn;
+        : screen_ == Screen::Reset ? View::Reset : screen_ == Screen::Report ? View::Report : screen_ == Screen::Pick ? View::Pick
+        : screen_ == Screen::Actions ? View::Actions : View::Learn;
     std::optional<TourView::Step> tour_step;
     if (calibration) {
         using Phase = CalibrationView::Phase;
@@ -893,6 +958,8 @@ const Canvas& Panel::render(const PanelState& state, std::optional<std::pair<flo
         report_card(state);
     } else if (screen_ == Screen::Pick) {
         pick_screen(state);
+    } else if (screen_ == Screen::Actions) {
+        actions_screen(state);
     } else {
         learn_screen(state);
     }

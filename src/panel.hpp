@@ -1,6 +1,7 @@
 #pragma once
 
 #include "canvas.hpp"
+#include "knock_actions.hpp"
 #include "knock_detector.hpp"
 
 #include <array>
@@ -64,8 +65,9 @@ struct PanelState {
     std::optional<bool> opaque;      // Room View style, unknown without SteamVR
     bool busy = false;               // a Room View change is in progress
     bool paused = false;
-    bool sounds = true;              // SteamVR's click on a triple knock and on panel buttons
+    bool sounds = true;              // SteamVR's click on knock actions and on panel buttons
     std::array<bool, 3> enabled{true, true, true}; // per KnockKind
+    KnockActions knock_actions;
     std::string app_key, app_name;   // the running game, empty when none
     bool app_blocked = false;
     std::optional<CalibrationView> calibration;
@@ -109,15 +111,19 @@ enum class PanelCommand {
     CloseReport,
     SaveReport,         // writes the full report to the home folder
     RecordKnocks,       // records 20 s of controller motion for the report
+    SetKnockAction,     // gives every kind of knock an action for a knock count
 };
 
 struct PanelClick {
     PanelCommand command;
     KnockKind kind = KnockKind::Together; // for Kind and Calibrate
+    int count = 0;                        // for SetKnockAction
+    KnockAction action = KnockAction::None;
 };
 
 // The KnockThru dashboard panel, drawn into an RGBA image. It has a main
-// screen, a settings screen with a factory reset confirm, a calibration
+// screen, a settings screen with a factory reset confirm, the knock actions
+// screen, a calibration
 // walkthrough in four steps (pick a kind, learn the knock, record, and try
 // it), and the first-run tour in six.
 class Panel {
@@ -143,9 +149,9 @@ public:
     static void draw_icon(Canvas& canvas, IconStyle style = IconStyle::Tile);
 
 private:
-    enum class Screen { Main, Settings, Reset, Report, Pick, Learn, SkipTour };
+    enum class Screen { Main, Settings, Reset, Report, Pick, Learn, SkipTour, Actions };
     // What is on screen, for transitions: a screen, a calibration phase, or the tour.
-    enum class View { Main, Settings, Reset, Report, Pick, Learn, Record, Try, Tour };
+    enum class View { Main, Settings, Reset, Report, Pick, Learn, Record, Try, Tour, Actions };
     struct Target {
         Rect rect;
         std::optional<PanelClick> click = {};
@@ -188,6 +194,8 @@ private:
     void check_mark(float cx, float cy, float radius, float pop);
     void knock_scene(KnockKind kind, Rect box, float t, int knocks);
     void settings_screen(const PanelState& state);
+    void actions_screen(const PanelState& state);
+    void action_list(Rect rect, const PanelState& state, int count);
     void update_control(const PanelState& state);
     void report_card(const PanelState& state);
     void update_card(const UpdateNotice& notice);
