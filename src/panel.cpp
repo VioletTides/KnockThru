@@ -41,7 +41,7 @@ constexpr float kRadius = 16;
 constexpr float kMargin = 40;
 
 constexpr const char* kKindTitles[3] = {"Controllers together", "Controller on a surface", "Knock on the headset"};
-constexpr const char* kKindOnce[3] = {"Knock the controllers together.", "Knock one controller on a surface or your leg.",
+constexpr const char* kKindOnce[3] = {"Knock the controllers together.", "Knock one controller on a surface, like your leg.",
                                       "Knock on the side of the headset with a controller."};
 constexpr const char* kKindNames[3] = {"a together knock", "a surface knock", "a headset knock"};
 
@@ -740,7 +740,7 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
     y = paragraph(bold_, title, x, y, 36, 48, w, 2, kText);
     y += 4;
     // Lists only the kinds left on, since the others do nothing.
-    static constexpr const char* kWays[3] = {"controllers together", "a controller on a surface or leg", "a controller on the headset"};
+    static constexpr const char* kWays[3] = {"controllers together", "a controller on a surface like your leg", "a controller on the headset"};
     std::vector<std::string> ways;
     for (int k = 0; k < 3; ++k)
         if (state.enabled[k]) ways.push_back(kWays[k]);
