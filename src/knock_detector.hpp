@@ -16,6 +16,7 @@ const char* to_string(KnockKind kind);
 std::optional<KnockKind> parse_knock_kind(const std::string& name);
 
 // Thresholds come from the Steam Frame recordings in tests/data/.
+// docs/knock-detection.md explains each one.
 struct DetectorConfig {
     double controller_peak = 60;   // m/s^2, spike on the knocking controller
     double confirmed_peak = 40;    // m/s^2, controller spike for a together knock, which the other controller confirms

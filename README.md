@@ -235,6 +235,8 @@ To replay the knock recording from a bug report, unzip the report and run this:
 build/bin/detector_test knockthru-knocks.csv.gz
 ```
 
+[`docs/`](docs/README.md) explains how knock detection and calibration work, how they were tuned, and how the app fits together.
+
 </details>
 
 ## Credits
