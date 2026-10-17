@@ -14,7 +14,7 @@ endif()
 include(cmake/OpenVRLoader.cmake)
 find_package(Threads REQUIRED)
 
-add_library(knockthru_core STATIC src/knock_detector.cpp src/config.cpp src/calibrator.cpp src/update.cpp src/report.cpp src/report_server.cpp)
+add_library(knockthru_core STATIC src/knock_detector.cpp src/config.cpp src/calibrator.cpp src/update.cpp src/report.cpp src/report_server.cpp src/room_view.cpp)
 target_include_directories(knockthru_core PUBLIC src third_party/json)
 target_compile_options(knockthru_core PRIVATE -Wall -Wextra -Wpedantic)
 
@@ -24,7 +24,7 @@ target_include_directories(knockthru_ui SYSTEM PRIVATE third_party/stb third_par
 target_link_libraries(knockthru_ui PUBLIC knockthru_core)
 target_compile_options(knockthru_ui PRIVATE -Wall -Wextra -Wpedantic)
 
-add_executable(knockthru src/main.cpp src/app.cpp src/steamvr.cpp src/poses.cpp src/diagnostics.cpp src/install.cpp src/room_view.cpp src/style.cpp src/sound.cpp src/overlay_texture.cpp)
+add_executable(knockthru src/main.cpp src/app.cpp src/steamvr.cpp src/poses.cpp src/diagnostics.cpp src/install.cpp src/style.cpp src/sound.cpp src/overlay_texture.cpp)
 target_include_directories(knockthru SYSTEM PRIVATE third_party/vulkan/include)
 target_link_libraries(knockthru PRIVATE knockthru_core knockthru_ui openvr_loader Threads::Threads ${CMAKE_DL_LIBS})
 target_compile_definitions(knockthru PRIVATE KNOCKTHRU_VERSION="${PROJECT_VERSION}")
@@ -53,6 +53,12 @@ add_executable(update_test tests/update_test.cpp)
 target_link_libraries(update_test PRIVATE knockthru_core)
 target_compile_options(update_test PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME update COMMAND update_test)
+
+add_executable(room_view_test tests/room_view_test.cpp)
+target_link_libraries(room_view_test PRIVATE knockthru_core Threads::Threads)
+target_compile_options(room_view_test PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME room_view COMMAND room_view_test)
+set_tests_properties(room_view PROPERTIES SKIP_RETURN_CODE 77)
 
 # Renders the dashboard panel in sample states to PNG files, for review.
 add_executable(panel_preview tests/panel_preview.cpp)
