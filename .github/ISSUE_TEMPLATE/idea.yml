@@ -2,14 +2,43 @@ name: Idea
 description: Suggest a feature or a change to KnockThru
 labels: [enhancement]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! A sentence or two per box is plenty.
+        If you'd rather talk it over first, start a [discussion](https://github.com/VioletTides/KnockThru/discussions) instead.
+  - type: dropdown
+    id: area
+    attributes:
+      label: What is the idea about?
+      options:
+        - Something new a knock can do
+        - How knocks are detected or calibrated
+        - Settings or the panel in the headset
+        - Installing or updating
+        - Something else
+    validations:
+      required: true
   - type: textarea
     id: idea
     attributes:
       label: What would you like KnockThru to do?
+      placeholder: Show and hide the performance overlay with a triple knock.
     validations:
       required: true
   - type: textarea
     id: why
     attributes:
       label: When would you use it?
-      description: What you were doing when you wanted it, such as the game or the knock kind.
+      description: What you were doing when you wanted it.
+      placeholder: I check my frame rate in some games, and I don't want to open a menu each time.
+  - type: dropdown
+    id: knock-kinds
+    attributes:
+      label: Which knocks do you use?
+      description: Pick any that apply. This helps if the idea is about knocks.
+      multiple: true
+      options:
+        - Controllers together
+        - Controller on a surface (or your leg)
+        - Knock on the headset
