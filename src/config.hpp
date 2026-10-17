@@ -60,7 +60,6 @@ AppConfig load_config(const std::filesystem::path& install_directory);
 // Changes settings in the user config.json and keeps every other key. The
 // dashboard panel uses these.
 void save_paused(bool paused);
-void save_classic_bar_icon(bool classic);
 void save_knock_types(const std::array<bool, 3>& enabled);
 void save_blocked_apps(const std::set<std::string>& apps);
 void save_sounds(bool sounds);

@@ -352,7 +352,7 @@ void readme_report(const std::filesystem::path& dir) {
     rec.play(state, 1.1);
     rec.click();
     rec.play(state, 0.5);
-    rec.aim(1050, 542); // Report on the Something wrong? row
+    rec.aim(1050, 450); // Report on the Something wrong? row
     rec.play(state, 1.3);
     rec.click();
     rec.play(state, 0.3);
@@ -391,7 +391,7 @@ int readme(const std::filesystem::path& out) {
     report_panel.render(report, std::nullopt, 40);
     report_panel.click(460, 60); // Settings
     report_panel.render(report, std::nullopt, 41);
-    report_panel.click(1050, 542); // Report on the Something wrong? row
+    report_panel.click(1050, 450); // Report on the Something wrong? row
     shot(report_panel, report, 43, out / "readme-report.png");
     // The page the phone opens from the QR code, as the headset serves it.
     std::ofstream(out / "readme-phone.html") << report_page(
@@ -449,8 +449,6 @@ int main(int argc, char** argv) {
     settings_panel.render(idle);
     settings_panel.click(460, 60);
     settings_panel.render(idle, std::make_pair(600.0f, 200.0f)).write_png(out / "panel-settings.png");
-    idle.classic_bar_icon = true;
-    settings_panel.render(idle).write_png(out / "panel-settings-color.png");
     PanelState update = idle;
     update.version = "0.1.0";
     settings_panel.render(update).write_png(out / "panel-settings-update-idle.png");
@@ -492,7 +490,7 @@ int main(int argc, char** argv) {
     update.message_is_error = false;
     update.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
     update.report_full = true;
-    settings_panel.click(1050, 542); // Report on the Something wrong? row
+    settings_panel.click(1050, 450); // Report on the Something wrong? row
     settings_panel.render(update, std::nullopt, 0);
     settings_panel.render(update).write_png(out / "panel-report.png");
     update.recording_left = 14;
@@ -508,9 +506,8 @@ int main(int argc, char** argv) {
                         "&steamvr=2.18.2&passthrough=on";
     settings_panel.render(update).write_png(out / "panel-report-offline.png");
     settings_panel.click(900, 638); // Done
-    settings_panel.click(1050, 632); // Reset on the factory reset row
+    settings_panel.click(1050, 542); // Reset on the factory reset row
     settings_panel.render(idle, std::make_pair(800.0f, 500.0f)).write_png(out / "panel-reset-confirm.png");
-    idle.classic_bar_icon = false;
 
     tour(out, idle);
 
