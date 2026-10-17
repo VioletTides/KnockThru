@@ -193,7 +193,7 @@ The log is `~/.config/knockthru/application.log`.
 Copy the Linux ARM64 ZIP from the releases page to the Frame, then run:
 
 ```sh
-unzip -oq knockthru-1.0.1-linux-arm64.zip -d ~/KnockThru
+unzip -oq knockthru-1.0.2-linux-arm64.zip -d ~/KnockThru
 ~/KnockThru/knockthru --install
 ```
 
@@ -214,7 +214,7 @@ Steam Frame build (needs Zig 0.16.0) and release ZIP (needs Node.js):
 
 ```sh
 scripts/build-arm64.sh
-node scripts/package.mjs --build-dir build-arm64 --version 1.0.1
+node scripts/package.mjs --build-dir build-arm64 --version 1.0.2
 ```
 
 README images (needs Pillow, numpy, ffmpeg, and Chromium, after the host build):
