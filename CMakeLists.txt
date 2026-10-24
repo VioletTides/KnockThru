@@ -18,7 +18,7 @@ add_library(knockthru_core STATIC src/knock_detector.cpp src/knock_actions.cpp s
 target_include_directories(knockthru_core PUBLIC src third_party/json)
 target_compile_options(knockthru_core PRIVATE -Wall -Wextra -Wpedantic)
 
-add_library(knockthru_ui STATIC src/canvas.cpp src/panel.cpp third_party/qrcodegen/qrcodegen.cpp)
+add_library(knockthru_ui STATIC src/canvas.cpp src/panel.cpp src/panel_main.cpp src/panel_calibration.cpp src/panel_cards.cpp src/panel_tour.cpp third_party/qrcodegen/qrcodegen.cpp)
 target_include_directories(knockthru_ui PUBLIC src)
 target_include_directories(knockthru_ui SYSTEM PRIVATE third_party/stb third_party/qrcodegen)
 target_link_libraries(knockthru_ui PUBLIC knockthru_core)
