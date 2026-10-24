@@ -60,10 +60,8 @@ std::string today() {
     return date;
 }
 
-// "double" or "triple".
 const char* sequence_name(const KnockEvent& event) { return event.count == 3 ? "triple" : "double"; }
 
-// Whether a background job has a result to collect.
 template <typename T> bool ready(const std::future<T>& job) {
     return job.valid() && job.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
 }
@@ -80,10 +78,7 @@ std::string heard_summary(const Calibrator& calibrator) {
     return line;
 }
 
-// The resident app. SteamVR starts it as a dashboard overlay. Each knock kind
-// and count runs its action from knock_actions. By default, knocking twice turns
-// Room View on or off, and knocking thrice switches translucent and opaque. The
-// KnockThru dashboard tab has buttons for everything.
+// The resident app (--run), which SteamVR starts as a dashboard overlay.
 class App {
 public:
     App();
@@ -100,8 +95,7 @@ private:
     using Step = TourView::Step;
     using UpdateStatus = UpdateView::Status;
 
-    // Each returns false when the app should exit.
-    bool slow_check(double t);
+    bool slow_check(double t); // false when the app should exit
     void handle_click(const PanelClick& click, double t);
     void set_knock_action(int count, KnockAction action);
     void toggle_kind(KnockKind kind);
@@ -148,8 +142,8 @@ private:
     std::string room_view_text() const;
 
     AppState app_state_ = load_state();
-    std::optional<std::string>
-        updated_from_; // set when an update ran since the last start. Empty when the old version is unknown.
+    // Set when an update ran since the last start. Empty when the old version is unknown.
+    std::optional<std::string> updated_from_;
     Haptics haptics_;
     std::unique_ptr<DashboardPanel> panel_;
 
@@ -159,39 +153,39 @@ private:
     std::string stamp_ = config_stamp();
     KnockDetector detector_{config_.detector};
     std::optional<Calibrator> calibrator_;
-    std::optional<CalibrationView> calibration_; // the walkthrough the panel shows
-    std::optional<TourView> tour_; // the first-run tour, while the panel shows it
+    std::optional<CalibrationView> calibration_;
+    std::optional<TourView> tour_;
 
     Clock clock_;
     PoseThread poses_{clock_};
-    std::vector<PoseThread::Sample> samples_; // reused by every loop, so take() never allocates
+    std::vector<PoseThread::Sample> samples_; // kept, so take() never allocates
     PanelState state_;
     std::string last_error_; // for the report link
 
     std::future<RoomViewResult> room_view_job_;
     bool room_view_job_toggles_ = false;
-    bool dashboard_changed_ = false; // the last Room View read did not find the button, so the log has it
+    bool dashboard_changed_ = false; // the button went missing and the log says so
     std::future<void> tint_job_;
 
     std::atomic<bool> cancel_downloads_{false};
-    std::atomic<float> install_progress_{0}; // the install job writes it, from 0 to 1
+    std::atomic<float> install_progress_{0}; // 0 to 1, from the install job
     const fs::path update_work_ = user_directory() / "update";
     std::future<Release> check_job_;
     bool check_is_automatic_ = false; // the daily check, which never shows errors
     std::future<void> install_job_;
-    std::optional<Release> latest_; // the newer release a check found
-    double restart_started_ = -1; // when this process asked knockthru-ctl to restart into the new version
+    std::optional<Release> latest_; // newer than this version
+    double restart_started_ = -1; // when knockthru-ctl was asked to restart into the update
 
     double next_slow_check_ = 0;
     const fs::path binary_ = executable();
     double binary_missing_since_ = -1;
 
     std::optional<KnockRecording> recording_; // while the report card records knocks
-    std::future<void> recording_job_; // writes a finished recording
+    std::future<void> recording_job_;
     std::unique_ptr<ReportServer> report_server_; // while the report card shows
 #ifdef KNOCKTHRU_TEST_HOOK
-    fs::path test_commands_; // the command file
-    std::uintmax_t test_read_ = 0; // bytes of it already run
+    fs::path test_commands_;
+    std::uintmax_t test_read_ = 0; // bytes already run
 #endif
 };
 
@@ -240,9 +234,8 @@ App::App() {
     }
 }
 
-// A SteamVR update is the usual cause when Room View control breaks, so the log marks each one.
-// A newer KnockThru than at the last start means an update ran, from Settings or FrameDrop. The panel says
-// so.
+// Logs each SteamVR update, the usual cause when Room View control breaks. A newer KnockThru
+// than at the last start means an update ran, from Settings or FrameDrop, and the panel says so.
 void App::note_versions() {
     // A state file without knockthru_version comes from an older KnockThru.
     const bool ran_before = !app_state_.steamvr_version.empty();
@@ -323,10 +316,8 @@ void App::run() {
         collect_jobs(t);
         draw_panel(t);
         haptics_.update(t);
-        // Knocks are judged 50 ms late and a sequence ends 350 ms after its last knock, so
-        // 20 ms between loops costs nothing a person notices. The pose thread still samples
-        // every millisecond. The open panel and queued buzzes get 5 ms, for steady frames
-        // and pulse spacing.
+        // Knocks are judged 50 ms late anyway, and the pose thread keeps sampling every 1 ms.
+        // The open panel and queued buzzes get 5 ms, for steady frames and pulse spacing.
         const bool busy = (panel_ && panel_->visible()) || haptics_.pending();
         clock_.tick(std::chrono::milliseconds(busy ? 5 : 20));
     }
@@ -604,7 +595,7 @@ void App::save_calibration(double t) {
     }
 }
 
-// Adds each knock and action to the bug report recording, and saves it when its time is up.
+// Saves the recording when its 20 s are up.
 void App::record_knocks(double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event) {
     char line[160];
     for (const auto& knock : knocks) {
@@ -631,7 +622,6 @@ void App::record_knocks(double t, const std::deque<Knock>& knocks, const std::op
     if (panel_) panel_->invalidate();
 }
 
-// Feeds knocks to a running calibration, judges the try step, or acts on a double or triple knock.
 void App::handle_knocks(double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event) {
     // Opens the click stream on the first knock, so it is ready if a triple knock follows.
     if (config_.sounds && !config_.paused && !knocks.empty()) prepare_click();
@@ -705,7 +695,6 @@ void App::handle_knocks(double t, const std::deque<Knock>& knocks, const std::op
     }
 }
 
-// Takes the results of finished background jobs: the recording, Room View, the update check, and the install.
 void App::collect_jobs(double t) {
     if (ready(recording_job_)) {
         try {
@@ -938,7 +927,7 @@ void App::save_app_state() {
     }
 }
 
-// The modification times of the settings files, to notice an edit.
+// Modification times, to notice an edit.
 std::string App::config_stamp() const {
     std::string stamp;
     for (const auto& path : config_files_) {
@@ -1014,8 +1003,7 @@ bool App::toggle_room_view(const std::string& why) {
     return true;
 }
 
-// Runs a knock action. Success buzzes once after knocking twice, and two times after knocking thrice.
-// A failure buzzes 3 times.
+// One buzz after a double, two after a triple, three on failure.
 void App::run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t) {
     const int buzzes = event.count - 1;
     const auto tick_tour = [&] {
@@ -1092,7 +1080,6 @@ void App::restart_failed(const std::string& version) {
               "restart SteamVR."};
 }
 
-// Leaves the calibration walkthrough and goes back to the saved thresholds.
 void App::end_calibration() {
     calibrator_.reset();
     calibration_.reset();

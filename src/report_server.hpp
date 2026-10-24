@@ -41,7 +41,7 @@ public:
     // http://address:port/token, the page link for the QR code.
     const std::string& url() const { return url_; }
 
-    // Replaces the report, for one that gained a knock recording summary.
+    // For a report that gained a knock recording summary.
     void set_report(std::string report);
     // Offers a gzipped knock recording on the page. The file is read when a phone asks for it.
     void set_recording(std::filesystem::path recording);

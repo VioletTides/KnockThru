@@ -13,37 +13,35 @@
 
 namespace knockthru {
 
-// A calibration in progress, filled in by the app.
+// The app fills these in. Times are seconds on the clock render() gets, and -1 is "not yet".
+
 struct CalibrationView {
     enum class Phase { Recording, Trying };
     KnockKind kind = KnockKind::Together;
     Phase phase = Phase::Recording;
     int wanted = 10, seconds_left = 0;
-    std::vector<double> peaks;          // counted knocks, oldest first, in m/s^2
-    std::vector<double> speeds;         // the same knocks' approach speeds, in m/s, which the chart shows
-    double started_t = -1;              // when recording started
-    double counted_t = -1;              // when the latest knock counted
-    double knocked_t = -1;              // when that knock happened, which the pacing ring runs from
-    std::optional<KnockKind> ignored;   // the latest knock of another kind
+    std::vector<double> peaks, speeds; // counted knocks, oldest first: m/s^2 and m/s
+    double started_t = -1;
+    double counted_t = -1;
+    double knocked_t = -1; // when the counted knock happened. The pacing ring runs from here.
+    std::optional<KnockKind> ignored;
     double ignored_t = -1;
-    double too_light_t = -1;            // when the latest knock of this kind was too light to count
-    double too_soon_t = -1;             // when the latest knock came before the pacing ring filled
-    std::optional<bool> trial_passed;   // unset until the try step hears a knock sequence
-    std::string trial_heard;            // what the try step heard, for a miss
+    double too_light_t = -1;
+    double too_soon_t = -1;
+    std::optional<bool> trial_passed; // unset until the try step hears a sequence
+    std::string trial_heard; // shown on a miss
     double trial_t = -1;
 };
 
-// The first-run tour, filled in by the app. The knock steps really switch
-// passthrough and style, and tick off when they hear their knock.
+// The tour's knock steps really switch passthrough and style.
 struct TourView {
     enum class Step { Welcome, Kinds, Calibrate, Double, Triple, Done };
     Step step = Step::Welcome;
-    std::array<bool, 3> calibrated{}; // per KnockKind, calibrated before or during this tour
-    double double_t = -1; // when the double knock step heard a double knock
-    double triple_t = -1; // when the triple knock step heard a triple knock
+    std::array<bool, 3> calibrated{}; // per KnockKind, before or during this tour
+    double double_t = -1;
+    double triple_t = -1;
 };
 
-// The update check in Settings, filled in by the app.
 struct UpdateView {
     enum class Status {
         Idle,
@@ -57,52 +55,49 @@ struct UpdateView {
         Failed
     };
     Status status = Status::Idle;
-    std::string latest; // the newest release, once a check found one. For Updated, the version before.
-    std::string error;  // why the check or the install failed
+    std::string latest; // the newest release. For Updated, the version before.
+    std::string error;
 };
 
-// The card that reports an update. The new process shows success after its restart, and the old one shows a
-// failure.
+// After an update, the new process shows success and the old one shows a failure.
 struct UpdateNotice {
     bool failed = false;
     std::string text;
 };
 
-// Everything the dashboard panel shows. The app fills it in, the panel draws it.
-// Times are seconds on the app clock, the same clock render() gets.
 struct PanelState {
-    std::optional<bool> room_view;   // unknown until the first debug port read
-    std::string room_view_error;     // why Room View cannot be read or changed
-    std::optional<bool> opaque;      // Room View style, unknown without SteamVR
-    bool busy = false;               // a Room View change is in progress
+    std::optional<bool> room_view; // unset until the first debug port read
+    std::string room_view_error;
+    std::optional<bool> opaque; // unset without SteamVR
+    bool busy = false; // a Room View change is in progress
     bool paused = false;
-    bool sounds = true;              // SteamVR's click on knock actions and on panel buttons
+    bool sounds = true;
     std::array<bool, 3> enabled{true, true, true}; // per KnockKind
     KnockActions knock_actions;
-    std::string app_key, app_name;   // the running game, empty when none
+    std::string app_key, app_name; // the running game, empty when none
     bool app_blocked = false;
     std::optional<CalibrationView> calibration;
     std::optional<TourView> tour;
-    std::optional<KnockKind> calibration_saved; // the kind the last calibration just saved
-    std::string version;             // this KnockThru's version
+    std::optional<KnockKind> calibration_saved;
+    std::string version;
     UpdateView update;
-    float update_progress = 0;       // 0 to 1 while an update installs
-    std::optional<UpdateNotice> update_notice; // shown over every screen until OK
-    std::string report_url;          // the GitHub issue link the report card shows as a QR code
-    bool report_full = false;        // report_url is the headset's page with the full report
-    std::string report_saved;        // where Save report file wrote the report, empty before
-    std::string report_error;        // why Save to headset or the recording failed
-    int recording_left = -1;         // seconds left in a knock recording, -1 when none runs
-    int recording_knocks = 0;        // knocks heard so far in the recording
-    bool recorded = false;           // a knock recording is ready for the report
+    float update_progress = 0;
+    std::optional<UpdateNotice> update_notice; // covers every screen until OK
+    std::string report_url; // the QR code's link
+    bool report_full = false; // report_url is the headset's page, not the bare GitHub form
+    std::string report_saved;
+    std::string report_error;
+    int recording_left = -1; // seconds
+    int recording_knocks = 0;
+    bool recorded = false;
     std::string message;
     bool message_is_error = false;
 };
 
 enum class IconStyle {
-    Tile,     // the logo on a dark rounded tile, for the app icon and the panel header
-    BarWhite, // the mark in white, which Steam's tint turns grey
-    BarColor, // the mark in the logo colors
+    Tile, // on a dark rounded tile, for the app icon and the panel header
+    BarWhite, // Steam's tint turns it grey
+    BarColor,
 };
 
 enum class PanelCommand {
@@ -111,39 +106,35 @@ enum class PanelCommand {
     Pause,
     Kind,
     BlockApp,
-    Calibrate,          // starts recording a kind, or records it again
+    Calibrate,
     CancelCalibration,
     SaveCalibration,
-    Navigate,           // a button that only changes the screen, such as Back
+    Navigate, // only changes the screen, like Back
     Sounds,
     StartTour,
     TourNext,
     TourBack,
-    TourSkip,           // ends the tour from any step, including Done
+    TourSkip, // also Done on the last step
     FactoryReset,
     CheckUpdate,
     InstallUpdate,
-    RestartForUpdate,   // restarts KnockThru into the installed update
+    RestartForUpdate,
     DismissUpdateNotice,
-    ShowReport,         // starts the report page for the report card's QR code
+    ShowReport, // starts the page the QR code opens
     CloseReport,
-    SaveReport,         // writes the full report to the home folder
-    RecordKnocks,       // records 20 s of controller motion for the report
-    SetKnockAction,     // gives every kind of knock an action for a knock count
+    SaveReport, // to the home folder
+    RecordKnocks,
+    SetKnockAction, // sets every kind at once
 };
 
 struct PanelClick {
     PanelCommand command;
     KnockKind kind = KnockKind::Together; // for Kind and Calibrate
-    int count = 0;                        // for SetKnockAction
+    int count = 0; // for SetKnockAction
     KnockAction action = KnockAction::None;
 };
 
-// The KnockThru dashboard panel, drawn into an RGBA image. It has a main
-// screen, a settings screen with a factory reset confirm, the knock actions
-// screen, a calibration
-// walkthrough in four steps (pick a kind, learn the knock, record, and try
-// it), and the first-run tour in six.
+// Draws the dashboard tab into an RGBA image.
 class Panel {
 public:
     static constexpr int kWidth = 1200, kHeight = 770;
@@ -151,19 +142,16 @@ public:
     // `fonts` holds NotoSans-SemiBold.ttf and NotoSans-Regular.ttf.
     explicit Panel(const std::filesystem::path& fonts);
 
-    // Draws the panel at time `now`. `hover` is the pointer position in panel pixels.
+    // `hover` is the pointer position in panel pixels.
     const Canvas& render(
         const PanelState& state, std::optional<std::pair<float, float>> hover = std::nullopt, double now = 0);
 
-    // Whether the last render had something moving, so the next frame differs.
     bool animating() const { return animating_; }
 
-    // Handles a click at a point, using the controls from the last render.
-    // Row 0 is the top. Switching screens happens here and returns nothing.
+    // Hits the controls from the last render, row 0 at the top. Screen changes happen here.
     std::optional<PanelClick> click(float x, float y);
 
-    // Draws the KnockThru icon to fill a square canvas. The bar styles draw the mark alone on
-    // transparency, as large as fits, with wider gaps for the dashboard bar's small size.
+    // Fills a square canvas. The bar styles leave wider gaps, for the bar's small size.
     static void draw_icon(Canvas& canvas, IconStyle style = IconStyle::Tile);
 
 private:
@@ -174,7 +162,7 @@ private:
         Rect rect;
         std::optional<PanelClick> click = {};
         std::optional<Screen> go_to = {};
-        std::optional<KnockKind> learn = {}; // the kind the Learn screen shows
+        std::optional<KnockKind> learn = {};
     };
 
     Font bold_, regular_;
@@ -189,9 +177,9 @@ private:
     double now_ = 0;
     bool animating_ = false;
     std::optional<View> view_;
-    std::optional<TourView::Step> tour_step_; // the tour step on screen, so each step rises in
+    std::optional<TourView::Step> tour_step_;
     double view_t_ = 0;
-    std::map<std::pair<int, IconStyle>, Canvas> icons_; // drawn icons by size and style
+    std::map<std::pair<int, IconStyle>, Canvas> icons_;
 
     const Canvas& icon(int size, IconStyle style);
     bool hovered(Rect rect) const;

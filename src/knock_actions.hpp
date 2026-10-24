@@ -8,7 +8,6 @@
 
 namespace knockthru {
 
-// What a set of knocks does.
 enum class KnockAction { Passthrough, Style, PerfGraph, None };
 constexpr std::array<KnockAction, 4> kKnockActionList{
     KnockAction::Passthrough, KnockAction::Style, KnockAction::PerfGraph, KnockAction::None};

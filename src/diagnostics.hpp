@@ -28,7 +28,6 @@ void write_recording(const KnockRecording& recording);
 // end of the logs. `vr` is false when SteamVR is not running, and `room_view`
 // describes what the caller read from Room View.
 std::string report_text(bool vr, const std::string& room_view);
-// Writes report_text() to report_path() and returns that path.
 std::filesystem::path write_report(bool vr, const std::string& room_view);
 
 } // namespace knockthru
