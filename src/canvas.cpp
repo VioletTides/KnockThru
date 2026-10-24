@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <stdexcept>
@@ -346,6 +347,26 @@ void Canvas::draw(const Canvas& image, int x, int y, float alpha) {
             d[3] = static_cast<std::uint8_t>(out);
         }
     }
+}
+
+std::uint64_t Canvas::hash() const {
+    // Four independent lanes, so the multiplies overlap and memory speed sets the pace.
+    // Width times 4 bytes is a multiple of 32 for every canvas KnockThru draws, and the tail loop covers the
+    // rest.
+    constexpr std::uint64_t kPrime = 0x100000001b3ull;
+    std::uint64_t lanes[4] = {0xcbf29ce484222325ull, 1, 2, 3};
+    const auto* bytes = pixels_.data();
+    const std::size_t size = pixels_.size();
+    std::size_t i = 0;
+    for (; i + 32 <= size; i += 32) {
+        for (int lane = 0; lane < 4; ++lane) {
+            std::uint64_t word;
+            std::memcpy(&word, bytes + i + lane * 8, 8);
+            lanes[lane] = (lanes[lane] ^ word) * kPrime;
+        }
+    }
+    for (; i < size; ++i) lanes[0] = (lanes[0] ^ bytes[i]) * kPrime;
+    return lanes[0] ^ (lanes[1] * 3) ^ (lanes[2] * 5) ^ (lanes[3] * 7);
 }
 
 bool Canvas::write_png(const std::filesystem::path& path) const {

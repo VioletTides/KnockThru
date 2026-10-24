@@ -437,19 +437,27 @@ void bench_screen(Panel& panel, const PanelState& state, double start, const cha
     using Clock = std::chrono::steady_clock;
     constexpr int kFrames = 300;
     std::vector<std::uint8_t> uploaded;
-    double render_s = 0, upload_s = 0;
+    std::uint64_t hash = 0;
+    int changed = 0;
+    double render_s = 0, upload_s = 0, hash_s = 0;
     for (int i = 0; i < kFrames; ++i) {
         const auto t0 = Clock::now();
         const auto& canvas = panel.render(state, std::make_pair(600.0f, 400.0f), start + i / 30.0);
         const auto t1 = Clock::now();
         if (canvas.pixels() != uploaded) uploaded = canvas.pixels();
         const auto t2 = Clock::now();
+        const auto frame_hash = canvas.hash();
+        if (frame_hash != hash) ++changed;
+        hash = frame_hash;
+        const auto t3 = Clock::now();
         render_s += std::chrono::duration<double>(t1 - t0).count();
         upload_s += std::chrono::duration<double>(t2 - t1).count();
+        hash_s += std::chrono::duration<double>(t3 - t2).count();
     }
     std::cout << std::fixed << std::setprecision(2) << std::setw(10) << name << "  render "
               << render_s * 1000 / kFrames << " ms  compare and copy " << upload_s * 1000 / kFrames
-              << " ms\n";
+              << " ms  hash " << hash_s * 1000 / kFrames << " ms  changed " << changed << " of " << kFrames
+              << "\n";
 }
 
 int bench() {

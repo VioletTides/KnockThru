@@ -139,24 +139,28 @@ public:
         if (!visible_ || now - last_draw_ < interval) return;
         last_draw_ = now;
         dirty_ = false;
-        upload(panel_.render(state, hover_, now));
+        const auto& canvas = panel_.render(state, hover_, now);
+        // Even animated screens repeat about half their frames. On the Frame the hash
+        // takes 0.2 ms, and an upload copies 3.7 MB to the GPU.
+        const auto hash = canvas.hash();
+        if (hash == uploaded_hash_) return;
+        uploaded_hash_ = hash;
+        upload(canvas);
     }
 
 private:
     void upload(const Canvas& canvas) {
-        if (canvas.pixels() == uploaded_) return;
-        uploaded_ = canvas.pixels();
         if (texture_) {
             try {
-                texture_->show(main_, uploaded_.data());
+                texture_->show(main_, canvas.pixels().data());
                 return;
             } catch (const std::exception& error) {
                 log(std::string("Panel uses slower image uploads: ") + error.what());
                 texture_.reset();
             }
         }
-        vr::VROverlay()->SetOverlayRaw(main_, uploaded_.data(), static_cast<uint32_t>(canvas.width()),
-            static_cast<uint32_t>(canvas.height()), 4);
+        vr::VROverlay()->SetOverlayRaw(main_, const_cast<std::uint8_t*>(canvas.pixels().data()),
+            static_cast<uint32_t>(canvas.width()), static_cast<uint32_t>(canvas.height()), 4);
     }
 
     Panel panel_;
@@ -165,7 +169,7 @@ private:
     double last_draw_ = -1;
     std::optional<std::pair<float, float>> hover_;
     std::optional<bool> bar_icon_classic_;
-    std::vector<std::uint8_t> uploaded_;
+    std::optional<std::uint64_t> uploaded_hash_;
     std::unique_ptr<OverlayTexture> texture_;
 #ifdef KNOCKTHRU_TEST_HOOK
     bool test_shown_ = false;
@@ -264,7 +268,6 @@ private:
     std::optional<std::string>
         updated_from_; // set when an update ran since the last start. Empty when the old version is unknown.
     Haptics haptics_;
-    vr::VRActiveActionSet_t active_{}; // its action set stays invalid without the action manifest
     std::unique_ptr<DashboardPanel> panel_;
 
     const std::array<fs::path, 3> config_files_{install_directory() / "config.json",
@@ -278,6 +281,7 @@ private:
 
     Clock clock_;
     PoseThread poses_{clock_};
+    std::vector<PoseThread::Sample> samples_; // reused by every loop, so take() never allocates
     PanelState state_;
     std::string last_error_; // for the report link
 
@@ -383,8 +387,7 @@ void App::load_haptics() {
             == vr::VRInputError_None
         && vr::VRInput()->GetActionHandle("/actions/knockthru/out/haptic_right", &right)
             == vr::VRInputError_None) {
-        haptics_.use_actions(left, right);
-        active_.ulActionSet = action_set;
+        haptics_.use_actions(action_set, left, right);
     } else {
         log("SteamVR input actions unavailable. Using direct haptic pulses.");
     }
@@ -407,9 +410,6 @@ void App::run() {
                 stopping = 1;
             }
         }
-        if (active_.ulActionSet != vr::k_ulInvalidActionSetHandle)
-            vr::VRInput()->UpdateActionState(&active_, sizeof active_, 1);
-
         if (t >= next_slow_check_ && !slow_check(t)) break;
         if (panel_) {
             bool shown = false;
@@ -425,7 +425,8 @@ void App::run() {
             }
         }
 
-        for (const auto& sample : poses_.take()) {
+        poses_.take(samples_);
+        for (const auto& sample : samples_) {
             detector_.push(sample.device, sample.t, sample.position, sample.velocity);
             if (recording_) recording_->samples.push_back(sample);
         }
@@ -439,9 +440,12 @@ void App::run() {
         collect_jobs(t);
         draw_panel(t);
         haptics_.update(t);
-        // Knocks are judged 50 ms late anyway, so a hidden panel lets the loop wake every 5 ms.
-        // The pose thread still samples every millisecond.
-        clock_.tick(std::chrono::milliseconds(panel_ && panel_->visible() ? 1 : 5));
+        // Knocks are judged 50 ms late and a sequence ends 350 ms after its last knock, so
+        // 20 ms between loops costs nothing a person notices. The pose thread still samples
+        // every millisecond. The open panel and queued buzzes get 5 ms, for steady frames
+        // and pulse spacing.
+        const bool busy = (panel_ && panel_->visible()) || haptics_.pending();
+        clock_.tick(std::chrono::milliseconds(busy ? 5 : 20));
     }
     log("KnockThru stopped");
 }

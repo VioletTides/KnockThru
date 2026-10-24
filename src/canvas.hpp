@@ -79,6 +79,9 @@ public:
     // with its opacity scaled by `alpha`.
     void draw(const Canvas& image, int x, int y, float alpha = 1);
 
+    // A 64-bit hash of the pixels, to tell whether a frame changed without keeping a copy.
+    std::uint64_t hash() const;
+
     bool write_png(const std::filesystem::path& path) const;
 
 private:

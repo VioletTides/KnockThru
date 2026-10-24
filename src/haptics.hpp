@@ -12,10 +12,13 @@ namespace knockthru {
 // manifest is loaded, and the older direct pulse call otherwise.
 class Haptics {
 public:
-    void use_actions(vr::VRActionHandle_t left, vr::VRActionHandle_t right) {
+    void use_actions(vr::VRActionSetHandle_t set, vr::VRActionHandle_t left, vr::VRActionHandle_t right) {
+        active_.ulActionSet = set;
         left_ = left;
         right_ = right;
     }
+
+    bool pending() const { return !pending_.empty(); }
 
     // Queues `count` pulses, 150 ms apart.
     void buzz(int count, double now) {
@@ -36,10 +39,14 @@ public:
 private:
     vr::VRActionHandle_t left_ = vr::k_ulInvalidActionHandle;
     vr::VRActionHandle_t right_ = vr::k_ulInvalidActionHandle;
+    vr::VRActiveActionSet_t active_{};
     std::vector<double> pending_;
 
     void pulse() {
         if (left_ != vr::k_ulInvalidActionHandle) {
+            // SteamVR acts on an action set only after UpdateActionState. KnockThru reads no
+            // input, so it updates the set before each pulse, not on every loop.
+            vr::VRInput()->UpdateActionState(&active_, sizeof active_, 1);
             for (const auto action : {left_, right_})
                 vr::VRInput()->TriggerHapticVibrationAction(
                     action, 0, 0.07f, 160, 1.0f, vr::k_ulInvalidInputValueHandle);

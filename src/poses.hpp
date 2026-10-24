@@ -4,6 +4,7 @@
 
 #include <openvr.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -73,9 +74,10 @@ public:
     double now() const {
         return std::chrono::duration<double>(std::chrono::steady_clock::now() - start_).count();
     }
-    // Sleeps until the next tick, `step` after the last one.
+    // Sleeps until the next tick, `step` after the last one. After an overrun the
+    // next tick is now, so missed ticks never run back to back.
     void tick(std::chrono::milliseconds step = std::chrono::milliseconds(1)) {
-        next_ += step;
+        next_ = std::max(next_ + step, std::chrono::steady_clock::now());
         std::this_thread::sleep_until(next_);
     }
 
@@ -102,12 +104,12 @@ public:
     }
     PoseThread(const PoseThread&) = delete;
 
-    // Returns the samples since the last call, oldest first.
-    std::vector<Sample> take() {
-        std::vector<Sample> samples;
+    // Fills `samples` with the samples since the last call, oldest first. The two
+    // buffers trade places, so both keep their capacity and neither allocates again.
+    void take(std::vector<Sample>& samples) {
+        samples.clear();
         std::lock_guard<std::mutex> lock(mutex_);
         samples.swap(samples_);
-        return samples;
     }
 
 private:
@@ -116,10 +118,15 @@ private:
         Clock ticker;
         while (!stop_) {
             const double t = clock.now();
+            std::array<Sample, 3> read;
+            std::size_t count = 0;
             sampler.sample([&](Device device, const vr::TrackedDevicePose_t& pose) {
-                std::lock_guard<std::mutex> lock(mutex_);
-                samples_.push_back({device, t, position_of(pose), velocity_of(pose)});
+                read[count++] = {device, t, position_of(pose), velocity_of(pose)};
             });
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                samples_.insert(samples_.end(), read.begin(), read.begin() + count);
+            }
             ticker.tick();
         }
     }
