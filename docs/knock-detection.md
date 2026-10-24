@@ -6,7 +6,7 @@ KnockThru watches how your controllers and headset move, and looks for the short
 
 KnockThru can't read the controllers' accelerometers. The Frame has no `/dev/hidraw` devices that would expose them. What SteamVR does give every app is each device's position and velocity.
 
-KnockThru reads those about once a millisecond. The headset reports a new velocity 1000 times a second, and each controller about 230 times a second.
+KnockThru reads those about once a millisecond. The headset reports a new velocity 1000 times a second, and each controller about 230 times a second. The thresholds depend on that rate. Replaying the recordings at 500 Hz (`KNOCKTHRU_TEST_DECIMATE=2`) misses together, surface, and headset doubles and finds 2 false actions in `noise`.
 
 A knock shows up as a sudden jump in velocity. KnockThru divides the change between two updates by the time between them. That gives an acceleration in m/s², and these pages call it the **spike**.
 

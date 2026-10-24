@@ -1,12 +1,15 @@
 // Writes the dashboard panel in sample states to PNG files.
 // Usage: panel_preview OUTPUT_DIRECTORY
 //        panel_preview --readme OUTPUT_DIRECTORY
+//        panel_preview --bench
 // The calibration steps also get frame sequences in OUTPUT_DIRECTORY/frames, at 25
 // frames a second, to review the animations. The --readme form writes clean states for
-// the README images instead.
+// the README images instead. The --bench form prints milliseconds per frame for
+// the screens the headset redraws most.
 #include "panel.hpp"
 #include "report_server.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -428,7 +431,72 @@ void knock_actions(const std::filesystem::path& out, PanelState state) {
     shot(panel, state, 64, out / "actions-kinds-differ.png");
 }
 
+// Times 300 frames of `state`, a frame each 1/30 s from `start`. Also times the
+// compare and copy that DashboardPanel::upload in app.cpp does with each frame.
+void bench_screen(Panel& panel, const PanelState& state, double start, const char* name) {
+    using Clock = std::chrono::steady_clock;
+    constexpr int kFrames = 300;
+    std::vector<std::uint8_t> uploaded;
+    double render_s = 0, upload_s = 0;
+    for (int i = 0; i < kFrames; ++i) {
+        const auto t0 = Clock::now();
+        const auto& canvas = panel.render(state, std::make_pair(600.0f, 400.0f), start + i / 30.0);
+        const auto t1 = Clock::now();
+        if (canvas.pixels() != uploaded) uploaded = canvas.pixels();
+        const auto t2 = Clock::now();
+        render_s += std::chrono::duration<double>(t1 - t0).count();
+        upload_s += std::chrono::duration<double>(t2 - t1).count();
+    }
+    std::cout << std::fixed << std::setprecision(2) << std::setw(10) << name << "  render "
+              << render_s * 1000 / kFrames << " ms  compare and copy " << upload_s * 1000 / kFrames
+              << " ms\n";
+}
+
+int bench() {
+    PanelState idle;
+    idle.room_view = false;
+    idle.opaque = false;
+    idle.app_key = "steam.app.620980";
+    idle.app_name = "Beat Saber";
+
+    Panel main_panel(KNOCKTHRU_FONTS);
+    bench_screen(main_panel, idle, 10, "main");
+
+    Panel settings_panel(KNOCKTHRU_FONTS);
+    settings_panel.render(idle, std::nullopt, 1);
+    settings_panel.click(460, 60); // Settings on the main screen
+    bench_screen(settings_panel, idle, 10, "settings");
+
+    Panel pick_panel(KNOCKTHRU_FONTS);
+    pick_panel.render(idle, std::nullopt, 1);
+    pick_panel.click(460, 60);
+    pick_panel.render(idle, std::nullopt, 2);
+    pick_panel.click(1050, 184); // Calibrate in Settings
+    bench_screen(pick_panel, idle, 10, "pick");
+
+    PanelState recording = idle;
+    CalibrationView view;
+    view.kind = KnockKind::Surface;
+    view.peaks = {92, 118, 76};
+    view.speeds = {1.1, 1.5, 0.8};
+    view.counted_t = 9;
+    view.knocked_t = 8.7;
+    view.seconds_left = 74;
+    recording.calibration = view;
+    Panel record_panel(KNOCKTHRU_FONTS);
+    bench_screen(record_panel, recording, 10, "record");
+
+    PanelState touring = idle;
+    TourView tour;
+    tour.step = TourView::Step::Double;
+    touring.tour = tour;
+    Panel tour_panel(KNOCKTHRU_FONTS);
+    bench_screen(tour_panel, touring, 10, "tour");
+    return 0;
+}
+
 int main(int argc, char** argv) {
+    if (argc > 1 && std::string(argv[1]) == "--bench") return bench();
     if (argc > 2 && std::string(argv[1]) == "--readme") return readme(argv[2]);
     const std::filesystem::path out = argc > 1 ? argv[1] : ".";
     Panel panel(KNOCKTHRU_FONTS);

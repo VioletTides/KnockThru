@@ -76,8 +76,17 @@ struct Row {
     Vec3 position, velocity;
 };
 
+// KNOCKTHRU_TEST_DECIMATE=N keeps every Nth sample of each device, to try a
+// slower pose rate. The recordings were sampled every millisecond.
+int decimate() {
+    const char* value = std::getenv("KNOCKTHRU_TEST_DECIMATE");
+    return value ? std::max(1, std::atoi(value)) : 1;
+}
+
 std::vector<Row> load(const std::string& path) {
     std::vector<Row> rows;
+    const int every = decimate();
+    std::map<Device, int> seen;
     FILE* pipe = popen(("gzip -dc '" + path + "'").c_str(), "r");
     if (!pipe) return rows;
     char buffer[512];
@@ -93,6 +102,7 @@ std::vector<Row> load(const std::string& path) {
         while (std::getline(line, field, ',')) f.push_back(field);
         if (f.size() < 9 || f[2] != "1") continue;
         const Device device = f[1] == "hmd" ? Device::Hmd : f[1] == "left" ? Device::Left : Device::Right;
+        if (seen[device]++ % every) continue;
         rows.push_back({std::stod(f[0]), device, {std::stod(f[3]), std::stod(f[4]), std::stod(f[5])},
             {std::stod(f[6]), std::stod(f[7]), std::stod(f[8])}});
     }
