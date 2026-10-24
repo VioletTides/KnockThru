@@ -21,6 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned to the version that formatted the tree, because releases format differently.
+      - name: Check formatting
+        run: |
+          pipx run clang-format==23.1.1 --dry-run --Werror $(git ls-files 'src/*.cpp' 'src/*.hpp' 'tests/*.cpp' 'tests/*.hpp' | grep -v -E 'logo_shapes|sprite_shapes')
+
       - name: Build and test
         run: |
           cmake -S . -B build
