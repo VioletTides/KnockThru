@@ -10,8 +10,8 @@ namespace knockthru {
 
 // What a set of knocks does.
 enum class KnockAction { Passthrough, Style, PerfGraph, None };
-constexpr std::array<KnockAction, 4> kKnockActionList{KnockAction::Passthrough, KnockAction::Style,
-                                                      KnockAction::PerfGraph, KnockAction::None};
+constexpr std::array<KnockAction, 4> kKnockActionList{
+    KnockAction::Passthrough, KnockAction::Style, KnockAction::PerfGraph, KnockAction::None};
 
 // The knock counts a person can give an action to. A new count needs the
 // detector to report it, a word in count_word(), and a default here.

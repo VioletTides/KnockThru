@@ -32,7 +32,8 @@ void open_log() {
     const auto path = user_directory() / "application.log";
     fs::create_directories(path.parent_path());
     std::error_code error;
-    if (fs::exists(path) && fs::file_size(path, error) > 1024 * 1024) fs::rename(path, path.string() + ".old", error);
+    if (fs::exists(path) && fs::file_size(path, error) > 1024 * 1024)
+        fs::rename(path, path.string() + ".old", error);
     log_file.open(path, std::ios::app);
 }
 
@@ -47,15 +48,17 @@ fs::path install_directory() { return executable().parent_path(); }
 
 void check_app(vr::EVRApplicationError error, const char* what) {
     if (error != vr::VRApplicationError_None)
-        throw std::runtime_error(std::string(what) + ": " + vr::VRApplications()->GetApplicationsErrorNameFromEnum(error));
+        throw std::runtime_error(
+            std::string(what) + ": " + vr::VRApplications()->GetApplicationsErrorNameFromEnum(error));
 }
 
 std::string scene_app_key() {
     const auto pid = vr::VRCompositor() ? vr::VRCompositor()->GetCurrentSceneFocusProcess() : 0;
     if (!pid) return "";
     std::array<char, vr::k_unMaxApplicationKeyLength> key{};
-    if (vr::VRApplications()->GetApplicationKeyByProcessId(pid, key.data(), static_cast<uint32_t>(key.size())) !=
-        vr::VRApplicationError_None) return "";
+    if (vr::VRApplications()->GetApplicationKeyByProcessId(pid, key.data(), static_cast<uint32_t>(key.size()))
+        != vr::VRApplicationError_None)
+        return "";
     return key.data();
 }
 

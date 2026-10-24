@@ -19,21 +19,23 @@ std::optional<KnockKind> parse_knock_kind(const std::string& name);
 // docs/knock-detection.md explains each one.
 struct DetectorConfig {
     double controller_peak = 60;   // m/s^2, spike on the knocking controller
-    double confirmed_peak = 40;    // m/s^2, controller spike for a together knock, which the other controller confirms
+    double confirmed_peak =
+        40;    // m/s^2, controller spike for a together knock, which the other controller confirms
     double headset_knock_peak = 40; // m/s^2, controller spike for a headset knock, which the headset confirms
-    double partner_peak = 20;      // m/s^2, spike on the other controller for a together knock
-    double headset_peak = 25;      // m/s^2, spike on the headset for a headset knock
-    double max_speed_after = 0.4;  // m/s, 30 ms after the spike
+    double partner_peak = 20; // m/s^2, spike on the other controller for a together knock
+    double headset_peak = 25; // m/s^2, spike on the headset for a headset knock
+    double max_speed_after = 0.4; // m/s, 30 ms after the spike
     double surface_speed_after = 0.55; // m/s, table knocks rebound
     double max_speed_before = 1.8; // m/s, 30 ms before the spike
     double surface_speed_before = 2.2; // m/s, knocks on a leg come in faster
     double together_distance = 0.15; // m, controller separation for a together knock
-    double same_spot = 0.06;       // m, surface knocks in one sequence must land this close. Leg knocks spread more than desk knocks.
-    double merge_s = 0.08;         // spikes closer than this are one knock (bounces)
-    double min_gap_s = 0.15;       // closer surface knocks are table bounces
-    double fast_gap_s = 0.105;     // closer together or headset knocks are rebounds
-    double max_gap_s = 0.35;       // a sequence ends after this long without a knock
-    double quiet_before_s = 0.8;   // a sequence must start this long after the previous one ended
+    double same_spot = 0.06; // m, surface knocks in one sequence must land this close. Leg knocks spread more
+                             // than desk knocks.
+    double merge_s = 0.08; // spikes closer than this are one knock (bounces)
+    double min_gap_s = 0.15; // closer surface knocks are table bounces
+    double fast_gap_s = 0.105; // closer together or headset knocks are rebounds
+    double max_gap_s = 0.35; // a sequence ends after this long without a knock
+    double quiet_before_s = 0.8; // a sequence must start this long after the previous one ended
     // m/s, the slowest approach that counts, per KnockKind. Calibration sets these.
     std::array<double, 3> min_approach{0, 0, 0};
     std::array<bool, 3> enabled{true, true, true}; // indexed by KnockKind
@@ -53,9 +55,9 @@ struct Knock {
 };
 
 struct KnockEvent {
-    double t;      // time of the last knock in the sequence
+    double t; // time of the last knock in the sequence
     KnockKind kind;
-    int count;     // 2 or 3
+    int count; // 2 or 3
 };
 
 // Streaming detector. Feed every pose sample in time order with push(), then

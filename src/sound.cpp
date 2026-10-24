@@ -43,14 +43,23 @@ struct Clip {
     std::vector<char> samples; // signed 16-bit little endian
 };
 
-uint32_t read_u32(const char* p) { uint32_t v; std::memcpy(&v, p, 4); return v; }
-uint16_t read_u16(const char* p) { uint16_t v; std::memcpy(&v, p, 2); return v; }
+uint32_t read_u32(const char* p) {
+    uint32_t v;
+    std::memcpy(&v, p, 4);
+    return v;
+}
+uint16_t read_u16(const char* p) {
+    uint16_t v;
+    std::memcpy(&v, p, 2);
+    return v;
+}
 
 // Reads a 16-bit PCM WAV file. Returns nothing for any other format.
 std::optional<Clip> load_clip(const fs::path& path) {
     std::ifstream in(path, std::ios::binary);
     const std::vector<char> file((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    if (file.size() < 12 || std::memcmp(file.data(), "RIFF", 4) || std::memcmp(file.data() + 8, "WAVE", 4)) return {};
+    if (file.size() < 12 || std::memcmp(file.data(), "RIFF", 4) || std::memcmp(file.data() + 8, "WAVE", 4))
+        return {};
     Clip clip;
     bool pcm16 = false;
     for (size_t at = 12; at + 8 <= file.size();) {
@@ -80,12 +89,18 @@ std::optional<Clip> load_clip(const fs::path& path) {
 // The parts of libpulse-simple the player uses, loaded at run time so the
 // build needs no PulseAudio headers.
 struct PulseSimple {
-    struct SampleSpec { int format; uint32_t rate; uint8_t channels; };
-    struct BufferAttr { uint32_t maxlength, tlength, prebuf, minreq, fragsize; };
+    struct SampleSpec {
+        int format;
+        uint32_t rate;
+        uint8_t channels;
+    };
+    struct BufferAttr {
+        uint32_t maxlength, tlength, prebuf, minreq, fragsize;
+    };
     static constexpr int kS16LE = 3, kPlayback = 1;
 
     void* (*open)(const char*, const char*, int, const char*, const char*, const SampleSpec*, const void*,
-                  const BufferAttr*, int*) = nullptr;
+        const BufferAttr*, int*) = nullptr;
     int (*write)(void*, const void*, size_t, int*) = nullptr;
     void (*close)(void*) = nullptr;
 
@@ -101,7 +116,9 @@ struct PulseSimple {
 
 class Player {
 public:
-    Player() { std::thread([this] { run(); }).detach(); }
+    Player() {
+        std::thread([this] { run(); }).detach();
+    }
 
     void prepare() {
         {
@@ -138,8 +155,8 @@ private:
             if (!stream) {
                 wake_.wait(lock, [this] { return wanted_; });
                 lock.unlock();
-                stream = pulse.open(nullptr, "KnockThru", PulseSimple::kPlayback, nullptr, "Click", &spec, nullptr,
-                                    &attr, nullptr);
+                stream = pulse.open(nullptr, "KnockThru", PulseSimple::kPlayback, nullptr, "Click", &spec,
+                    nullptr, &attr, nullptr);
                 lock.lock();
                 wanted_ = false;
                 if (!stream) pending_ = 0; // no sound server. The next click tries again.
@@ -154,7 +171,8 @@ private:
             if (pending_ == 0) continue;
             --pending_;
             lock.unlock();
-            const bool written = pulse.write(stream, clip->samples.data(), clip->samples.size(), nullptr) >= 0;
+            const bool written =
+                pulse.write(stream, clip->samples.data(), clip->samples.size(), nullptr) >= 0;
             if (!written) {
                 pulse.close(stream); // the server restarted. Reopen for the next click.
                 stream = nullptr;

@@ -72,7 +72,8 @@ int detect(double seconds, const std::string& save_path) {
         });
         const auto event = detector.poll(t);
         for (const auto& knock : detector.take_knocks())
-            std::printf("%8.3f  knock    %-8s peak %5.0f m/s^2\n", knock.t, to_string(knock.kind), knock.peak);
+            std::printf(
+                "%8.3f  knock    %-8s peak %5.0f m/s^2\n", knock.t, to_string(knock.kind), knock.peak);
         if (event)
             std::printf("%8.3f  ACTION   %-8s x%d  (reported %.0f ms after the last knock)\n", event->t,
                 to_string(event->kind), event->count, (t - event->t) * 1000);
@@ -116,7 +117,8 @@ int calibrate(const std::string& kind_name) {
         clock.tick();
     }
     if (!calibrator.done())
-        throw std::runtime_error("Calibration stopped after " + std::to_string(calibrator.count()) + " knocks. Nothing saved.");
+        throw std::runtime_error(
+            "Calibration stopped after " + std::to_string(calibrator.count()) + " knocks. Nothing saved.");
     std::cout << "Thresholds for " << kind_name << " set to " << thresholds_text(calibrator.save()) << " in "
               << (user_directory() / "calibration.json").string()
               << ". A running KnockThru picks it up within 2 s.\n";
@@ -128,8 +130,7 @@ int report(int port) {
     std::unique_ptr<VrSession> session;
     try {
         session = std::make_unique<VrSession>(vr::VRApplication_Background);
-    } catch (const std::exception&) {
-    }
+    } catch (const std::exception&) {}
     std::string room_view;
     try {
         room_view = RoomView(port).active() ? "on" : "off";
@@ -137,7 +138,8 @@ int report(int port) {
         room_view = error.what();
     }
     const auto path = write_report(session != nullptr, room_view);
-    std::cout << "Wrote " << path.string() << ". Attach it to an issue at https://github.com/VioletTides/KnockThru/issues\n";
+    std::cout << "Wrote " << path.string()
+              << ". Attach it to an issue at https://github.com/VioletTides/KnockThru/issues\n";
     return 0;
 }
 
@@ -147,7 +149,8 @@ int status(int port) {
     const bool installed = apps->IsApplicationInstalled(kAppKey);
     std::cout << "Registered with SteamVR: " << (installed ? "yes" : "no") << "\n";
     if (installed) {
-        std::cout << "Starts with SteamVR: " << (apps->GetApplicationAutoLaunch(kAppKey) ? "yes" : "no") << "\n";
+        std::cout << "Starts with SteamVR: " << (apps->GetApplicationAutoLaunch(kAppKey) ? "yes" : "no")
+                  << "\n";
         const auto pid = apps->GetApplicationProcessId(kAppKey);
         std::cout << "Running: " << (pid ? "yes, pid " + std::to_string(pid) : std::string("no")) << "\n";
     }
@@ -157,22 +160,23 @@ int status(int port) {
 }
 
 void usage() {
-    std::cout << "KnockThru " << kVersion << ": double knock to toggle Steam Frame passthrough.\n\n"
-        "Run with no arguments to register with SteamVR and start (the same as --install).\n\n"
-        "  --install            Register, turn on SteamVR autostart, and start\n"
-        "  --uninstall          Stop and remove from SteamVR. Keeps ~/.config/knockthru\n"
-        "  --purge              With --uninstall, also delete ~/.config/knockthru\n"
-        "  --status             Show registration and Room View state\n"
-        "  --report             Write ~/knockthru-report.txt for a bug report\n"
-        "  --update             Install the latest release from GitHub and restart\n"
-        "  --toggle             Turn Room View on or off once\n"
-        "  --style              Switch Room View translucent or opaque once\n"
-        "  --calibrate KIND     Set the threshold for together, surface, or headset knocks\n"
-        "  --current-app        Print the running app's key, for blocked_apps\n"
-        "  --detect [--save F]  Print knocks live without acting. --save also writes raw poses\n"
-        "  --record FILE        Write raw poses to CSV\n"
-        "  --seconds N          Stop --detect or --record after N seconds\n"
-        "  --run                The resident app. SteamVR starts this\n";
+    std::cout << "KnockThru " << kVersion
+              << ": double knock to toggle Steam Frame passthrough.\n\n"
+                 "Run with no arguments to register with SteamVR and start (the same as --install).\n\n"
+                 "  --install            Register, turn on SteamVR autostart, and start\n"
+                 "  --uninstall          Stop and remove from SteamVR. Keeps ~/.config/knockthru\n"
+                 "  --purge              With --uninstall, also delete ~/.config/knockthru\n"
+                 "  --status             Show registration and Room View state\n"
+                 "  --report             Write ~/knockthru-report.txt for a bug report\n"
+                 "  --update             Install the latest release from GitHub and restart\n"
+                 "  --toggle             Turn Room View on or off once\n"
+                 "  --style              Switch Room View translucent or opaque once\n"
+                 "  --calibrate KIND     Set the threshold for together, surface, or headset knocks\n"
+                 "  --current-app        Print the running app's key, for blocked_apps\n"
+                 "  --detect [--save F]  Print knocks live without acting. --save also writes raw poses\n"
+                 "  --record FILE        Write raw poses to CSV\n"
+                 "  --seconds N          Stop --detect or --record after N seconds\n"
+                 "  --run                The resident app. SteamVR starts this\n";
 }
 
 } // namespace
@@ -190,17 +194,28 @@ int main(int argc, char** argv) {
                 if (i + 1 >= argc) throw std::runtime_error(arg + " needs a value");
                 return argv[++i];
             };
-            if (arg == "--help" || arg == "-h") { usage(); return 0; }
-            if (arg == "--seconds") seconds = std::stod(value());
-            else if (arg == "--save") path = value();
-            else if (arg == "--purge") purge = true;
-            else if (arg == "--record") { command = arg; path = value(); }
-            else if (arg == "--calibrate") { command = arg; kind = value(); }
-            else if (arg == "--install" || arg == "--uninstall" || arg == "--status" || arg == "--toggle" ||
-                     arg == "--style" || arg == "--current-app" || arg == "--detect" || arg == "--run" ||
-                     arg == "--report" || arg == "--update")
+            if (arg == "--help" || arg == "-h") {
+                usage();
+                return 0;
+            }
+            if (arg == "--seconds")
+                seconds = std::stod(value());
+            else if (arg == "--save")
+                path = value();
+            else if (arg == "--purge")
+                purge = true;
+            else if (arg == "--record") {
                 command = arg;
-            else throw std::runtime_error("Unknown argument: " + arg + ". See --help.");
+                path = value();
+            } else if (arg == "--calibrate") {
+                command = arg;
+                kind = value();
+            } else if (arg == "--install" || arg == "--uninstall" || arg == "--status" || arg == "--toggle"
+                || arg == "--style" || arg == "--current-app" || arg == "--detect" || arg == "--run"
+                || arg == "--report" || arg == "--update")
+                command = arg;
+            else
+                throw std::runtime_error("Unknown argument: " + arg + ". See --help.");
         }
 
         // SteamVR identifies clients by executable path, so a command run from
@@ -225,7 +240,8 @@ int main(int argc, char** argv) {
         // Restart in Settings runs --install with no terminal, so its errors go to the log.
         if (command == "--install" || command == "--update") open_log();
         if (command == "--install") return install();
-        if (purge && command != "--uninstall") throw std::runtime_error("--purge only works with --uninstall");
+        if (purge && command != "--uninstall")
+            throw std::runtime_error("--purge only works with --uninstall");
         if (command == "--uninstall") return uninstall(purge);
         if (command == "--record") return record(path, seconds);
         if (command == "--detect") return detect(seconds, path);

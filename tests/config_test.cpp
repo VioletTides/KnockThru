@@ -74,16 +74,19 @@ int main() {
 
     // Knock actions: defaults, a partial table from the file, a bad action, and saving.
     const auto defaults = load_config(install).knock_actions;
-    check(defaults.is_default() && defaults.get(KnockKind::Headset, 2) == KnockAction::Passthrough &&
-              defaults.get(KnockKind::Headset, 3) == KnockAction::Style,
+    check(defaults.is_default() && defaults.get(KnockKind::Headset, 2) == KnockAction::Passthrough
+            && defaults.get(KnockKind::Headset, 3) == KnockAction::Style,
         "twice switches passthrough and thrice switches the style by default");
-    std::ofstream(user / "config.json") << R"({"knock_actions": {"headset": {"3": "perf_graph"}, "surface": {"2": "none"}}})";
+    std::ofstream(user / "config.json")
+        << R"({"knock_actions": {"headset": {"3": "perf_graph"}, "surface": {"2": "none"}}})";
     const auto loaded = load_config(install).knock_actions;
-    check(loaded.get(KnockKind::Headset, 3) == KnockAction::PerfGraph && loaded.get(KnockKind::Surface, 2) == KnockAction::None &&
-              loaded.get(KnockKind::Together, 3) == KnockAction::Style && !loaded.shared(3),
+    check(loaded.get(KnockKind::Headset, 3) == KnockAction::PerfGraph
+            && loaded.get(KnockKind::Surface, 2) == KnockAction::None
+            && loaded.get(KnockKind::Together, 3) == KnockAction::Style && !loaded.shared(3),
         "knock_actions loads, and kinds and counts it leaves out keep their default");
-    for (const auto* bad : {R"({"knock_actions": {"headset": {"3": "fly"}}})", R"({"knock_actions": {"headset": {"4": "style"}}})",
-                            R"({"knock_actions": {"elbow": {"2": "style"}}})"}) {
+    for (const auto* bad : {R"({"knock_actions": {"headset": {"3": "fly"}}})",
+             R"({"knock_actions": {"headset": {"4": "style"}}})",
+             R"({"knock_actions": {"elbow": {"2": "style"}}})"}) {
         std::ofstream(user / "config.json", std::ios::trunc) << bad;
         try {
             load_config(install);
@@ -101,26 +104,29 @@ int main() {
     check(load_config(install).knock_actions == changed && changed.shared(3) == KnockAction::PerfGraph,
         "save_knock_actions loads back");
     save_knock_actions(KnockActions{});
-    check(load_config(install).knock_actions.is_default() && !load_config(install).sounds &&
-              std::ifstream(user / "config.json") && read_text(user / "config.json").find("knock_actions") == std::string::npos,
+    check(load_config(install).knock_actions.is_default() && !load_config(install).sounds
+            && std::ifstream(user / "config.json")
+            && read_text(user / "config.json").find("knock_actions") == std::string::npos,
         "saving the defaults removes knock_actions and keeps other settings");
     fs::remove(user / "config.json");
 
     {
         AppState state = load_state();
         check(state.steamvr_version.empty() && state.last_update_check == 0, "state defaults without a file");
-        check(note_steamvr_version(state, "2.18.2", "2026-10-15").empty() && state.steamvr_since == "2026-10-15",
+        check(note_steamvr_version(state, "2.18.2", "2026-10-15").empty()
+                && state.steamvr_since == "2026-10-15",
             "the first SteamVR version is not a change");
-        check(note_steamvr_version(state, "2.18.2", "2026-10-16").empty() && state.steamvr_since == "2026-10-15",
+        check(note_steamvr_version(state, "2.18.2", "2026-10-16").empty()
+                && state.steamvr_since == "2026-10-15",
             "the same SteamVR version is not a change");
-        check(note_steamvr_version(state, "2.19.0", "2026-10-20") == "2.18.2" && state.steamvr_previous == "2.18.2" &&
-                  state.steamvr_since == "2026-10-20",
+        check(note_steamvr_version(state, "2.19.0", "2026-10-20") == "2.18.2"
+                && state.steamvr_previous == "2.18.2" && state.steamvr_since == "2026-10-20",
             "a new SteamVR version reports the old one");
         state.last_update_check = 1792000000;
         save_state(state);
         const auto loaded = load_state();
-        check(loaded.steamvr_version == "2.19.0" && loaded.steamvr_previous == "2.18.2" &&
-                  loaded.last_update_check == 1792000000,
+        check(loaded.steamvr_version == "2.19.0" && loaded.steamvr_previous == "2.18.2"
+                && loaded.last_update_check == 1792000000,
             "state survives a save and load");
         std::ofstream(user / "state.json") << "not json";
         check(load_state().steamvr_version.empty(), "a damaged state file gives defaults");

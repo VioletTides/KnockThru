@@ -40,18 +40,19 @@ void register_app() {
     Panel::draw_icon(icon);
     fs::create_directories(icon_path().parent_path());
     if (!icon.write_png(icon_path())) throw std::runtime_error("Cannot write " + icon_path().string());
-    json app = {
-        {"app_key", kAppKey}, {"launch_type", "binary"}, {"is_dashboard_overlay", true},
+    json app = {{"app_key", kAppKey}, {"launch_type", "binary"}, {"is_dashboard_overlay", true},
         {"binary_path_linux", binary},
         // The Frame's native ARM runtime reads this key, not binary_path_linux (from KominoVR).
-        {"binary_path_linux_arm", binary},
-        {"arguments", "--run"},
+        {"binary_path_linux_arm", binary}, {"arguments", "--run"},
         {"image_path", icon_path().generic_u8string()},
         {"action_manifest_path", (install_directory() / "actions.json").generic_u8string()},
-        {"strings", {{"en_us", {{"name", "KnockThru"}, {"description", "Double knock to toggle passthrough"}}}}}};
+        {"strings",
+            {{"en_us", {{"name", "KnockThru"}, {"description", "Double knock to toggle passthrough"}}}}}};
     fs::create_directories(manifest_path().parent_path());
-    std::ofstream(manifest_path(), std::ios::trunc) << json{{"source", "builtin"}, {"applications", json::array({app})}}.dump(2);
-    check_app(vr::VRApplications()->AddApplicationManifest(manifest_path().u8string().c_str(), false), "Register with SteamVR");
+    std::ofstream(manifest_path(), std::ios::trunc)
+        << json{{"source", "builtin"}, {"applications", json::array({app})}}.dump(2);
+    check_app(vr::VRApplications()->AddApplicationManifest(manifest_path().u8string().c_str(), false),
+        "Register with SteamVR");
 }
 
 // Stops every running resident KnockThru: a process of this user whose program
@@ -82,8 +83,8 @@ void stop_running_app() {
 
 // SteamVR's own per-app file, which holds the autostart flag.
 fs::path steamvr_app_config() {
-    return user_directory().parent_path() / "openvr" / "config" / "vrappconfig" /
-           (std::string(kAppKey) + ".vrappconfig");
+    return user_directory().parent_path() / "openvr" / "config" / "vrappconfig"
+        / (std::string(kAppKey) + ".vrappconfig");
 }
 
 } // namespace
@@ -105,7 +106,8 @@ int install() {
 void unregister() {
     if (vr::VRApplications()->IsApplicationInstalled(kAppKey)) {
         vr::VRApplications()->SetApplicationAutoLaunch(kAppKey, false);
-        check_app(vr::VRApplications()->RemoveApplicationManifest(manifest_path().u8string().c_str()), "Unregister");
+        check_app(vr::VRApplications()->RemoveApplicationManifest(manifest_path().u8string().c_str()),
+            "Unregister");
     }
     std::error_code error;
     fs::remove(manifest_path(), error);
@@ -125,8 +127,8 @@ int uninstall(bool purge) {
     fs::remove(steamvr_app_config());
     fs::remove(report_path());
     fs::remove(recording_path());
-    std::cout << "KnockThru stopped and removed from SteamVR. Deleted " << user_directory().string()
-              << ", " << steamvr_app_config().string() << ", and the report files in your home folder.\n";
+    std::cout << "KnockThru stopped and removed from SteamVR. Deleted " << user_directory().string() << ", "
+              << steamvr_app_config().string() << ", and the report files in your home folder.\n";
     return 0;
 }
 
@@ -134,7 +136,8 @@ int update() {
     const auto work = user_directory() / "update";
     const auto release = fetch_latest_release(work);
     if (compare_versions(release.version, kVersion) <= 0) {
-        std::cout << "KnockThru " << kVersion << " is up to date. The latest release is " << release.version << ".\n";
+        std::cout << "KnockThru " << kVersion << " is up to date. The latest release is " << release.version
+                  << ".\n";
         return 0;
     }
     std::cout << "Installing KnockThru " << release.version << " from " << release.url << "\n";

@@ -23,7 +23,7 @@ std::string make_zip(const std::vector<std::pair<std::string, std::string>>& fil
 // and the page asks for it to be attached. `issue_link` must be URL-encoded,
 // so it has no quotes.
 std::string report_page(const std::string& report, const std::string& issue_link, const std::string& download,
-                        const std::string& bundle = "");
+    const std::string& bundle = "");
 
 // Serves one report to phones on the same network, so a QR code can carry a
 // short link instead of the report. Paths need a random token, and the server

@@ -16,7 +16,8 @@ namespace knockthru {
 namespace {
 
 void check(VkResult result, const char* what) {
-    if (result != VK_SUCCESS) throw std::runtime_error(std::string("Vulkan ") + what + " failed: " + std::to_string(result));
+    if (result != VK_SUCCESS)
+        throw std::runtime_error(std::string("Vulkan ") + what + " failed: " + std::to_string(result));
 }
 
 // Splits SteamVR's space-separated extension list.
@@ -56,21 +57,45 @@ struct OverlayTexture::Impl {
     int next = 0;
 
 #define KT_VK(name) PFN_vk##name name = nullptr
-    KT_VK(CreateInstance); KT_VK(DestroyInstance); KT_VK(EnumeratePhysicalDevices);
-    KT_VK(GetPhysicalDeviceQueueFamilyProperties); KT_VK(GetPhysicalDeviceMemoryProperties);
-    KT_VK(CreateDevice); KT_VK(DestroyDevice); KT_VK(GetDeviceQueue); KT_VK(GetDeviceProcAddr);
-    KT_VK(CreateBuffer); KT_VK(DestroyBuffer); KT_VK(GetBufferMemoryRequirements); KT_VK(BindBufferMemory);
-    KT_VK(CreateImage); KT_VK(DestroyImage); KT_VK(GetImageMemoryRequirements); KT_VK(BindImageMemory);
-    KT_VK(AllocateMemory); KT_VK(FreeMemory); KT_VK(MapMemory);
-    KT_VK(CreateCommandPool); KT_VK(DestroyCommandPool); KT_VK(AllocateCommandBuffers);
-    KT_VK(BeginCommandBuffer); KT_VK(EndCommandBuffer); KT_VK(ResetCommandBuffer);
-    KT_VK(CmdPipelineBarrier); KT_VK(CmdCopyBufferToImage);
-    KT_VK(CreateFence); KT_VK(DestroyFence); KT_VK(ResetFences); KT_VK(WaitForFences);
-    KT_VK(QueueSubmit); KT_VK(DeviceWaitIdle);
+    KT_VK(CreateInstance);
+    KT_VK(DestroyInstance);
+    KT_VK(EnumeratePhysicalDevices);
+    KT_VK(GetPhysicalDeviceQueueFamilyProperties);
+    KT_VK(GetPhysicalDeviceMemoryProperties);
+    KT_VK(CreateDevice);
+    KT_VK(DestroyDevice);
+    KT_VK(GetDeviceQueue);
+    KT_VK(GetDeviceProcAddr);
+    KT_VK(CreateBuffer);
+    KT_VK(DestroyBuffer);
+    KT_VK(GetBufferMemoryRequirements);
+    KT_VK(BindBufferMemory);
+    KT_VK(CreateImage);
+    KT_VK(DestroyImage);
+    KT_VK(GetImageMemoryRequirements);
+    KT_VK(BindImageMemory);
+    KT_VK(AllocateMemory);
+    KT_VK(FreeMemory);
+    KT_VK(MapMemory);
+    KT_VK(CreateCommandPool);
+    KT_VK(DestroyCommandPool);
+    KT_VK(AllocateCommandBuffers);
+    KT_VK(BeginCommandBuffer);
+    KT_VK(EndCommandBuffer);
+    KT_VK(ResetCommandBuffer);
+    KT_VK(CmdPipelineBarrier);
+    KT_VK(CmdCopyBufferToImage);
+    KT_VK(CreateFence);
+    KT_VK(DestroyFence);
+    KT_VK(ResetFences);
+    KT_VK(WaitForFences);
+    KT_VK(QueueSubmit);
+    KT_VK(DeviceWaitIdle);
 #undef KT_VK
 
     template <typename T> void load(T& fn, const char* name, bool device_level) {
-        fn = reinterpret_cast<T>(device_level ? GetDeviceProcAddr(device, name) : get_instance_proc(instance, name));
+        fn = reinterpret_cast<T>(
+            device_level ? GetDeviceProcAddr(device, name) : get_instance_proc(instance, name));
         if (!fn) throw std::runtime_error(std::string("Vulkan function missing: ") + name);
     }
 
@@ -85,12 +110,14 @@ struct OverlayTexture::Impl {
     void create_instance() {
         library = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
         if (!library) throw std::runtime_error("libvulkan.so.1 not found");
-        get_instance_proc = reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(library, "vkGetInstanceProcAddr"));
+        get_instance_proc =
+            reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(library, "vkGetInstanceProcAddr"));
         if (!get_instance_proc) throw std::runtime_error("vkGetInstanceProcAddr not found");
         load(CreateInstance, "vkCreateInstance", false);
 
         std::array<char, 4096> buffer{};
-        vr::VRCompositor()->GetVulkanInstanceExtensionsRequired(buffer.data(), static_cast<uint32_t>(buffer.size()));
+        vr::VRCompositor()->GetVulkanInstanceExtensionsRequired(
+            buffer.data(), static_cast<uint32_t>(buffer.size()));
         const auto extensions = split(buffer.data());
         const auto names = c_strings(extensions);
         VkApplicationInfo app{};
@@ -115,7 +142,8 @@ struct OverlayTexture::Impl {
     void create_device() {
         // SteamVR names the GPU it composites on. Fall back to the first one.
         std::uint64_t output = 0;
-        vr::VRSystem()->GetOutputDevice(&output, vr::TextureType_Vulkan, reinterpret_cast<VkInstance_T*>(instance));
+        vr::VRSystem()->GetOutputDevice(
+            &output, vr::TextureType_Vulkan, reinterpret_cast<VkInstance_T*>(instance));
         physical = reinterpret_cast<VkPhysicalDevice>(output);
         if (!physical) {
             std::uint32_t count = 1;
@@ -129,7 +157,10 @@ struct OverlayTexture::Impl {
         GetPhysicalDeviceQueueFamilyProperties(physical, &count, families.data());
         family = count;
         for (std::uint32_t i = 0; i < count; ++i)
-            if (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) { family = i; break; }
+            if (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                family = i;
+                break;
+            }
         if (family == count) throw std::runtime_error("No Vulkan graphics queue");
 
         std::array<char, 4096> buffer{};
@@ -151,24 +182,33 @@ struct OverlayTexture::Impl {
         info.ppEnabledExtensionNames = names.data();
         check(CreateDevice(physical, &info, nullptr, &device), "device");
 
-        load(DestroyDevice, "vkDestroyDevice", true); load(GetDeviceQueue, "vkGetDeviceQueue", true);
-        load(CreateBuffer, "vkCreateBuffer", true); load(DestroyBuffer, "vkDestroyBuffer", true);
+        load(DestroyDevice, "vkDestroyDevice", true);
+        load(GetDeviceQueue, "vkGetDeviceQueue", true);
+        load(CreateBuffer, "vkCreateBuffer", true);
+        load(DestroyBuffer, "vkDestroyBuffer", true);
         load(GetBufferMemoryRequirements, "vkGetBufferMemoryRequirements", true);
         load(BindBufferMemory, "vkBindBufferMemory", true);
-        load(CreateImage, "vkCreateImage", true); load(DestroyImage, "vkDestroyImage", true);
+        load(CreateImage, "vkCreateImage", true);
+        load(DestroyImage, "vkDestroyImage", true);
         load(GetImageMemoryRequirements, "vkGetImageMemoryRequirements", true);
         load(BindImageMemory, "vkBindImageMemory", true);
-        load(AllocateMemory, "vkAllocateMemory", true); load(FreeMemory, "vkFreeMemory", true);
+        load(AllocateMemory, "vkAllocateMemory", true);
+        load(FreeMemory, "vkFreeMemory", true);
         load(MapMemory, "vkMapMemory", true);
-        load(CreateCommandPool, "vkCreateCommandPool", true); load(DestroyCommandPool, "vkDestroyCommandPool", true);
+        load(CreateCommandPool, "vkCreateCommandPool", true);
+        load(DestroyCommandPool, "vkDestroyCommandPool", true);
         load(AllocateCommandBuffers, "vkAllocateCommandBuffers", true);
-        load(BeginCommandBuffer, "vkBeginCommandBuffer", true); load(EndCommandBuffer, "vkEndCommandBuffer", true);
+        load(BeginCommandBuffer, "vkBeginCommandBuffer", true);
+        load(EndCommandBuffer, "vkEndCommandBuffer", true);
         load(ResetCommandBuffer, "vkResetCommandBuffer", true);
         load(CmdPipelineBarrier, "vkCmdPipelineBarrier", true);
         load(CmdCopyBufferToImage, "vkCmdCopyBufferToImage", true);
-        load(CreateFence, "vkCreateFence", true); load(DestroyFence, "vkDestroyFence", true);
-        load(ResetFences, "vkResetFences", true); load(WaitForFences, "vkWaitForFences", true);
-        load(QueueSubmit, "vkQueueSubmit", true); load(DeviceWaitIdle, "vkDeviceWaitIdle", true);
+        load(CreateFence, "vkCreateFence", true);
+        load(DestroyFence, "vkDestroyFence", true);
+        load(ResetFences, "vkResetFences", true);
+        load(WaitForFences, "vkWaitForFences", true);
+        load(QueueSubmit, "vkQueueSubmit", true);
+        load(DeviceWaitIdle, "vkDeviceWaitIdle", true);
         GetDeviceQueue(device, family, 0, &queue);
     }
 
@@ -184,8 +224,8 @@ struct OverlayTexture::Impl {
         VkMemoryAllocateInfo alloc{};
         alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         alloc.allocationSize = needs.size;
-        alloc.memoryTypeIndex = memory_type(needs.memoryTypeBits,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        alloc.memoryTypeIndex = memory_type(
+            needs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         check(AllocateMemory(device, &alloc, nullptr, &staging_memory), "staging memory");
         check(BindBufferMemory(device, staging, staging_memory, 0), "staging bind");
         check(MapMemory(device, staging_memory, 0, size, 0, &staging_map), "staging map");
@@ -200,7 +240,8 @@ struct OverlayTexture::Impl {
             image_info.arrayLayers = 1;
             image_info.samples = VK_SAMPLE_COUNT_1_BIT;
             image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-            image_info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+            image_info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                | VK_IMAGE_USAGE_SAMPLED_BIT;
             image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             check(CreateImage(device, &image_info, nullptr, &images[i]), "image");
             GetImageMemoryRequirements(device, images[i], &needs);
@@ -236,8 +277,8 @@ struct OverlayTexture::Impl {
         b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         b.image = image;
         b.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-        CmdPipelineBarrier(commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0,
-            0, nullptr, 0, nullptr, 1, &b);
+        CmdPipelineBarrier(commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0, 0, nullptr, 0, nullptr, 1, &b);
     }
 
     ~Impl() {
@@ -278,7 +319,8 @@ void OverlayTexture::show(vr::VROverlayHandle_t overlay, const std::uint8_t* rgb
     begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     check(v.BeginCommandBuffer(v.commands, &begin), "begin");
-    v.barrier(image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, VK_ACCESS_TRANSFER_WRITE_BIT);
+    v.barrier(image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0,
+        VK_ACCESS_TRANSFER_WRITE_BIT);
     VkBufferImageCopy region{};
     region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
     region.imageExtent = {v.width, v.height, 1};
@@ -310,8 +352,8 @@ void OverlayTexture::show(vr::VROverlayHandle_t overlay, const std::uint8_t* rgb
     vr::Texture_t texture{&data, vr::TextureType_Vulkan, vr::ColorSpace_Gamma};
     const auto error = vr::VROverlay()->SetOverlayTexture(overlay, &texture);
     if (error != vr::VROverlayError_None)
-        throw std::runtime_error(std::string("SetOverlayTexture failed: ") +
-            vr::VROverlay()->GetOverlayErrorNameFromEnum(error));
+        throw std::runtime_error(
+            std::string("SetOverlayTexture failed: ") + vr::VROverlay()->GetOverlayErrorNameFromEnum(error));
     v.next ^= 1;
 }
 
