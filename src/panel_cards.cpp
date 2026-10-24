@@ -43,9 +43,8 @@ void Panel::report_card(const PanelState& state) {
     // Knock problems need the motion itself, so the report can carry a recording.
     const Rect record{x, card.y + 420, 240, 64};
     const bool recording = state.recording_left >= 0;
-    const std::string record_label = recording ? "Recording " + std::to_string(state.recording_left) + " s"
-        : state.recorded                       ? "Record again"
-                                               : "Record knocks";
+    std::string record_label = state.recorded ? "Record again" : "Record knocks";
+    if (recording) record_label = "Recording " + std::to_string(state.recording_left) + " s";
     button(record, record_label, PanelClick{PanelCommand::RecordKnocks}, std::nullopt, false, !recording);
     std::string record_note = "Knocks missed or wrong? Record 20 s of them.";
     if (recording)

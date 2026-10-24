@@ -16,11 +16,13 @@ void Panel::passthrough_tile(Rect rect, const PanelState& state) {
         rect, kRadius, on ? (hover ? kAccentHover : kAccent) : (hover ? kRaisedHover : kRaised));
     const float x = rect.x + 36, w = rect.w - 72;
     canvas_.text(bold_, "Passthrough", x, rect.y + 52, 30, kText);
-    const std::string value = state.busy ? "Switching"
-        : broken                         ? "Unavailable"
-        : !state.room_view               ? "Checking"
-        : on                             ? "On"
-                                         : "Off";
+    std::string value = on ? "On" : "Off";
+    if (state.busy)
+        value = "Switching";
+    else if (broken)
+        value = "Unavailable";
+    else if (!state.room_view)
+        value = "Checking";
     canvas_.text(bold_, value, x, rect.y + 160, broken ? 64 : 96, kText);
     if (broken) {
         paragraph(regular_, state.room_view_error, x, rect.y + rect.h - 92, 26, 36, w, 2, kText);
@@ -45,9 +47,8 @@ void Panel::style_control(Rect rect, const PanelState& state) {
         canvas_.text(bold_, names[i], half.x + half.w / 2, half.y + half.h / 2, 28, selected ? kText : kDim,
             Align::Center);
     }
-    const std::string what = !state.opaque ? ""
-        : *state.opaque                    ? "You see only the room."
-                                           : "The room shows through your game.";
+    std::string what;
+    if (state.opaque) what = *state.opaque ? "You see only the room." : "The room shows through your game.";
     canvas_.text(regular_, what, rect.x, track.y + track.h + 34, 26, kDim);
 }
 

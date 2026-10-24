@@ -46,7 +46,12 @@ struct KindCalibration {
 struct Calibration {
     std::optional<KindCalibration> surface, together, headset;
     std::optional<KindCalibration>& operator[](KnockKind kind) {
-        return kind == KnockKind::Surface ? surface : kind == KnockKind::Together ? together : headset;
+        switch (kind) {
+        case KnockKind::Surface: return surface;
+        case KnockKind::Together: return together;
+        case KnockKind::Headset: break;
+        }
+        return headset;
     }
 };
 

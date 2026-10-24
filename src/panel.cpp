@@ -77,11 +77,16 @@ bool Panel::hovered(Rect rect) const { return hover_ && rect.contains(hover_->fi
 void Panel::switch_control(float right, float cy, bool on, bool enabled, float scale) {
     const float h = 48 * scale, w = 80 * scale, r = h / 2;
     const Rect track{right - w, cy - r, w, h};
-    canvas_.rounded_rect(track, r, !enabled ? kSurfaceHover : on ? kAccent : kRaisedHover);
-    canvas_.circle(on ? track.x + track.w - r : track.x + r, cy, r - 6 * scale,
-        !enabled ? kFaint
-            : on ? kText
-                 : kKnobOff);
+    Color fill = kRaisedHover, knob = kKnobOff;
+    if (!enabled) {
+        fill = kSurfaceHover;
+        knob = kFaint;
+    } else if (on) {
+        fill = kAccent;
+        knob = kText;
+    }
+    canvas_.rounded_rect(track, r, fill);
+    canvas_.circle(on ? track.x + track.w - r : track.x + r, cy, r - 6 * scale, knob);
 }
 
 // A danger button is red when primary, and has a red label otherwise.
@@ -93,15 +98,15 @@ void Panel::button(Rect rect, const std::string& label, std::optional<PanelClick
         return;
     }
     const bool hover = hovered(rect);
-    const Color fill = primary && danger ? (hover ? kErrorHover : kError)
-        : primary                        ? (hover ? kAccentHover : kAccent)
-                                         : (hover ? kRaisedHover : kRaised);
+    Color fill = hover ? kRaisedHover : kRaised, ink = danger ? kError : kText;
+    if (primary && danger) {
+        fill = hover ? kErrorHover : kError;
+        ink = kOnError;
+    } else if (primary) {
+        fill = hover ? kAccentHover : kAccent;
+    }
     canvas_.rounded_rect(rect, kRadius, fill);
-    canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, 28,
-        primary && danger ? kOnError
-            : danger      ? kError
-                          : kText,
-        Align::Center);
+    canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, 28, ink, Align::Center);
     targets_.push_back({rect, click, go_to});
 }
 
@@ -214,13 +219,17 @@ const Canvas& Panel::render(
     // The tour's Calibrate step hands over to the Learn screen, whose Back returns to the tour.
     const bool tour_on_screen = state.tour && screen_ != Screen::Learn;
 
-    View view = screen_ == Screen::Main ? View::Main
-        : screen_ == Screen::Settings   ? View::Settings
-        : screen_ == Screen::Reset      ? View::Reset
-        : screen_ == Screen::Report     ? View::Report
-        : screen_ == Screen::Pick       ? View::Pick
-        : screen_ == Screen::Actions    ? View::Actions
-                                        : View::Learn;
+    View view = View::Learn;
+    switch (screen_) {
+    case Screen::Main: view = View::Main; break;
+    case Screen::Settings: view = View::Settings; break;
+    case Screen::Reset: view = View::Reset; break;
+    case Screen::Report: view = View::Report; break;
+    case Screen::Pick: view = View::Pick; break;
+    case Screen::Actions: view = View::Actions; break;
+    case Screen::Learn:
+    case Screen::SkipTour: break;
+    }
     std::optional<TourView::Step> tour_step;
     if (calibration) {
         using Phase = CalibrationView::Phase;
@@ -316,10 +325,10 @@ void Panel::draw_icon(Canvas& canvas, IconStyle style) {
         // The white bar icon takes Steam's tint: grey when idle, and white on hover. Its accent
         // parts are half transparent, so they stay apart from the controllers like the blue does.
         const bool accent = shape.fill == logo::Fill::Accent;
-        canvas.polygon(rings,
-            style == IconStyle::BarWhite ? Color{255, 255, 255, static_cast<std::uint8_t>(accent ? 128 : 255)}
-                : accent                 ? kAccent
-                                         : kText);
+        Color color = accent ? kAccent : kText;
+        if (style == IconStyle::BarWhite)
+            color = {255, 255, 255, static_cast<std::uint8_t>(accent ? 128 : 255)};
+        canvas.polygon(rings, color);
     }
 }
 

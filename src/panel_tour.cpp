@@ -58,9 +58,14 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
     std::vector<std::string> ways;
     for (int k = 0; k < 3; ++k)
         if (state.enabled[k]) ways.push_back(kWays[k]);
+    // "a", "a or b", "a, b, or c"
     std::string list;
-    for (std::size_t i = 0; i < ways.size(); ++i)
-        list += (i == 0 ? "" : i + 1 == ways.size() ? (ways.size() == 2 ? " or " : ", or ") : ", ") + ways[i];
+    for (std::size_t i = 0; i < ways.size(); ++i) {
+        const bool last = i + 1 == ways.size();
+        if (i > 0 && !last) list += ", ";
+        if (i > 0 && last) list += ways.size() == 2 ? " or " : ", or ";
+        list += ways[i];
+    }
     const std::string how = ways.size() > 1 ? "Any of these work: " + list + "." : "Use " + list + ".";
     paragraph(regular_, how, x, y, 28, 40, w, 3, kDim);
 
@@ -83,15 +88,15 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
         check_mark(cx, cy, 34, anim::ease_out_back(static_cast<float>(now_ - heard_t) / 0.3f));
         std::string title, detail;
         if (triple) {
-            title = !state.opaque ? "Style switched"
-                : *state.opaque   ? "Style is opaque"
-                                  : "Style is translucent";
+            title = "Style switched";
+            if (state.opaque) title = *state.opaque ? "Style is opaque" : "Style is translucent";
             // A triple knock while passthrough is off sets the style it opens in.
             detail = state.room_view == false ? "Passthrough is off. It opens in this style."
                                               : "Knock three times again to switch back.";
         } else {
             const bool on = state.room_view.value_or(false);
-            title = state.busy ? "Switching" : on ? "Passthrough is on" : "Passthrough is off";
+            title = on ? "Passthrough is on" : "Passthrough is off";
+            if (state.busy) title = "Switching";
             detail = std::string("Knock twice again to turn it ") + (on ? "off." : "on.");
         }
         canvas_.text(bold_, canvas_.fit(bold_, title, 34, status.w - 150), cx + 64, cy - 22, 34, kText);
