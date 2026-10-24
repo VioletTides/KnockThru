@@ -43,7 +43,7 @@ struct Canceled : std::runtime_error {
 // `cancel` becomes true, stops the program within about 50 ms and returns -2.
 // With `cancel`, `on_poll` runs about every 50 ms while the program runs.
 int run_program(const std::vector<std::string>& args, const std::atomic<bool>* cancel = nullptr,
-                const std::function<void()>& on_poll = {});
+    const std::function<void()>& on_poll = {});
 
 // Starts a program in its own session and returns without waiting, so it
 // outlives this process. Throws if it could not start.
@@ -61,8 +61,8 @@ Release fetch_latest_release(const std::filesystem::path& work, const std::atomi
 // nothing. The file swap after them is never canceled, so it never stops halfway.
 // `progress` goes from 0 to 1. The download fills the first 90 percent.
 void install_release(const Release& release, const std::filesystem::path& install_directory,
-                     const std::filesystem::path& work, const std::atomic<bool>* cancel = nullptr,
-                     std::atomic<float>* progress = nullptr);
+    const std::filesystem::path& work, const std::atomic<bool>* cancel = nullptr,
+    std::atomic<float>* progress = nullptr);
 
 // Copies every file in `staging` into `install`, keeping the folder layout. Each
 // file is first written beside its target under a temporary name, then renamed

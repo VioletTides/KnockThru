@@ -26,8 +26,7 @@ std::vector<KnockEvent> drain(KnockDetector& detector, double now, std::vector<K
 // Simulates one controller resting at `position`, with knocks at the given
 // times. Each knock is a fast approach (0.8 m/s) that stops dead.
 std::vector<KnockEvent> synthetic(const std::vector<double>& knock_times, DetectorConfig config = {},
-                                  Device device = Device::Right, Vec3 position = {0.2, 0.8, -0.3},
-                                  double duration = 3.0) {
+    Device device = Device::Right, Vec3 position = {0.2, 0.8, -0.3}, double duration = 3.0) {
     KnockDetector detector(config);
     std::vector<KnockEvent> events;
     const double dt = 1.0 / 233;
@@ -50,7 +49,7 @@ void synthetic_tests() {
 
     auto events = synthetic({1.0, 1.25});
     check(events.size() == 1 && events[0].count == 2 && events[0].kind == KnockKind::Surface,
-          "two knocks 250 ms apart are a surface double");
+        "two knocks 250 ms apart are a surface double");
 
     events = synthetic({1.0, 1.25, 1.5});
     check(events.size() == 1 && events[0].count == 3, "three knocks are a triple");
@@ -84,7 +83,10 @@ std::vector<Row> load(const std::string& path) {
     char buffer[512];
     bool header = true;
     while (std::fgets(buffer, sizeof buffer, pipe)) {
-        if (header) { header = false; continue; }
+        if (header) {
+            header = false;
+            continue;
+        }
         std::stringstream line(buffer);
         std::string field;
         std::vector<std::string> f;
@@ -92,7 +94,7 @@ std::vector<Row> load(const std::string& path) {
         if (f.size() < 9 || f[2] != "1") continue;
         const Device device = f[1] == "hmd" ? Device::Hmd : f[1] == "left" ? Device::Left : Device::Right;
         rows.push_back({std::stod(f[0]), device, {std::stod(f[3]), std::stod(f[4]), std::stod(f[5])},
-                        {std::stod(f[6]), std::stod(f[7]), std::stod(f[8])}});
+            {std::stod(f[6]), std::stod(f[7]), std::stod(f[8])}});
     }
     pclose(pipe);
     return rows;
@@ -104,16 +106,15 @@ DetectorConfig test_config() {
     DetectorConfig config;
     const char* set = std::getenv("KNOCKTHRU_TEST_SET");
     if (!set) return config;
-    const std::map<std::string, double*> fields{
-        {"controller_peak", &config.controller_peak}, {"confirmed_peak", &config.confirmed_peak},
-        {"partner_peak", &config.partner_peak}, {"headset_peak", &config.headset_peak}, {"headset_knock_peak", &config.headset_knock_peak},
+    const std::map<std::string, double*> fields{{"controller_peak", &config.controller_peak},
+        {"confirmed_peak", &config.confirmed_peak}, {"partner_peak", &config.partner_peak},
+        {"headset_peak", &config.headset_peak}, {"headset_knock_peak", &config.headset_knock_peak},
         {"min_approach_together", &config.min_approach[0]}, {"min_approach_surface", &config.min_approach[1]},
-        {"min_approach_headset", &config.min_approach[2]},
-        {"max_speed_after", &config.max_speed_after}, {"surface_speed_after", &config.surface_speed_after},
-        {"max_speed_before", &config.max_speed_before}, {"surface_speed_before", &config.surface_speed_before},
-        {"same_spot", &config.same_spot},
-        {"min_gap_s", &config.min_gap_s}, {"fast_gap_s", &config.fast_gap_s}, {"max_gap_s", &config.max_gap_s},
-        {"quiet_before_s", &config.quiet_before_s}};
+        {"min_approach_headset", &config.min_approach[2]}, {"max_speed_after", &config.max_speed_after},
+        {"surface_speed_after", &config.surface_speed_after}, {"max_speed_before", &config.max_speed_before},
+        {"surface_speed_before", &config.surface_speed_before}, {"same_spot", &config.same_spot},
+        {"min_gap_s", &config.min_gap_s}, {"fast_gap_s", &config.fast_gap_s},
+        {"max_gap_s", &config.max_gap_s}, {"quiet_before_s", &config.quiet_before_s}};
     std::stringstream list(set);
     std::string item;
     while (std::getline(list, item, ',')) {
@@ -152,11 +153,12 @@ std::map<std::string, int> replay(const std::string& name) {
         auto event = detector.poll(row.t);
         if (std::getenv("KNOCKTHRU_TEST_VERBOSE"))
             for (const auto& knock : detector.take_knocks())
-                std::cout << "    knock " << knock.t << " " << to_string(knock.kind) << " source " << knock.source
-                          << " peak " << knock.peak << "\n";
+                std::cout << "    knock " << knock.t << " " << to_string(knock.kind) << " source "
+                          << knock.source << " peak " << knock.peak << "\n";
         if (event) {
             if (std::getenv("KNOCKTHRU_TEST_VERBOSE"))
-                std::cout << "    " << event->t << " " << to_string(event->kind) << "x" << event->count << "\n";
+                std::cout << "    " << event->t << " " << to_string(event->kind) << "x" << event->count
+                          << "\n";
             ++counts[std::string(to_string(event->kind)) + "x" + std::to_string(event->count)];
         }
     }
@@ -180,7 +182,11 @@ int total(const std::map<std::string, int>& counts) {
 // is when a sequence starts. An action must end within 1 s of that start.
 // Returns how many actions were right and how many wrong.
 std::pair<int, int> mixed_score(const DetectorConfig& config, bool verbose) {
-    struct Expected { double start; KnockKind kind; int count; };
+    struct Expected {
+        double start;
+        KnockKind kind;
+        int count;
+    };
     std::vector<Expected> expected;
     const auto add = [&](KnockKind kind, int count, std::initializer_list<double> starts) {
         for (const double start : starts) expected.push_back({start, kind, count});
@@ -219,7 +225,8 @@ void replay_tests() {
     std::cout << "recordings\n";
     // Fast together doubles, 89 to 168 ms apart, about 20 pairs in 30 s.
     auto fast = replay("fast");
-    check(fast["togetherx2"] >= 12 && total(fast) == fast["togetherx2"], "fast: at least 12 together doubles, nothing else");
+    check(fast["togetherx2"] >= 12 && total(fast) == fast["togetherx2"],
+        "fast: at least 12 together doubles, nothing else");
     auto together = replay("together");
     check(together["togetherx2"] >= 18, "together: at least 18 together doubles");
     auto surface = replay("surface");
@@ -298,11 +305,14 @@ void calibrated_replay_tests() {
         DetectorConfig config;
         apply_calibration(calibration, config);
         int doubles = 0;
-        for (const auto& event : replay_events(name, config)) doubles += event.kind == kind && event.count == 2;
-        const auto false_actions = replay_events("play", config).size() + replay_events("noise", config).size();
+        for (const auto& event : replay_events(name, config))
+            doubles += event.kind == kind && event.count == 2;
+        const auto false_actions =
+            replay_events("play", config).size() + replay_events("noise", config).size();
         const auto [right, wrong] = mixed_score(config, false);
-        std::cout << "  " << name << ": spike " << calibration[kind]->peak << ", approach " << calibration[kind]->approach
-                  << ", " << doubles << " doubles, mixed " << right << " right " << wrong << " wrong\n";
+        std::cout << "  " << name << ": spike " << calibration[kind]->peak << ", approach "
+                  << calibration[kind]->approach << ", " << doubles << " doubles, mixed " << right
+                  << " right " << wrong << " wrong\n";
         check(false_actions == 0, name + " calibrated: no actions in play and noise");
         check(wrong == 0, name + " calibrated: no wrong actions in mixed");
         const int least = kind == KnockKind::Surface ? 17 : 19;
@@ -316,7 +326,8 @@ void calibrated_replay_tests() {
     soft[KnockKind::Headset] = KindCalibration{25.0, 0.154, {}, {}};
     DetectorConfig config;
     apply_calibration(soft, config);
-    check(config.confirmed_peak == Calibrator::floor(KnockKind::Together), "soft calibration: together floor applies");
+    check(config.confirmed_peak == Calibrator::floor(KnockKind::Together),
+        "soft calibration: together floor applies");
     check(replay_events("straps", config).empty(), "soft calibration: no actions in straps");
 }
 

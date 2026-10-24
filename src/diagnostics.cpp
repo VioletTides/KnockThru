@@ -64,15 +64,17 @@ void write_recording(const KnockRecording& recording) {
     {
         std::ofstream out(csv, std::ios::trunc);
         out << kCsvHeader;
-        for (const auto& s : recording.samples) write_csv_row(out, s.t - recording.start, s.device, s.position, s.velocity);
+        for (const auto& s : recording.samples)
+            write_csv_row(out, s.t - recording.start, s.device, s.position, s.velocity);
         if (!out) throw std::runtime_error("Cannot write " + csv.string());
     }
-    if (run_program({"gzip", "-f", csv.string()}) != 0) throw std::runtime_error("gzip could not compress the recording");
+    if (run_program({"gzip", "-f", csv.string()}) != 0)
+        throw std::runtime_error("gzip could not compress the recording");
     fs::copy_file(csv.string() + ".gz", recording_path(), fs::copy_options::overwrite_existing);
     fs::remove(csv.string() + ".gz");
     std::ofstream summary(user_directory() / "knocks.txt", std::ios::trunc);
-    summary << "Recorded " << recording.samples.size() << " samples over " << KnockRecording::kSeconds << " s. Heard "
-            << recording.heard.size() << " knocks and actions:\n";
+    summary << "Recorded " << recording.samples.size() << " samples over " << KnockRecording::kSeconds
+            << " s. Heard " << recording.heard.size() << " knocks and actions:\n";
     for (const auto& line : recording.heard) summary << line << "\n";
 }
 
@@ -91,7 +93,8 @@ std::string report_text(bool vr, const std::string& room_view) {
         const auto remembered = load_state();
         if (!remembered.steamvr_since.empty())
             out << "SteamVR seen since: " << remembered.steamvr_since
-                << (remembered.steamvr_previous.empty() ? "" : ", before that " + remembered.steamvr_previous) << "\n";
+                << (remembered.steamvr_previous.empty() ? "" : ", before that " + remembered.steamvr_previous)
+                << "\n";
         out << "Registered with SteamVR: " << (apps->IsApplicationInstalled(kAppKey) ? "yes" : "no") << "\n";
         out << "Starts with SteamVR: " << (apps->GetApplicationAutoLaunch(kAppKey) ? "yes" : "no") << "\n";
         const auto pid = apps->GetApplicationProcessId(kAppKey);
@@ -111,12 +114,13 @@ std::string report_text(bool vr, const std::string& room_view) {
     // The summary of the last knock recording, if it is under an hour old.
     std::error_code age_error;
     const auto knocks = user / "knocks.txt";
-    if (fs::exists(knocks, age_error) &&
-        fs::file_time_type::clock::now() - fs::last_write_time(knocks, age_error) < std::chrono::hours(1))
+    if (fs::exists(knocks, age_error)
+        && fs::file_time_type::clock::now() - fs::last_write_time(knocks, age_error) < std::chrono::hours(1))
         out << "\n== Knock recording, knockthru-knocks.csv.gz ==\n" << tail(knocks, 200);
     for (const auto* name : {"config.json", "calibration.json"})
         out << "\n== " << (user / name).string() << " ==\n" << tail(user / name, 400);
-    out << "\n== " << (user / "application.log").string() << ", last 300 lines ==\n" << tail(user / "application.log", 300);
+    out << "\n== " << (user / "application.log").string() << ", last 300 lines ==\n"
+        << tail(user / "application.log", 300);
     const auto home = std::getenv("HOME");
     if (home && *home) {
         const auto steam_log = fs::path(home) / ".local/share/Steam/logs/vrclient_knockthru.txt";

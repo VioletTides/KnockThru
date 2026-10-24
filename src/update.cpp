@@ -74,19 +74,19 @@ private:
     static std::uint32_t rotate(std::uint32_t x, int n) { return (x >> n) | (x << (32 - n)); }
 
     void compress() {
-        static constexpr std::array<std::uint32_t, 64> k{
-            0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-            0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-            0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-            0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-            0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-            0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-            0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-            0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
+        static constexpr std::array<std::uint32_t, 64> k{0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+            0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+            0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+            0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+            0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+            0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+            0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+            0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+            0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
         std::array<std::uint32_t, 64> w{};
         for (int i = 0; i < 16; ++i)
-            w[i] = (std::uint32_t{block_[4 * i]} << 24) | (std::uint32_t{block_[4 * i + 1]} << 16) |
-                   (std::uint32_t{block_[4 * i + 2]} << 8) | std::uint32_t{block_[4 * i + 3]};
+            w[i] = (std::uint32_t{block_[4 * i]} << 24) | (std::uint32_t{block_[4 * i + 1]} << 16)
+                | (std::uint32_t{block_[4 * i + 2]} << 8) | std::uint32_t{block_[4 * i + 3]};
         for (int i = 16; i < 64; ++i) {
             const auto s0 = rotate(w[i - 15], 7) ^ rotate(w[i - 15], 18) ^ (w[i - 15] >> 3);
             const auto s1 = rotate(w[i - 2], 17) ^ rotate(w[i - 2], 19) ^ (w[i - 2] >> 10);
@@ -94,16 +94,24 @@ private:
         }
         auto [a, b, c, d, e, f, g, h] = state_;
         for (int i = 0; i < 64; ++i) {
-            const auto t1 = h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + k[i] + w[i];
+            const auto t1 =
+                h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + k[i] + w[i];
             const auto t2 = (rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
-            h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+            h = g;
+            g = f;
+            f = e;
+            e = d + t1;
+            d = c;
+            c = b;
+            b = a;
+            a = t1 + t2;
         }
         const std::array<std::uint32_t, 8> add{a, b, c, d, e, f, g, h};
         for (int i = 0; i < 8; ++i) state_[i] += add[i];
     }
 
-    std::array<std::uint32_t, 8> state_{0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                                        0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
+    std::array<std::uint32_t, 8> state_{
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
     std::array<unsigned char, 64> block_{};
     std::size_t used_ = 0;
     std::uint64_t length_ = 0;
@@ -145,7 +153,8 @@ std::uintmax_t last_length(const fs::path& headers) {
         const auto colon = line.find(':');
         if (colon == std::string::npos) continue;
         std::string name = line.substr(0, colon);
-        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+        std::transform(
+            name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
         if (name != "content-length") continue;
         try {
             length = std::stoull(line.substr(colon + 1));
@@ -162,7 +171,7 @@ std::uintmax_t last_length(const fs::path& headers) {
 // While curl runs, `progress` follows the file's size against the Content-Length,
 // scaled from 0 to `scale`. Without a Content-Length it stays where it is.
 void download(const std::string& url, const fs::path& path, int seconds, const std::string& missing,
-              const std::atomic<bool>* cancel, std::atomic<float>* progress = nullptr, float scale = 1) {
+    const std::atomic<bool>* cancel, std::atomic<float>* progress = nullptr, float scale = 1) {
     const auto headers = path.string() + ".headers";
     const auto follow = [&] {
         if (!progress) return;
@@ -170,10 +179,12 @@ void download(const std::string& url, const fs::path& path, int seconds, const s
         const auto length = last_length(headers);
         const auto size = fs::file_size(path, error);
         if (length > 0 && !error)
-            *progress = scale * static_cast<float>(std::min(1.0, static_cast<double>(size) / static_cast<double>(length)));
+            *progress = scale
+                * static_cast<float>(std::min(1.0, static_cast<double>(size) / static_cast<double>(length)));
     };
     const int code = run_program({"curl", "--silent", "--location", "--max-time", std::to_string(seconds),
-                                  "--dump-header", headers, "--output", path.string(), url}, cancel, follow);
+                                     "--dump-header", headers, "--output", path.string(), url},
+        cancel, follow);
     if (code == -2) throw Canceled("Download canceled");
     const int status = last_status(headers);
     std::error_code ignored;
@@ -192,7 +203,8 @@ void download(const std::string& url, const fs::path& path, int seconds, const s
 int compare_versions(const std::string& a, const std::string& b) {
     const auto split = [](const std::string& version) {
         const auto dash = version.find('-');
-        return std::make_pair(version.substr(0, dash), dash == std::string::npos ? "" : version.substr(dash + 1));
+        return std::make_pair(
+            version.substr(0, dash), dash == std::string::npos ? "" : version.substr(dash + 1));
     };
     const auto [core_a, suffix_a] = split(a);
     const auto [core_b, suffix_b] = split(b);
@@ -239,7 +251,7 @@ std::string sha256(const std::string& data) {
 std::string sha256_file(const fs::path& path) { return sha256(read_file(path)); }
 
 int run_program(const std::vector<std::string>& args, const std::atomic<bool>* cancel,
-                const std::function<void()>& on_poll) {
+    const std::function<void()>& on_poll) {
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
@@ -314,7 +326,7 @@ Release fetch_latest_release(const fs::path& work, const std::atomic<bool>* canc
 }
 
 void install_release(const Release& release, const fs::path& install_directory, const fs::path& work,
-                     const std::atomic<bool>* cancel, std::atomic<float>* progress) {
+    const std::atomic<bool>* cancel, std::atomic<float>* progress) {
     const auto reach = [&](float value) {
         if (progress) *progress = value;
     };
@@ -332,7 +344,9 @@ void install_release(const Release& release, const fs::path& install_directory, 
         const int code = run_program({"unzip", "-q", "-o", zip.string(), "-d", staging.string()}, cancel);
         if (code == -2) throw Canceled("Unpack canceled");
         if (code == -1 || code == 127) throw std::runtime_error("unzip is missing on this system");
-        if (code != 0) throw std::runtime_error("Cannot unpack the release ZIP, unzip exit code " + std::to_string(code));
+        if (code != 0)
+            throw std::runtime_error(
+                "Cannot unpack the release ZIP, unzip exit code " + std::to_string(code));
         reach(0.95f);
         replace_files(staging, install_directory);
         reach(1);
@@ -352,8 +366,10 @@ void replace_files(const fs::path& staging, const fs::path& install) {
 
     // The programs go last, so a failure partway leaves the old app with at most new assets.
     std::vector<fs::path> files;
-    for (auto it = fs::recursive_directory_iterator(staging); it != fs::recursive_directory_iterator(); ++it) {
-        if (it->is_symlink()) throw std::runtime_error("The release contains a symlink: " + it->path().string());
+    for (auto it = fs::recursive_directory_iterator(staging); it != fs::recursive_directory_iterator();
+        ++it) {
+        if (it->is_symlink())
+            throw std::runtime_error("The release contains a symlink: " + it->path().string());
         if (it->is_regular_file()) files.push_back(fs::relative(it->path(), staging));
     }
     std::stable_partition(files.begin(), files.end(),

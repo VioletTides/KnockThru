@@ -65,8 +65,8 @@ const Font::Glyph& Font::glyph(char32_t codepoint, float size) {
 }
 
 float Font::kerning(char32_t left, char32_t right, float size) const {
-    return stbtt_GetCodepointKernAdvance(&impl_->info, static_cast<int>(left), static_cast<int>(right)) *
-        stbtt_ScaleForPixelHeight(&impl_->info, size);
+    return stbtt_GetCodepointKernAdvance(&impl_->info, static_cast<int>(left), static_cast<int>(right))
+        * stbtt_ScaleForPixelHeight(&impl_->info, size);
 }
 
 float Font::ascent(float size) const {
@@ -160,9 +160,7 @@ void Canvas::fill_span(int y, int from, int to, Color color) {
     }
 }
 
-void Canvas::circle(float cx, float cy, float radius, Color color) {
-    arc(cx, cy, 0, radius, 0, 7, color);
-}
+void Canvas::circle(float cx, float cy, float radius, Color color) { arc(cx, cy, 0, radius, 0, 7, color); }
 
 void Canvas::polygon(const std::vector<std::vector<Point>>& rings, Color color) {
     float top = static_cast<float>(height_), bottom = 0, left = static_cast<float>(width_), right = 0;
@@ -174,11 +172,13 @@ void Canvas::polygon(const std::vector<std::vector<Point>>& rings, Color color) 
             right = std::max(right, p.x);
         }
     }
-    const int first_x = std::max(0, static_cast<int>(left)), last_x = std::min(width_, static_cast<int>(std::ceil(right)) + 1);
+    const int first_x = std::max(0, static_cast<int>(left)),
+              last_x = std::min(width_, static_cast<int>(std::ceil(right)) + 1);
     // Four sample lines per pixel row. Each span adds its exact horizontal coverage.
     constexpr int kSamples = 4;
     std::vector<float> coverage(width_ + 1), crossings;
-    for (int y = std::max(0, static_cast<int>(top)); y < std::min(height_, static_cast<int>(std::ceil(bottom))); ++y) {
+    for (int y = std::max(0, static_cast<int>(top));
+        y < std::min(height_, static_cast<int>(std::ceil(bottom))); ++y) {
         std::fill(coverage.begin() + first_x, coverage.begin() + last_x, 0.0f);
         for (int sample = 0; sample < kSamples; ++sample) {
             const float sy = y + (sample + 0.5f) / kSamples;
@@ -186,7 +186,8 @@ void Canvas::polygon(const std::vector<std::vector<Point>>& rings, Color color) 
             for (const auto& ring : rings) {
                 for (std::size_t i = 0; i < ring.size(); ++i) {
                     const Point a = ring[i], b = ring[(i + 1) % ring.size()];
-                    if ((a.y <= sy) != (b.y <= sy)) crossings.push_back(a.x + (sy - a.y) * (b.x - a.x) / (b.y - a.y));
+                    if ((a.y <= sy) != (b.y <= sy))
+                        crossings.push_back(a.x + (sy - a.y) * (b.x - a.x) / (b.y - a.y));
                 }
             }
             std::sort(crossings.begin(), crossings.end());
@@ -208,8 +209,10 @@ void Canvas::polygon(const std::vector<std::vector<Point>>& rings, Color color) 
 }
 
 void Canvas::arc(float cx, float cy, float inner, float outer, float from, float to, Color color) {
-    const int x0 = static_cast<int>(std::floor(cx - outer - 1)), x1 = static_cast<int>(std::ceil(cx + outer + 1));
-    const int y0 = static_cast<int>(std::floor(cy - outer - 1)), y1 = static_cast<int>(std::ceil(cy + outer + 1));
+    const int x0 = static_cast<int>(std::floor(cx - outer - 1)),
+              x1 = static_cast<int>(std::ceil(cx + outer + 1));
+    const int y0 = static_cast<int>(std::floor(cy - outer - 1)),
+              y1 = static_cast<int>(std::ceil(cy + outer + 1));
     const bool full = to - from >= 6.283f;
     for (int y = y0; y < y1; ++y) {
         for (int x = x0; x < x1; ++x) {
@@ -231,7 +234,9 @@ void Canvas::arc(float cx, float cy, float inner, float outer, float from, float
     }
 }
 
-float Canvas::measure(Font& font, const std::string& utf8, float size) { return measure(font, decode_utf8(utf8), size); }
+float Canvas::measure(Font& font, const std::string& utf8, float size) {
+    return measure(font, decode_utf8(utf8), size);
+}
 
 float Canvas::measure(Font& font, const std::u32string& text, float size) {
     float width = 0;
@@ -249,10 +254,13 @@ std::string Canvas::fit(Font& font, const std::string& utf8, float size, float w
         text.pop_back();
         std::string out;
         for (const char32_t c : text) {
-            if (c < 0x80) out += static_cast<char>(c);
-            else if (c < 0x800) out += {static_cast<char>(0xC0 | (c >> 6)), static_cast<char>(0x80 | (c & 0x3F))};
-            else out += {static_cast<char>(0xE0 | (c >> 12)), static_cast<char>(0x80 | ((c >> 6) & 0x3F)),
-                         static_cast<char>(0x80 | (c & 0x3F))};
+            if (c < 0x80)
+                out += static_cast<char>(c);
+            else if (c < 0x800)
+                out += {static_cast<char>(0xC0 | (c >> 6)), static_cast<char>(0x80 | (c & 0x3F))};
+            else
+                out += {static_cast<char>(0xE0 | (c >> 12)), static_cast<char>(0x80 | ((c >> 6) & 0x3F)),
+                    static_cast<char>(0x80 | (c & 0x3F))};
         }
         out += "...";
         if (measure(font, out, size) <= width) return out;
@@ -260,7 +268,8 @@ std::string Canvas::fit(Font& font, const std::string& utf8, float size, float w
     return "";
 }
 
-std::vector<std::string> Canvas::wrap(Font& font, const std::string& utf8, float size, float width, int max_lines) {
+std::vector<std::string> Canvas::wrap(
+    Font& font, const std::string& utf8, float size, float width, int max_lines) {
     std::vector<std::string> lines;
     std::string line;
     std::size_t start = 0;
@@ -287,7 +296,8 @@ std::vector<std::string> Canvas::wrap(Font& font, const std::string& utf8, float
     return lines;
 }
 
-void Canvas::text(Font& font, const std::string& utf8, float x, float y, float size, Color color, Align align) {
+void Canvas::text(
+    Font& font, const std::string& utf8, float x, float y, float size, Color color, Align align) {
     const auto text = decode_utf8(utf8);
     const float width = measure(font, text, size);
     if (align == Align::Center) x -= width / 2;
@@ -331,7 +341,8 @@ void Canvas::draw(const Canvas& image, int x, int y, float alpha) {
             }
             // Source over destination, in 0..255 integers.
             const int under = d[3] * (255 - a) / 255, out = a + under;
-            for (int c = 0; c < 3; ++c) d[c] = static_cast<std::uint8_t>((s[c] * a + d[c] * under + out / 2) / out);
+            for (int c = 0; c < 3; ++c)
+                d[c] = static_cast<std::uint8_t>((s[c] * a + d[c] * under + out / 2) / out);
             d[3] = static_cast<std::uint8_t>(out);
         }
     }

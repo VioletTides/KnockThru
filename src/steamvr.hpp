@@ -37,7 +37,8 @@ public:
             const std::string reason = vr::VR_GetVRInitErrorAsEnglishDescription(error);
             if (!wait) throw std::runtime_error("SteamVR unavailable: " + reason);
             if (attempt % 12 == 0) log("Waiting for SteamVR: " + reason);
-            for (int i = 0; i < 50 && !stopping; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            for (int i = 0; i < 50 && !stopping; ++i)
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         throw std::runtime_error("Stopped while waiting for SteamVR");
     }

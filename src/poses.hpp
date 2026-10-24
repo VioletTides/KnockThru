@@ -23,8 +23,8 @@ Vec3 velocity_of(const vr::TrackedDevicePose_t& pose);
 constexpr const char* kCsvHeader = "t_s,device,valid,px,py,pz,vx,vy,vz,wx,wy,wz\n";
 
 // One row of the tests/data CSV format. Without `angular`, its columns are zero.
-void write_csv_row(std::ostream& out, double t, Device device, const Vec3& p, const Vec3& v,
-                   const float* angular = nullptr);
+void write_csv_row(
+    std::ostream& out, double t, Device device, const Vec3& p, const Vec3& v, const float* angular = nullptr);
 
 // Reads headset and controller poses once per call. SteamVR poses are only
 // valid in the standing universe on the Frame.
@@ -45,7 +45,8 @@ public:
         std::uint32_t count = 0;
         for (const auto index : indices_)
             if (index < vr::k_unMaxTrackedDeviceCount) count = std::max(count, index + 1);
-        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0, poses_.data(), count);
+        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(
+            vr::TrackingUniverseStanding, 0, poses_.data(), count);
         for (std::size_t i = 0; i < 3; ++i) {
             if (indices_[i] >= vr::k_unMaxTrackedDeviceCount) continue;
             const auto& pose = poses_[indices_[i]];
@@ -69,7 +70,9 @@ private:
 
 class Clock {
 public:
-    double now() const { return std::chrono::duration<double>(std::chrono::steady_clock::now() - start_).count(); }
+    double now() const {
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - start_).count();
+    }
     // Sleeps until the next tick, `step` after the last one.
     void tick(std::chrono::milliseconds step = std::chrono::milliseconds(1)) {
         next_ += step;

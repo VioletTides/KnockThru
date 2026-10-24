@@ -108,7 +108,9 @@ private:
         }
         return data;
     }
-    static void send_all(int client, const std::string& data) { ::send(client, data.data(), data.size(), MSG_NOSIGNAL); }
+    static void send_all(int client, const std::string& data) {
+        ::send(client, data.data(), data.size(), MSG_NOSIGNAL);
+    }
 
     // An unmasked text frame, as the Steam client sends.
     static std::string frame(const std::string& text) {
@@ -134,7 +136,8 @@ private:
         }
         const auto mask = receive(client, 4);
         auto payload = receive(client, length);
-        for (std::size_t i = 0; i < payload.size(); ++i) payload[i] = static_cast<char>(payload[i] ^ mask[i % 4]);
+        for (std::size_t i = 0; i < payload.size(); ++i)
+            payload[i] = static_cast<char>(payload[i] ^ mask[i % 4]);
         return payload;
     }
 
@@ -148,25 +151,31 @@ private:
         const auto ws = "ws://127.0.0.1:" + std::to_string(port_) + "/devtools/page/";
         if (headers.rfind("GET /json ", 0) == 0) {
             json targets = json::array();
-            targets.push_back({{"url", "https://steamloopback.host/?vrOverlayKey=valve.steam.gamepadui.barpopup"},
-                               {"webSocketDebuggerUrl", ws + "POPUP"}});
+            targets.push_back(
+                {{"url", "https://steamloopback.host/?vrOverlayKey=valve.steam.gamepadui.barpopup"},
+                    {"webSocketDebuggerUrl", ws + "POPUP"}});
             if (bar)
-                targets.push_back({{"url", "https://steamloopback.host/?vrOverlayKey=valve.steam.gamepadui.bar"},
-                                   {"webSocketDebuggerUrl", ws + "BAR"}});
+                targets.push_back(
+                    {{"url", "https://steamloopback.host/?vrOverlayKey=valve.steam.gamepadui.bar"},
+                        {"webSocketDebuggerUrl", ws + "BAR"}});
             const auto body = targets.dump();
             // The connection stays open, as Steam's does, so the client must read by length.
-            send_all(client, "HTTP/1.1 200 OK\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body);
+            send_all(client,
+                "HTTP/1.1 200 OK\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body);
             return;
         }
         if (headers.rfind("GET /devtools/page/BAR ", 0) != 0) {
             send_all(client, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
             return;
         }
-        send_all(client, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n");
+        send_all(
+            client, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n");
         const auto request = json::parse(read_frame(client), nullptr, false);
         if (request.is_discarded()) return;
         // An event comes first, longer than 125 bytes, which the client must skip.
-        send_all(client, frame(json{{"method", "Runtime.consoleAPICalled"}, {"params", {{"pad", std::string(200, 'x')}}}}.dump()));
+        send_all(client,
+            frame(json{{"method", "Runtime.consoleAPICalled"}, {"params", {{"pad", std::string(200, 'x')}}}}
+                    .dump()));
         send_all(client, frame(evaluate(request["id"], request["params"]["expression"])));
     }
 
@@ -175,18 +184,21 @@ private:
         std::string script = kPrelude;
         script.replace(script.find("EXPRESSION"), 10, expression);
         std::ofstream(directory_ / "script.js", std::ios::trunc) << script;
-        const auto command = "node '" + (directory_ / "script.js").string() + "' '" +
-                             (directory_ / "state.json").string() + "' 2>/dev/null";
+        const auto command = "node '" + (directory_ / "script.js").string() + "' '"
+            + (directory_ / "state.json").string() + "' 2>/dev/null";
         std::string output;
         int status = -1;
         if (FILE* pipe = ::popen(command.c_str(), "r")) {
             char buffer[256];
-            for (std::size_t n; (n = std::fread(buffer, 1, sizeof buffer, pipe)) > 0;) output.append(buffer, n);
+            for (std::size_t n; (n = std::fread(buffer, 1, sizeof buffer, pipe)) > 0;)
+                output.append(buffer, n);
             status = ::pclose(pipe);
         }
         json result;
-        if (status == 0) result = {{"type", "string"}, {"value", json::parse(output)}};
-        else result = {{"type", "object"}, {"subtype", "error"}, {"description", "Error: script threw"}};
+        if (status == 0)
+            result = {{"type", "string"}, {"value", json::parse(output)}};
+        else
+            result = {{"type", "object"}, {"subtype", "error"}, {"description", "Error: script threw"}};
         return json{{"id", id}, {"result", {{"result", result}}}}.dump();
     }
 
@@ -234,20 +246,20 @@ int main() {
         steam.set_state(false, false, false);
         const auto [missing, missing_changed] = error_of([&] { room_view.active(); });
         check(missing_changed && missing.find("not found") != std::string::npos,
-              "a bar without the button throws DashboardChanged: " + missing);
+            "a bar without the button throws DashboardChanged: " + missing);
         const auto [click, click_changed] = error_of([&] { room_view.toggle(); });
         check(click_changed, "toggle without the button throws DashboardChanged");
 
         steam.set_state(false, true, true);
         const auto [broken, broken_changed] = error_of([&] { room_view.active(); });
         check(broken_changed && broken.find("Dashboard script failed") != std::string::npos,
-              "a script error throws DashboardChanged: " + broken);
+            "a script error throws DashboardChanged: " + broken);
 
         steam.set_state(false, true, false);
         steam.bar = false;
         const auto [no_bar, no_bar_changed] = error_of([&] { room_view.active(); });
         check(!no_bar_changed && no_bar.find("dashboard bar not found") != std::string::npos,
-              "a target list without the bar says SteamVR may not be running: " + no_bar);
+            "a target list without the bar says SteamVR may not be running: " + no_bar);
     }
     // The fake port is closed now.
     {
@@ -262,7 +274,7 @@ int main() {
         ::close(probe); // nothing listens on this port
         const auto [closed, closed_changed] = error_of([&] { RoomView(closed_port).active(); });
         check(!closed_changed && closed.find("CEF Remote Debugging") != std::string::npos,
-              "a closed port says to turn on CEF Remote Debugging: " + closed);
+            "a closed port says to turn on CEF Remote Debugging: " + closed);
     }
     fs::remove_all(root);
     return finish();

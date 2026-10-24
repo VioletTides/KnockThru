@@ -46,8 +46,8 @@ public:
         address.sin_port = htons(static_cast<std::uint16_t>(port));
         address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         if (::connect(fd_, reinterpret_cast<sockaddr*>(&address), sizeof address) < 0)
-            throw std::runtime_error("Steam debug port " + std::to_string(port) +
-                " is closed. Turn on CEF Remote Debugging in the Frame's Developer settings.");
+            throw std::runtime_error("Steam debug port " + std::to_string(port)
+                + " is closed. Turn on CEF Remote Debugging in the Frame's Developer settings.");
     }
     ~Socket() { ::close(fd_); }
     Socket(const Socket&) = delete;
@@ -110,7 +110,8 @@ std::string websocket_read(Socket& socket) {
         length = 0;
         for (const char byte : bytes) length = (length << 8) | static_cast<unsigned char>(byte);
     }
-    if ((static_cast<unsigned char>(head[0]) & 0x0F) == 8) throw std::runtime_error("Steam debug port closed the connection");
+    if ((static_cast<unsigned char>(head[0]) & 0x0F) == 8)
+        throw std::runtime_error("Steam debug port closed the connection");
     return socket.receive(length); // the server never masks its frames
 }
 
@@ -144,20 +145,22 @@ std::string RoomView::evaluate(const std::string& expression) const {
     const auto path = bar_websocket_path(port_);
     Socket socket(port_);
     // The key is fixed because only the local Steam client is on the other end.
-    socket.send("GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port_) +
-                "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                "Sec-WebSocket-Key: a25vY2t0aHJ1LWtub2NrdGhydQ==\r\nSec-WebSocket-Version: 13\r\n\r\n");
+    socket.send("GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port_)
+        + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+          "Sec-WebSocket-Key: a25vY2t0aHJ1LWtub2NrdGhydQ==\r\nSec-WebSocket-Version: 13\r\n\r\n");
     const auto headers = socket.receive_headers();
-    if (headers.rfind("HTTP/1.1 101", 0) != 0) throw std::runtime_error("Steam debug port refused the connection");
+    if (headers.rfind("HTTP/1.1 101", 0) != 0)
+        throw std::runtime_error("Steam debug port refused the connection");
 
     const json request = {{"id", 1}, {"method", "Runtime.evaluate"},
-                          {"params", {{"expression", expression}, {"returnByValue", true}}}};
+        {"params", {{"expression", expression}, {"returnByValue", true}}}};
     socket.send(websocket_frame(request.dump()));
     for (;;) {
         const auto reply = json::parse(websocket_read(socket));
         if (reply.value("id", 0) != 1) continue;
         // The scripts only fail if the page no longer has what they expect.
-        if (reply.contains("error")) throw DashboardChanged("Dashboard script failed: " + reply["error"].dump());
+        if (reply.contains("error"))
+            throw DashboardChanged("Dashboard script failed: " + reply["error"].dump());
         const auto& result = reply["result"]["result"];
         if (result.value("subtype", "") == "error")
             throw DashboardChanged("Dashboard script failed: " + result.value("description", ""));
@@ -166,16 +169,16 @@ std::string RoomView::evaluate(const std::string& expression) const {
 }
 
 bool RoomView::active() const {
-    const auto state = evaluate(std::string("(() => {") + kFindButton +
-        "  if (!button) return 'missing';\n  return roomViewAction(button).active ? 'on' : 'off';\n})()");
+    const auto state = evaluate(std::string("(() => {") + kFindButton
+        + "  if (!button) return 'missing';\n  return roomViewAction(button).active ? 'on' : 'off';\n})()");
     if (state == "missing") throw DashboardChanged("Room View button not found on the SteamVR dashboard");
     return state == "on";
 }
 
 bool RoomView::toggle() const {
     const bool before = active();
-    const auto clicked = evaluate(std::string("(() => {") + kFindButton +
-        "  if (!button) return 'missing';\n  button.click();\n  return 'clicked';\n})()");
+    const auto clicked = evaluate(std::string("(() => {") + kFindButton
+        + "  if (!button) return 'missing';\n  button.click();\n  return 'clicked';\n})()");
     if (clicked != "clicked") throw DashboardChanged("Room View button not found on the SteamVR dashboard");
     // The button state updates after SteamVR applies the change.
     for (int attempt = 0; attempt < 10; ++attempt) {
@@ -194,10 +197,10 @@ void RoomView::tint_icon(const std::string& overlay_key, bool tint) const {
     // layer is the ::after of the img's parent, because an img has no pseudo-elements.
     const auto url = "https://steamloopback.host/overlays/thumbnail?key=" + overlay_key;
     const auto parent = ":has(> img[src*=\"key=" + overlay_key + "\"])";
-    const auto css = parent + " { position: relative; } " + parent +
-                     "::after { content: \"\"; position: absolute; inset: 0; background-color: currentColor; "
-                     "mix-blend-mode: multiply; pointer-events: none; -webkit-mask: url(\"" + url +
-                     "\") center / contain no-repeat; }";
+    const auto css = parent + " { position: relative; } " + parent
+        + "::after { content: \"\"; position: absolute; inset: 0; background-color: currentColor; "
+          "mix-blend-mode: multiply; pointer-events: none; -webkit-mask: url(\""
+        + url + "\") center / contain no-repeat; }";
     evaluate("(() => {\n"
              "  let style = document.getElementById('knockthru-icon');\n"
              "  if (!style) {\n"
@@ -205,9 +208,11 @@ void RoomView::tint_icon(const std::string& overlay_key, bool tint) const {
              "    style.id = 'knockthru-icon';\n"
              "    document.head.append(style);\n"
              "  }\n"
-             "  style.textContent = " + json(css).dump() + ";\n"
-             "  return 'ok';\n"
-             "})()");
+             "  style.textContent = "
+        + json(css).dump()
+        + ";\n"
+          "  return 'ok';\n"
+          "})()");
 }
 
 } // namespace knockthru

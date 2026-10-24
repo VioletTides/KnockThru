@@ -12,7 +12,10 @@ namespace knockthru {
 // manifest is loaded, and the older direct pulse call otherwise.
 class Haptics {
 public:
-    void use_actions(vr::VRActionHandle_t left, vr::VRActionHandle_t right) { left_ = left; right_ = right; }
+    void use_actions(vr::VRActionHandle_t left, vr::VRActionHandle_t right) {
+        left_ = left;
+        right_ = right;
+    }
 
     // Queues `count` pulses, 150 ms apart.
     void buzz(int count, double now) {
@@ -21,7 +24,10 @@ public:
 
     void update(double now) {
         for (auto it = pending_.begin(); it != pending_.end();) {
-            if (*it > now) { ++it; continue; }
+            if (*it > now) {
+                ++it;
+                continue;
+            }
             pulse();
             it = pending_.erase(it);
         }
@@ -35,7 +41,8 @@ private:
     void pulse() {
         if (left_ != vr::k_ulInvalidActionHandle) {
             for (const auto action : {left_, right_})
-                vr::VRInput()->TriggerHapticVibrationAction(action, 0, 0.07f, 160, 1.0f, vr::k_ulInvalidInputValueHandle);
+                vr::VRInput()->TriggerHapticVibrationAction(
+                    action, 0, 0.07f, 160, 1.0f, vr::k_ulInvalidInputValueHandle);
             return;
         }
         auto* system = vr::VRSystem();

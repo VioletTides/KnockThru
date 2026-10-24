@@ -1,0 +1,28 @@
+# Matches the hand-written style the code had before the formatter.
+BasedOnStyle: LLVM
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 110
+AccessModifierOffset: -4
+NamespaceIndentation: None
+FixNamespaceComments: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Empty
+AllowShortLambdasOnASingleLine: All
+AlwaysBreakTemplateDeclarations: No
+AlignAfterOpenBracket: DontAlign
+AlignOperands: DontAlign
+AlignTrailingComments:
+  Kind: Leave
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeTernaryOperators: true
+BinPackArguments: true
+BinPackParameters: true
+Cpp11BracedListStyle: true
+IncludeBlocks: Preserve
+SortIncludes: Never
+PointerAlignment: Left
+SpaceAfterTemplateKeyword: true

@@ -43,8 +43,10 @@ void Calibrator::finish_burst() {
     burst_.clear();
     Heard heard = Heard::Ignored;
     if (deliberate && !done())
-        heard = early ? Heard::TooSoon : best.kind != kind_ ? Heard::OtherKind
-            : best.peak < floor(kind_) ? Heard::TooLight : Heard::Counted;
+        heard = early                  ? Heard::TooSoon
+            : best.kind != kind_       ? Heard::OtherKind
+            : best.peak < floor(kind_) ? Heard::TooLight
+                                       : Heard::Counted;
     if (heard == Heard::Counted) {
         last_counted_ = best.t;
         peaks_.push_back(best.peak);
@@ -105,7 +107,8 @@ KindCalibration Calibrator::save() const {
 
 std::string thresholds_text(const KindCalibration& calibration) {
     char line[128];
-    std::snprintf(line, sizeof line, "spike %.0f m/s^2, approach %.2f m/s", calibration.peak, calibration.approach);
+    std::snprintf(
+        line, sizeof line, "spike %.0f m/s^2, approach %.2f m/s", calibration.peak, calibration.approach);
     return line;
 }
 

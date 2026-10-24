@@ -64,14 +64,16 @@ public:
     // 0 points right, counterclockwise on screen).
     void arc(float cx, float cy, float inner, float outer, float from, float to, Color color);
     // Draws one line of text. `y` is the vertical center of the line.
-    void text(Font& font, const std::string& utf8, float x, float y, float size, Color color, Align align = Align::Left);
+    void text(Font& font, const std::string& utf8, float x, float y, float size, Color color,
+        Align align = Align::Left);
     float measure(Font& font, const std::string& utf8, float size);
     // Shrinks `utf8` with a trailing "..." until it fits in `width`.
     std::string fit(Font& font, const std::string& utf8, float size, float width);
 
     // Splits `utf8` at spaces into lines no wider than `width`. The last of
     // `max_lines` lines is shortened with "..." if the text does not fit.
-    std::vector<std::string> wrap(Font& font, const std::string& utf8, float size, float width, int max_lines);
+    std::vector<std::string> wrap(
+        Font& font, const std::string& utf8, float size, float width, int max_lines);
 
     // Blends another canvas onto this one with its top left corner at (x, y),
     // with its opacity scaled by `alpha`.
