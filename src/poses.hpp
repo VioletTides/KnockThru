@@ -1,6 +1,7 @@
 #pragma once
 
 #include "knock_detector.hpp"
+#include "pose_rate.hpp"
 
 #include <openvr.h>
 
@@ -86,9 +87,10 @@ private:
     std::chrono::steady_clock::time_point next_ = start_;
 };
 
-// Samples poses every millisecond on its own thread. Knock strength is the
-// velocity change between samples over the time between them, so a main loop
-// busy drawing the panel would stretch those gaps and garble the strength.
+// Samples poses every millisecond on its own thread, or at PoseRate's idle rate
+// while no controller is tracked. Knock strength is the velocity change between
+// samples over the time between them, so a main loop busy drawing the panel
+// would stretch those gaps and garble the strength.
 class PoseThread {
 public:
     struct Sample {
@@ -115,6 +117,7 @@ public:
 private:
     void loop(const Clock& clock) {
         PoseSampler sampler;
+        PoseRate rate;
         Clock ticker;
         while (!stop_) {
             const double t = clock.now();
@@ -127,7 +130,9 @@ private:
                 std::lock_guard<std::mutex> lock(mutex_);
                 samples_.insert(samples_.end(), read.begin(), read.begin() + count);
             }
-            ticker.tick();
+            const auto controllers = std::count_if(
+                read.begin(), read.begin() + count, [](const Sample& s) { return s.device != Device::Hmd; });
+            ticker.tick(rate.next(static_cast<int>(controllers)));
         }
     }
 
