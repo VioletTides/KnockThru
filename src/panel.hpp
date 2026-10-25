@@ -45,13 +45,24 @@ struct TourView {
 
 // The update check in Settings, filled in by the app.
 struct UpdateView {
-    enum class Status { Idle, Checking, Current, Available, Installing, Installed, Restarting, Updated, Failed };
+    enum class Status {
+        Idle,
+        Checking,
+        Current,
+        Available,
+        Installing,
+        Installed,
+        Restarting,
+        Updated,
+        Failed
+    };
     Status status = Status::Idle;
     std::string latest; // the newest release, once a check found one. For Updated, the version before.
     std::string error;  // why the check or the install failed
 };
 
-// The card that reports an update. The new process shows success after its restart, and the old one shows a failure.
+// The card that reports an update. The new process shows success after its restart, and the old one shows a
+// failure.
 struct UpdateNotice {
     bool failed = false;
     std::string text;
@@ -95,16 +106,23 @@ enum class IconStyle {
 };
 
 enum class PanelCommand {
-    RoomView, Style, Pause, Kind, BlockApp,
+    RoomView,
+    Style,
+    Pause,
+    Kind,
+    BlockApp,
     Calibrate,          // starts recording a kind, or records it again
     CancelCalibration,
     SaveCalibration,
     Navigate,           // a button that only changes the screen, such as Back
     Sounds,
-    StartTour, TourNext, TourBack,
+    StartTour,
+    TourNext,
+    TourBack,
     TourSkip,           // ends the tour from any step, including Done
     FactoryReset,
-    CheckUpdate, InstallUpdate,
+    CheckUpdate,
+    InstallUpdate,
     RestartForUpdate,   // restarts KnockThru into the installed update
     DismissUpdateNotice,
     ShowReport,         // starts the report page for the report card's QR code
@@ -134,8 +152,8 @@ public:
     explicit Panel(const std::filesystem::path& fonts);
 
     // Draws the panel at time `now`. `hover` is the pointer position in panel pixels.
-    const Canvas& render(const PanelState& state, std::optional<std::pair<float, float>> hover = std::nullopt,
-                         double now = 0);
+    const Canvas& render(
+        const PanelState& state, std::optional<std::pair<float, float>> hover = std::nullopt, double now = 0);
 
     // Whether the last render had something moving, so the next frame differs.
     bool animating() const { return animating_; }
@@ -177,8 +195,8 @@ private:
 
     const Canvas& icon(int size, IconStyle style);
     bool hovered(Rect rect) const;
-    float paragraph(Font& font, const std::string& text, float x, float y, float size, float leading, float width,
-                    int max_lines, Color color);
+    float paragraph(Font& font, const std::string& text, float x, float y, float size, float leading,
+        float width, int max_lines, Color color);
     void header(const std::string& title);
     void main_screen(const PanelState& state);
     void pick_screen(const PanelState& state);
@@ -188,8 +206,8 @@ private:
     void tour_screen(const PanelState& state, const TourView& tour);
     void tour_knock_step(const PanelState& state, const TourView& tour);
     void tour_buttons(bool first, bool last, bool complete);
-    void confirm_card(const std::string& title, const std::string& text, const std::string& cancel, Screen cancel_to,
-                      const std::string& confirm, PanelClick confirm_click, bool danger);
+    void confirm_card(const std::string& title, const std::string& text, const std::string& cancel,
+        Screen cancel_to, const std::string& confirm, PanelClick confirm_click, bool danger);
     void steps(int current, int total);
     void check_mark(float cx, float cy, float radius, float pop);
     void knock_scene(KnockKind kind, Rect box, float t, int knocks);
@@ -205,11 +223,11 @@ private:
     void passthrough_tile(Rect rect, const PanelState& state);
     void style_control(Rect rect, const PanelState& state);
     void switch_row(Rect rect, std::optional<PanelClick> click, bool on, const std::string& title,
-                    const std::string& detail, bool enabled, bool divider);
+        const std::string& detail, bool enabled, bool divider);
     void button_row(Rect rect, const std::string& title, const std::string& detail, const std::string& label,
-                    std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger, bool divider = true);
-    void button(Rect rect, const std::string& label, std::optional<PanelClick> click, std::optional<Screen> go_to,
-                bool primary = false, bool enabled = true, bool danger = false);
+        std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger, bool divider = true);
+    void button(Rect rect, const std::string& label, std::optional<PanelClick> click,
+        std::optional<Screen> go_to, bool primary = false, bool enabled = true, bool danger = false);
     void switch_control(float right, float cy, bool on, bool enabled, float scale);
     void message(const PanelState& state, float y);
 };

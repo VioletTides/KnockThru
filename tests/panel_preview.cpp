@@ -19,7 +19,7 @@ using namespace knockthru;
 
 // Writes `seconds` of frames, starting at `start`, as NAME-000.png and up.
 void frames(Panel& panel, const PanelState& state, const std::filesystem::path& out, const std::string& name,
-            double start, double seconds) {
+    double start, double seconds) {
     std::filesystem::create_directories(out / "frames");
     for (int i = 0; i < static_cast<int>(seconds * 25); ++i) {
         std::ostringstream file;
@@ -30,7 +30,7 @@ void frames(Panel& panel, const PanelState& state, const std::filesystem::path& 
 
 // Writes a frame at `t`, after one at `t` - 0.5 so a new screen has finished rising in.
 void shot(Panel& panel, const PanelState& state, double t, const std::filesystem::path& path,
-          std::optional<std::pair<float, float>> hover = std::nullopt) {
+    std::optional<std::pair<float, float>> hover = std::nullopt) {
     panel.render(state, hover, t - 0.5);
     panel.render(state, hover, t).write_png(path);
 }
@@ -160,8 +160,11 @@ struct Recorder {
                 // Minimum-jerk timing, as a hand moves: a smooth start and a long settle.
                 const float p = std::min(1.0f, static_cast<float>((t - move_t) / move_s));
                 const float e = p * p * p * (10 - 15 * p + 6 * p * p);
-                const auto at = [&](float a, float b, float c) { return (1 - e) * (1 - e) * a + 2 * (1 - e) * e * b + e * e * c; };
-                pointer = Point{at(from->first, bend->first, to->first), at(from->second, bend->second, to->second)};
+                const auto at = [&](float a, float b, float c) {
+                    return (1 - e) * (1 - e) * a + 2 * (1 - e) * e * b + e * e * c;
+                };
+                pointer = Point{
+                    at(from->first, bend->first, to->first), at(from->second, bend->second, to->second)};
                 if (p >= 1) to.reset();
             }
             std::ostringstream file;
@@ -192,7 +195,9 @@ struct Recorder {
         marks << "\n";
     }
     // The first time after the clock where `phase` seconds into a `loop` long animation comes round.
-    double next(double loop, double phase) const { return t + std::fmod(phase - std::fmod(t, loop) + 2 * loop, loop); }
+    double next(double loop, double phase) const {
+        return t + std::fmod(phase - std::fmod(t, loop) + 2 * loop, loop);
+    }
 };
 
 // A surface calibration from the Settings button to the saved banner, as frames in `dir`.
@@ -249,7 +254,8 @@ void readme_calibration(const std::filesystem::path& dir) {
     // Skip ahead to just before the tenth knock, which lands as the cross-fade ends.
     rec.cuts.push_back(rec.index);
     rec.t += 14.6;
-    for (std::size_t i = 2; i < 9; ++i) state.calibration->peaks.push_back(peaks[i]), state.calibration->speeds.push_back(speeds[i]);
+    for (std::size_t i = 2; i < 9; ++i)
+        state.calibration->peaks.push_back(peaks[i]), state.calibration->speeds.push_back(speeds[i]);
     state.calibration->knocked_t = state.calibration->counted_t = rec.t - 1.6;
     state.calibration->seconds_left = 90 - static_cast<int>(rec.t - state.calibration->started_t);
     knock(9);
@@ -472,7 +478,8 @@ int main(int argc, char** argv) {
     update.update = {UpdateView::Status::Checking, "", ""};
     settings_panel.render(update).write_png(out / "panel-settings-update-checking.png");
     update.update = {UpdateView::Status::Available, "0.2.0", ""};
-    settings_panel.render(update, std::make_pair(1000.0f, 68.0f)).write_png(out / "panel-settings-update-available.png");
+    settings_panel.render(update, std::make_pair(1000.0f, 68.0f))
+        .write_png(out / "panel-settings-update-available.png");
     update.update = {UpdateView::Status::Current, "0.1.0", ""};
     settings_panel.render(update).write_png(out / "panel-settings-update-current.png");
     update.update = {UpdateView::Status::Installing, "0.2.0", ""};
@@ -493,7 +500,8 @@ int main(int argc, char** argv) {
         updated.update_notice = UpdateNotice{false, "You now have version 0.2.0. You had version 0.1.0."};
         Panel main_panel(KNOCKTHRU_FONTS);
         main_panel.render(updated).write_png(out / "panel-updated.png");
-        updated.update_notice = UpdateNotice{true, "Version 0.2.0 was not installed. The downloaded ZIP does not match "
+        updated.update_notice = UpdateNotice{true,
+            "Version 0.2.0 was not installed. The downloaded ZIP does not match "
             "its SHA-256. Nothing changed. You still have version 0.1.0."};
         main_panel.render(updated).write_png(out / "panel-update-failed.png");
     }

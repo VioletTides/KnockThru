@@ -67,9 +67,10 @@ void send_all(int fd, const std::atomic<bool>& stop, const std::string& data) {
 }
 
 std::string response(const std::string& status, const std::string& type, const std::string& body,
-                     const std::string& extra = "") {
-    return "HTTP/1.1 " + status + "\r\nContent-Type: " + type + "\r\nContent-Length: " + std::to_string(body.size()) +
-           "\r\nCache-Control: no-store\r\nConnection: close\r\n" + extra + "\r\n" + body;
+    const std::string& extra = "") {
+    return "HTTP/1.1 " + status + "\r\nContent-Type: " + type
+        + "\r\nContent-Length: " + std::to_string(body.size())
+        + "\r\nCache-Control: no-store\r\nConnection: close\r\n" + extra + "\r\n" + body;
 }
 
 } // namespace
@@ -85,8 +86,10 @@ std::string local_address() {
         char text[INET_ADDRSTRLEN];
         const auto* address = reinterpret_cast<const sockaddr_in*>(item->ifa_addr);
         if (!::inet_ntop(AF_INET, &address->sin_addr, text, sizeof text)) continue;
-        if (item->ifa_name == preferred) found = text;
-        else if (fallback.empty()) fallback = text;
+        if (item->ifa_name == preferred)
+            found = text;
+        else if (fallback.empty())
+            fallback = text;
     }
     ::freeifaddrs(list);
     return !found.empty() ? found : preferred.empty() ? fallback : "";
@@ -116,18 +119,33 @@ std::string make_zip(const std::vector<std::pair<std::string, std::string>>& fil
         const auto offset = static_cast<std::uint32_t>(zip.size());
         const auto size = static_cast<std::uint32_t>(data.size());
         put32(zip, 0x04034b50);
-        put16(zip, 20); put16(zip, 0); put16(zip, 0); // version, flags, stored
-        put16(zip, 0); put16(zip, 33);                // 1980-01-01 00:00
-        put32(zip, crc); put32(zip, size); put32(zip, size);
-        put16(zip, static_cast<std::uint32_t>(name.size())); put16(zip, 0);
+        put16(zip, 20);
+        put16(zip, 0);
+        put16(zip, 0); // version, flags, stored
+        put16(zip, 0);
+        put16(zip, 33);                // 1980-01-01 00:00
+        put32(zip, crc);
+        put32(zip, size);
+        put32(zip, size);
+        put16(zip, static_cast<std::uint32_t>(name.size()));
+        put16(zip, 0);
         zip += name;
         zip += data;
         put32(directory, 0x02014b50);
-        put16(directory, 0x0314); put16(directory, 20); put16(directory, 0); put16(directory, 0);
-        put16(directory, 0); put16(directory, 33);
-        put32(directory, crc); put32(directory, size); put32(directory, size);
+        put16(directory, 0x0314);
+        put16(directory, 20);
+        put16(directory, 0);
+        put16(directory, 0);
+        put16(directory, 0);
+        put16(directory, 33);
+        put32(directory, crc);
+        put32(directory, size);
+        put32(directory, size);
         put16(directory, static_cast<std::uint32_t>(name.size()));
-        put16(directory, 0); put16(directory, 0); put16(directory, 0); put16(directory, 0);
+        put16(directory, 0);
+        put16(directory, 0);
+        put16(directory, 0);
+        put16(directory, 0);
         put32(directory, 0100644u << 16); // a regular file, rw-r--r--
         put32(directory, offset);
         directory += name;
@@ -135,29 +153,37 @@ std::string make_zip(const std::vector<std::pair<std::string, std::string>>& fil
     const auto directory_offset = static_cast<std::uint32_t>(zip.size());
     zip += directory;
     put32(zip, 0x06054b50);
-    put16(zip, 0); put16(zip, 0);
-    put16(zip, static_cast<std::uint32_t>(files.size())); put16(zip, static_cast<std::uint32_t>(files.size()));
-    put32(zip, static_cast<std::uint32_t>(directory.size())); put32(zip, directory_offset);
+    put16(zip, 0);
+    put16(zip, 0);
+    put16(zip, static_cast<std::uint32_t>(files.size()));
+    put16(zip, static_cast<std::uint32_t>(files.size()));
+    put32(zip, static_cast<std::uint32_t>(directory.size()));
+    put32(zip, directory_offset);
     put16(zip, 0);
     return zip;
 }
 
 std::string report_page(const std::string& report, const std::string& issue_link, const std::string& download,
-                        const std::string& bundle) {
+    const std::string& bundle) {
     // With a knock recording, the page leads with one file that holds the report and the
     // recording, because a second download link is easy to miss. Without one, it copies the report.
-    const std::string steps = bundle.empty() ? R"HTML(<button id="go">Copy report and open GitHub</button>
+    const std::string steps = bundle.empty()
+        ? R"HTML(<button id="go">Copy report and open GitHub</button>
 <p id="status" role="status"></p>
 <ol>
 <li>Sign in to GitHub if it asks.</li>
 <li>Paste into the <b>Report</b> box.</li>
 <li>Say what went wrong, then tap <b>Create</b>.</li>
 </ol>
-<p>Copy didn't work? <a href=")HTML" + html_escape(download) + R"HTML(" download>Download the report</a> and attach it instead.</p>)HTML"
+<p>Copy didn't work? <a href=")HTML"
+            + html_escape(download)
+            + R"HTML(" download>Download the report</a> and attach it instead.</p>)HTML"
         : R"HTML(<p>Your report includes a knock recording, so it comes as one file to attach.</p>
 <ol class="actions">
-<li><a class="button" href=")HTML" + html_escape(bundle) + R"HTML(" download>Download the report file</a></li>
-<li><a class="button" href=")HTML" + html_escape(issue_link) + R"HTML(">Open GitHub</a></li>
+<li><a class="button" href=")HTML"
+            + html_escape(bundle) + R"HTML(" download>Download the report file</a></li>
+<li><a class="button" href=")HTML"
+            + html_escape(issue_link) + R"HTML(">Open GitHub</a></li>
 <li>Sign in if it asks. Attach <b class="file">knockthru-report.zip</b> from your downloads, say what went wrong, then tap <b>Create</b>.</li>
 </ol>)HTML";
     return R"HTML(<!doctype html>
@@ -189,11 +215,13 @@ details{margin-top:24px;color:var(--dim)}
 </style></head><body><main>
 <h1>KnockThru bug report</h1>
 <p>Sent from your Frame. GitHub gets nothing until you tap Create.</p>
-)HTML" + steps + R"HTML(
-<details><summary>See the report</summary><textarea id="report" readonly>)HTML" +
-           html_escape(report) + R"HTML(</textarea></details>
+)HTML" + steps
+        + R"HTML(
+<details><summary>See the report</summary><textarea id="report" readonly>)HTML"
+        + html_escape(report) + R"HTML(</textarea></details>
 <script>
-const link = ")HTML" + issue_link + R"HTML(";
+const link = ")HTML"
+        + issue_link + R"HTML(";
 const go = document.getElementById("go");
 if (go) go.addEventListener("click", async () => {
   const box = document.getElementById("report");
@@ -237,9 +265,9 @@ ReportServer::ReportServer(std::string report, std::string issue_link)
     bind_address.sin_addr.s_addr = htonl(INADDR_ANY);
     bind_address.sin_port = 0; // the kernel picks a free port, above 1024
     socklen_t size = sizeof bind_address;
-    if (::bind(listener_, reinterpret_cast<sockaddr*>(&bind_address), sizeof bind_address) < 0 ||
-        ::listen(listener_, 8) < 0 ||
-        ::getsockname(listener_, reinterpret_cast<sockaddr*>(&bind_address), &size) < 0) {
+    if (::bind(listener_, reinterpret_cast<sockaddr*>(&bind_address), sizeof bind_address) < 0
+        || ::listen(listener_, 8) < 0
+        || ::getsockname(listener_, reinterpret_cast<sockaddr*>(&bind_address), &size) < 0) {
         ::close(listener_);
         throw std::runtime_error("Cannot listen for phones");
     }
@@ -285,7 +313,8 @@ void ReportServer::answer(int client) {
     while (request.find("\r\n") == std::string::npos && request.size() < 4096) {
         if (stop_) return;
         const auto n = ::recv(client, buffer, sizeof buffer, 0);
-        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && ++waits < 15) continue; // 3 s for the request line
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && ++waits < 15)
+            continue; // 3 s for the request line
         if (n <= 0) return;
         request.append(buffer, static_cast<std::size_t>(n));
     }
@@ -308,14 +337,16 @@ void ReportServer::answer(int client) {
             has_recording ? base + "knockthru-report.zip" : "");
         send_all(client, stop_, response("200 OK", "text/html; charset=utf-8", page));
     } else if (method == "GET" && path == base + "knockthru-report.txt") {
-        send_all(client, stop_, response("200 OK", "text/plain; charset=utf-8", report,
-            "Content-Disposition: attachment; filename=\"knockthru-report.txt\"\r\n"));
+        send_all(client, stop_,
+            response("200 OK", "text/plain; charset=utf-8", report,
+                "Content-Disposition: attachment; filename=\"knockthru-report.txt\"\r\n"));
     } else if (method == "GET" && path == base + "knockthru-report.zip" && has_recording) {
         std::ifstream file(recording, std::ios::binary);
         const std::string data{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
         const auto zip = make_zip({{"knockthru-report.txt", report}, {"knockthru-knocks.csv.gz", data}});
-        send_all(client, stop_, response("200 OK", "application/zip", zip,
-            "Content-Disposition: attachment; filename=\"knockthru-report.zip\"\r\n"));
+        send_all(client, stop_,
+            response("200 OK", "application/zip", zip,
+                "Content-Disposition: attachment; filename=\"knockthru-report.zip\"\r\n"));
     } else {
         send_all(client, stop_, response("404 Not Found", "text/plain", "Not found\n"));
     }

@@ -37,7 +37,8 @@ inline float keyframes(float t, std::initializer_list<Key> keys) {
     for (const auto& key : keys) {
         if (t <= key.t) {
             if (!previous) return key.value;
-            return previous->value + (key.value - previous->value) * key.curve((t - previous->t) / (key.t - previous->t));
+            return previous->value
+                + (key.value - previous->value) * key.curve((t - previous->t) / (key.t - previous->t));
         }
         previous = &key;
     }
@@ -56,10 +57,14 @@ inline float knock_time(int i, float start = kFirstKnock) { return start + i * k
 inline float knock_motion(float t, int knocks, float start = kFirstKnock) {
     const float first = knock_time(0, start), last = knock_time(knocks - 1, start);
     if (t <= first)
-        return keyframes(t, {{first - 0.3f, 1.0f, ease_in_out}, {first - 0.13f, 1.18f, ease_in_out}, {first, 0.0f, ease_in}});
+        return keyframes(t,
+            {{first - 0.3f, 1.0f, ease_in_out}, {first - 0.13f, 1.18f, ease_in_out}, {first, 0.0f, ease_in}});
     for (int i = 1; i < knocks; ++i) {
         const float contact = knock_time(i, start), previous = knock_time(i - 1, start);
-        if (t <= contact) return keyframes(t, {{previous, 0.0f, ease_in}, {contact - kKnockGap / 2, 0.55f, ease_out}, {contact, 0.0f, ease_in}});
+        if (t <= contact)
+            return keyframes(t,
+                {{previous, 0.0f, ease_in}, {contact - kKnockGap / 2, 0.55f, ease_out},
+                    {contact, 0.0f, ease_in}});
     }
     return keyframes(t, {{last, 0.0f, ease_in}, {last + 0.35f, 1.0f, ease_out_back}});
 }
