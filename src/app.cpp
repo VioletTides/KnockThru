@@ -302,7 +302,9 @@ void App::run() {
         }
 
         poses_.take(samples_);
+        bool controllers = false;
         for (const auto& sample : samples_) {
+            controllers |= sample.device != Device::Hmd;
             detector_.push(sample.device, sample.t, sample.position, sample.velocity);
             if (recording_) recording_->samples.push_back(sample);
         }
@@ -318,8 +320,9 @@ void App::run() {
         haptics_.update(t);
         // Knocks are judged 50 ms late anyway, and the pose thread keeps sampling every 1 ms.
         // The open panel and queued buzzes get 5 ms, for steady frames and pulse spacing.
+        // With no controller tracked, as in standby, no knock can start, so 100 ms is enough.
         const bool busy = (panel_ && panel_->visible()) || haptics_.pending();
-        clock_.tick(std::chrono::milliseconds(busy ? 5 : 20));
+        clock_.tick(std::chrono::milliseconds(busy ? 5 : controllers ? 20 : 100));
     }
     log("KnockThru stopped");
 }
