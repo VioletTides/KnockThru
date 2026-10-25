@@ -27,10 +27,16 @@ std::optional<KnockAction> parse_knock_action(const std::string& name) {
     return std::nullopt;
 }
 
-const char* count_word(int count) { return count == 2 ? "twice" : count == 3 ? "thrice" : "more"; }
+const char* count_word(int count) {
+    if (count == 2) return "twice";
+    if (count == 3) return "thrice";
+    return "more";
+}
 
 KnockAction KnockActions::default_for(int count) {
-    return count == 2 ? KnockAction::Passthrough : count == 3 ? KnockAction::Style : KnockAction::None;
+    if (count == 2) return KnockAction::Passthrough;
+    if (count == 3) return KnockAction::Style;
+    return KnockAction::None;
 }
 
 KnockActions::Row KnockActions::defaults() {

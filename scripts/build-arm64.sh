@@ -15,6 +15,7 @@ export ZIG_LOCAL_CACHE_DIR="$build/zig-local-cache"
 sources=(
     src/main.cpp
     src/app.cpp
+    src/dashboard_panel.cpp
     src/steamvr.cpp
     src/poses.cpp
     src/diagnostics.cpp
@@ -33,6 +34,10 @@ sources=(
     third_party/qrcodegen/qrcodegen.cpp
     src/canvas.cpp
     src/panel.cpp
+    src/panel_main.cpp
+    src/panel_calibration.cpp
+    src/panel_cards.cpp
+    src/panel_tour.cpp
     src/overlay_texture.cpp
     third_party/openvr/src/openvr_api_public.cpp
     third_party/openvr/src/jsoncpp.cpp

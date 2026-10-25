@@ -41,12 +41,13 @@ void Calibrator::finish_burst() {
     const bool early = first < start_ + kGetReady || first - last_counted_ < kPace;
     last_heard_ = burst_.back().t;
     burst_.clear();
-    Heard heard = Heard::Ignored;
-    if (deliberate && !done())
-        heard = early                  ? Heard::TooSoon
-            : best.kind != kind_       ? Heard::OtherKind
-            : best.peak < floor(kind_) ? Heard::TooLight
-                                       : Heard::Counted;
+    const auto judge = [&] {
+        if (early) return Heard::TooSoon;
+        if (best.kind != kind_) return Heard::OtherKind;
+        if (best.peak < floor(kind_)) return Heard::TooLight;
+        return Heard::Counted;
+    };
+    const Heard heard = deliberate && !done() ? judge() : Heard::Ignored;
     if (heard == Heard::Counted) {
         last_counted_ = best.t;
         peaks_.push_back(best.peak);
@@ -64,7 +65,12 @@ double Calibrator::weakest() const {
 }
 
 double Calibrator::floor(KnockKind kind) {
-    return kind == KnockKind::Surface ? 50.0 : kind == KnockKind::Together ? 30.0 : 20.0;
+    switch (kind) {
+    case KnockKind::Surface: return 50;
+    case KnockKind::Together: return 30;
+    case KnockKind::Headset: break;
+    }
+    return 20;
 }
 
 double Calibrator::peak_threshold(KnockKind kind, const std::vector<double>& peaks) {

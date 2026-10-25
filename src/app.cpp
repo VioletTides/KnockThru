@@ -2,11 +2,11 @@
 
 #include "calibrator.hpp"
 #include "config.hpp"
+#include "dashboard_panel.hpp"
 #include "diagnostics.hpp"
 #include "haptics.hpp"
 #include "install.hpp"
 #include "knock_detector.hpp"
-#include "overlay_texture.hpp"
 #include "panel.hpp"
 #include "perf_overlay.hpp"
 #include "poses.hpp"
@@ -46,133 +46,6 @@ namespace {
 
 namespace fs = std::filesystem;
 
-// The KnockThru tab on the SteamVR dashboard: an overlay showing the panel
-// image, with the laser pointer as a mouse.
-class DashboardPanel {
-public:
-    explicit DashboardPanel(const fs::path& font) : panel_(font) {
-        auto* overlay = vr::VROverlay();
-        const auto error = overlay->CreateDashboardOverlay(kPanelKey, "KnockThru", &main_, &thumbnail_);
-        if (error != vr::VROverlayError_None)
-            throw std::runtime_error(std::string("Cannot add the dashboard panel: ")
-                + overlay->GetOverlayErrorNameFromEnum(error));
-        overlay->SetOverlayWidthInMeters(main_, 1.6f);
-        overlay->SetOverlayInputMethod(main_, vr::VROverlayInputMethod_Mouse);
-        const vr::HmdVector2_t scale{{Panel::kWidth, Panel::kHeight}};
-        overlay->SetOverlayMouseScale(main_, &scale);
-        try {
-            texture_ = std::make_unique<OverlayTexture>(Panel::kWidth, Panel::kHeight);
-        } catch (const std::exception& error) {
-            log(std::string("Panel uses slower image uploads: ") + error.what());
-        }
-    }
-    ~DashboardPanel() { vr::VROverlay()->DestroyOverlay(main_); }
-    DashboardPanel(const DashboardPanel&) = delete;
-
-    bool visible() const { return visible_; }
-
-    // Handles overlay events. Returns the clicked buttons and sets `shown` when
-    // the panel just opened.
-    std::vector<PanelClick> poll(bool& shown) {
-        std::vector<PanelClick> clicks;
-#ifdef KNOCKTHRU_TEST_HOOK
-        clicks.swap(test_clicks_);
-        if (test_shown_) shown = true;
-        test_shown_ = false;
-#endif
-        vr::VREvent_t event{};
-        while (vr::VROverlay()->PollNextOverlayEvent(main_, &event, sizeof event)) {
-            // OpenVR puts the mouse origin at the bottom left.
-            const float x = event.data.mouse.x, y = Panel::kHeight - event.data.mouse.y;
-            switch (event.eventType) {
-            case vr::VREvent_OverlayShown: visible_ = shown = dirty_ = true; break;
-            case vr::VREvent_OverlayHidden:
-                visible_ = false;
-                hover_.reset();
-                break;
-            case vr::VREvent_MouseMove:
-                hover_ = std::make_pair(x, y);
-                dirty_ = true;
-                break;
-            case vr::VREvent_MouseButtonUp:
-                if (event.data.mouse.button == vr::VRMouseButton_Left)
-                    if (const auto click = panel_.click(x, y)) clicks.push_back(*click);
-                dirty_ = true;
-                break;
-            default: break;
-            }
-        }
-        return clicks;
-    }
-
-    void invalidate() { dirty_ = true; }
-
-#ifdef KNOCKTHRU_TEST_HOOK
-    // Stand-ins for the dashboard and the laser pointer. The next poll() reports them.
-    void test_open() { visible_ = dirty_ = test_shown_ = true; }
-    void test_close() { visible_ = false; }
-    void test_click(float x, float y) {
-        if (const auto click = panel_.click(x, y)) test_clicks_.push_back(*click);
-        dirty_ = true;
-    }
-    void test_press(PanelClick click) { test_clicks_.push_back(click); }
-    bool test_snapshot(const PanelState& state, double now, const fs::path& path) {
-        return panel_.render(state, hover_, now).write_png(path);
-    }
-#endif
-
-    // Sets the dashboard bar icon: the mark in the logo colors, or in white for Steam's tint.
-    void set_bar_icon(bool classic) {
-        if (bar_icon_classic_ == classic) return;
-        bar_icon_classic_ = classic;
-        Canvas icon(256, 256);
-        Panel::draw_icon(icon, classic ? IconStyle::BarColor : IconStyle::BarWhite);
-        vr::VROverlay()->SetOverlayRaw(
-            thumbnail_, const_cast<std::uint8_t*>(icon.pixels().data()), 256, 256, 4);
-    }
-
-    // Renders 30 times a second while something moves, at most 20 times a second
-    // after a change, and twice a second otherwise, for countdowns and changes
-    // made outside KnockThru. Uploads only changed images.
-    void draw(const PanelState& state, double now) {
-        const double interval = panel_.animating() ? 1.0 / 30 : dirty_ ? 0.05 : 0.5;
-        if (!visible_ || now - last_draw_ < interval) return;
-        last_draw_ = now;
-        dirty_ = false;
-        upload(panel_.render(state, hover_, now));
-    }
-
-private:
-    void upload(const Canvas& canvas) {
-        if (canvas.pixels() == uploaded_) return;
-        uploaded_ = canvas.pixels();
-        if (texture_) {
-            try {
-                texture_->show(main_, uploaded_.data());
-                return;
-            } catch (const std::exception& error) {
-                log(std::string("Panel uses slower image uploads: ") + error.what());
-                texture_.reset();
-            }
-        }
-        vr::VROverlay()->SetOverlayRaw(main_, uploaded_.data(), static_cast<uint32_t>(canvas.width()),
-            static_cast<uint32_t>(canvas.height()), 4);
-    }
-
-    Panel panel_;
-    vr::VROverlayHandle_t main_ = vr::k_ulOverlayHandleInvalid, thumbnail_ = vr::k_ulOverlayHandleInvalid;
-    bool visible_ = false, dirty_ = true;
-    double last_draw_ = -1;
-    std::optional<std::pair<float, float>> hover_;
-    std::optional<bool> bar_icon_classic_;
-    std::vector<std::uint8_t> uploaded_;
-    std::unique_ptr<OverlayTexture> texture_;
-#ifdef KNOCKTHRU_TEST_HOOK
-    bool test_shown_ = false;
-    std::vector<PanelClick> test_clicks_;
-#endif
-};
-
 // A Room View read or change running on another thread, because the debug
 // port can take a second.
 struct RoomViewResult {
@@ -187,10 +60,8 @@ std::string today() {
     return date;
 }
 
-// "double" or "triple".
 const char* sequence_name(const KnockEvent& event) { return event.count == 3 ? "triple" : "double"; }
 
-// Whether a background job has a result to collect.
 template <typename T> bool ready(const std::future<T>& job) {
     return job.valid() && job.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
 }
@@ -207,10 +78,7 @@ std::string heard_summary(const Calibrator& calibrator) {
     return line;
 }
 
-// The resident app. SteamVR starts it as a dashboard overlay. Each knock kind
-// and count runs its action from knock_actions. By default, knocking twice turns
-// Room View on or off, and knocking thrice switches translucent and opaque. The
-// KnockThru dashboard tab has buttons for everything.
+// The resident app (--run), which SteamVR starts as a dashboard overlay.
 class App {
 public:
     App();
@@ -227,9 +95,22 @@ private:
     using Step = TourView::Step;
     using UpdateStatus = UpdateView::Status;
 
-    // Each returns false when the app should exit.
-    bool slow_check(double t);
+    bool slow_check(double t); // false when the app should exit
     void handle_click(const PanelClick& click, double t);
+    void set_knock_action(int count, KnockAction action);
+    void toggle_kind(KnockKind kind);
+    void toggle_blocked_app();
+    void factory_reset();
+    void end_tour();
+    void check_for_update();
+    void install_update();
+    void restart_for_update(double t);
+    void show_report();
+    void start_recording(double t);
+    void save_report();
+    void start_calibration(KnockKind kind, double t);
+    void cancel_calibration();
+    void save_calibration(double t);
     void record_knocks(double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event);
     void handle_knocks(double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event);
     void collect_jobs(double t);
@@ -261,10 +142,9 @@ private:
     std::string room_view_text() const;
 
     AppState app_state_ = load_state();
-    std::optional<std::string>
-        updated_from_; // set when an update ran since the last start. Empty when the old version is unknown.
+    // Set when an update ran since the last start. Empty when the old version is unknown.
+    std::optional<std::string> updated_from_;
     Haptics haptics_;
-    vr::VRActiveActionSet_t active_{}; // its action set stays invalid without the action manifest
     std::unique_ptr<DashboardPanel> panel_;
 
     const std::array<fs::path, 3> config_files_{install_directory() / "config.json",
@@ -273,38 +153,39 @@ private:
     std::string stamp_ = config_stamp();
     KnockDetector detector_{config_.detector};
     std::optional<Calibrator> calibrator_;
-    std::optional<CalibrationView> calibration_; // the walkthrough the panel shows
-    std::optional<TourView> tour_; // the first-run tour, while the panel shows it
+    std::optional<CalibrationView> calibration_;
+    std::optional<TourView> tour_;
 
     Clock clock_;
     PoseThread poses_{clock_};
+    std::vector<PoseThread::Sample> samples_; // kept, so take() never allocates
     PanelState state_;
     std::string last_error_; // for the report link
 
     std::future<RoomViewResult> room_view_job_;
     bool room_view_job_toggles_ = false;
-    bool dashboard_changed_ = false; // the last Room View read did not find the button, so the log has it
+    bool dashboard_changed_ = false; // the button went missing and the log says so
     std::future<void> tint_job_;
 
     std::atomic<bool> cancel_downloads_{false};
-    std::atomic<float> install_progress_{0}; // the install job writes it, from 0 to 1
+    std::atomic<float> install_progress_{0}; // 0 to 1, from the install job
     const fs::path update_work_ = user_directory() / "update";
     std::future<Release> check_job_;
     bool check_is_automatic_ = false; // the daily check, which never shows errors
     std::future<void> install_job_;
-    std::optional<Release> latest_; // the newer release a check found
-    double restart_started_ = -1; // when this process asked knockthru-ctl to restart into the new version
+    std::optional<Release> latest_; // newer than this version
+    double restart_started_ = -1; // when knockthru-ctl was asked to restart into the update
 
     double next_slow_check_ = 0;
     const fs::path binary_ = executable();
     double binary_missing_since_ = -1;
 
     std::optional<KnockRecording> recording_; // while the report card records knocks
-    std::future<void> recording_job_; // writes a finished recording
+    std::future<void> recording_job_;
     std::unique_ptr<ReportServer> report_server_; // while the report card shows
 #ifdef KNOCKTHRU_TEST_HOOK
-    fs::path test_commands_; // the command file
-    std::uintmax_t test_read_ = 0; // bytes of it already run
+    fs::path test_commands_;
+    std::uintmax_t test_read_ = 0; // bytes already run
 #endif
 };
 
@@ -353,9 +234,8 @@ App::App() {
     }
 }
 
-// A SteamVR update is the usual cause when Room View control breaks, so the log marks each one.
-// A newer KnockThru than at the last start means an update ran, from Settings or FrameDrop. The panel says
-// so.
+// Logs each SteamVR update, the usual cause when Room View control breaks. A newer KnockThru
+// than at the last start means an update ran, from Settings or FrameDrop, and the panel says so.
 void App::note_versions() {
     // A state file without knockthru_version comes from an older KnockThru.
     const bool ran_before = !app_state_.steamvr_version.empty();
@@ -383,8 +263,7 @@ void App::load_haptics() {
             == vr::VRInputError_None
         && vr::VRInput()->GetActionHandle("/actions/knockthru/out/haptic_right", &right)
             == vr::VRInputError_None) {
-        haptics_.use_actions(left, right);
-        active_.ulActionSet = action_set;
+        haptics_.use_actions(action_set, left, right);
     } else {
         log("SteamVR input actions unavailable. Using direct haptic pulses.");
     }
@@ -407,9 +286,6 @@ void App::run() {
                 stopping = 1;
             }
         }
-        if (active_.ulActionSet != vr::k_ulInvalidActionSetHandle)
-            vr::VRInput()->UpdateActionState(&active_, sizeof active_, 1);
-
         if (t >= next_slow_check_ && !slow_check(t)) break;
         if (panel_) {
             bool shown = false;
@@ -425,7 +301,8 @@ void App::run() {
             }
         }
 
-        for (const auto& sample : poses_.take()) {
+        poses_.take(samples_);
+        for (const auto& sample : samples_) {
             detector_.push(sample.device, sample.t, sample.position, sample.velocity);
             if (recording_) recording_->samples.push_back(sample);
         }
@@ -439,9 +316,10 @@ void App::run() {
         collect_jobs(t);
         draw_panel(t);
         haptics_.update(t);
-        // Knocks are judged 50 ms late anyway, so a hidden panel lets the loop wake every 5 ms.
-        // The pose thread still samples every millisecond.
-        clock_.tick(std::chrono::milliseconds(panel_ && panel_->visible() ? 1 : 5));
+        // Knocks are judged 50 ms late anyway, and the pose thread keeps sampling every 1 ms.
+        // The open panel and queued buzzes get 5 ms, for steady frames and pulse spacing.
+        const bool busy = (panel_ && panel_->visible()) || haptics_.pending();
+        clock_.tick(std::chrono::milliseconds(busy ? 5 : 20));
     }
     log("KnockThru stopped");
 }
@@ -504,8 +382,6 @@ bool App::slow_check(double t) {
 
 void App::handle_click(const PanelClick& click, double t) {
     if (click.command != PanelCommand::RoomView) play_click();
-    const auto kind_name = std::string(to_string(click.kind));
-    const auto kind = static_cast<int>(click.kind);
     switch (click.command) {
     case PanelCommand::RoomView: toggle_room_view(""); break;
     case PanelCommand::Style: toggle_style(""); break;
@@ -517,13 +393,11 @@ void App::handle_click(const PanelClick& click, double t) {
     case PanelCommand::Sounds:
         if (save([&] { save_sounds(!config_.sounds); })) show(config_.sounds ? "Sounds on" : "Sounds off");
         break;
-    case PanelCommand::SetKnockAction: {
-        auto actions = config_.knock_actions;
-        actions.set_all(click.count, click.action);
-        if (save([&] { save_knock_actions(actions); }))
-            show(std::string("Knocking ") + count_word(click.count) + ": " + to_string(click.action));
-        break;
-    }
+    case PanelCommand::SetKnockAction: set_knock_action(click.count, click.action); break;
+    case PanelCommand::Kind: toggle_kind(click.kind); break;
+    case PanelCommand::BlockApp: toggle_blocked_app(); break;
+    case PanelCommand::FactoryReset: factory_reset(); break;
+
     case PanelCommand::StartTour: start_tour(); break;
     case PanelCommand::TourNext:
         if (tour_ && tour_->step != Step::Done)
@@ -533,163 +407,195 @@ void App::handle_click(const PanelClick& click, double t) {
         if (tour_ && tour_->step != Step::Welcome)
             tour_->step = static_cast<Step>(static_cast<int>(tour_->step) - 1);
         break;
-    case PanelCommand::TourSkip:
-        // The tour closes even if the flag cannot be saved, so it never traps anyone.
-        if (!config_.tour_done) save([&] { save_tour_done(true); });
-        if (tour_) log(tour_->step == Step::Done ? "Tour finished" : "Tour skipped");
-        tour_.reset();
-        break;
-    case PanelCommand::FactoryReset:
-        calibrator_.reset();
-        calibration_.reset();
-        try {
-            reset_user_settings();
-            reload();
-            log("Factory reset: settings and calibration deleted");
-            state_.message.clear();
-            state_.message_is_error = false;
-            state_.calibration_saved.reset();
-            start_tour();
-        } catch (const std::exception& error) {
-            detector_ = KnockDetector(config_.detector);
-            show(std::string("Factory reset failed: ") + error.what(), true);
-        }
-        break;
-    case PanelCommand::CheckUpdate:
-        // A daily check already running answers this press too.
-        if (check_job_.valid() && check_is_automatic_) {
-            check_is_automatic_ = false;
-            state_.update = {UpdateStatus::Checking, "", ""};
-        }
-        if (check_job_.valid() || install_job_.valid()) break;
-        check_is_automatic_ = false;
-        state_.update = {UpdateStatus::Checking, "", ""};
-        start_check();
-        break;
-    case PanelCommand::RestartForUpdate:
-        if (state_.update.status != UpdateStatus::Installed) break;
-        log("Restarting into KnockThru " + state_.update.latest);
-        try {
-            // knockthru-ctl --install stops this process and starts the new one.
-            start_detached({(install_directory() / "knockthru-ctl").string(), "--install"});
-            state_.update.status = UpdateStatus::Restarting;
-            restart_started_ = t;
-        } catch (const std::exception& error) {
-            log(std::string("Restart failed: ") + error.what());
-            restart_failed(state_.update.latest);
-        }
-        break;
+    case PanelCommand::TourSkip: end_tour(); break;
+
+    case PanelCommand::CheckUpdate: check_for_update(); break;
+    case PanelCommand::InstallUpdate: install_update(); break;
+    case PanelCommand::RestartForUpdate: restart_for_update(t); break;
     case PanelCommand::DismissUpdateNotice: state_.update_notice.reset(); break;
-    case PanelCommand::InstallUpdate:
-        if (!latest_ || check_job_.valid() || install_job_.valid()) break;
-        log("Installing KnockThru " + latest_->version + " from " + latest_->url);
-        state_.update.status = UpdateStatus::Installing;
-        install_progress_ = 0;
-        install_job_ = std::async(std::launch::async,
-            [release = *latest_, work = update_work_, cancel = &cancel_downloads_,
-                progress = &install_progress_] {
-                install_release(release, install_directory(), work, cancel, progress);
-            });
-        break;
-    case PanelCommand::ShowReport: {
-        // The QR code opens a page this headset serves, with the full report. Without a
-        // network, it opens the GitHub form directly, which only has room for the versions.
-        const auto issue = issue_url({kVersion, steamvr_version(), room_view_text(), last_error_});
-        report_server_.reset();
-        try {
-            report_server_ = std::make_unique<ReportServer>(report_text(true, room_view_text()), issue);
-            state_.report_url = report_server_->url();
-            state_.report_full = true;
-            // A recording made before the card closed belongs to this report too.
-            std::error_code missing;
-            if (state_.recorded && fs::exists(recording_path(), missing))
-                report_server_->set_recording(recording_path());
-            log("Serving the bug report at " + state_.report_url);
-        } catch (const std::exception& error) {
-            state_.report_url = issue;
-            state_.report_full = false;
-            log(std::string("Bug report page unavailable: ") + error.what());
-        }
-        state_.report_saved.clear();
-        state_.report_error.clear();
-        break;
-    }
-    case PanelCommand::RecordKnocks:
-        if (recording_ || recording_job_.valid()) break;
-        recording_.emplace();
-        recording_->start = t;
-        recording_->samples.reserve(70000);
-        state_.recording_knocks = 0;
-        state_.recorded = false;
-        log("Recording knocks for a bug report");
-        break;
+
+    case PanelCommand::ShowReport: show_report(); break;
+    case PanelCommand::RecordKnocks: start_recording(t); break;
+    case PanelCommand::SaveReport: save_report(); break;
     case PanelCommand::CloseReport: report_server_.reset(); break;
-    case PanelCommand::SaveReport:
-        try {
-            state_.report_saved = write_report(true, room_view_text()).string();
-            state_.report_error.clear();
-            log("Bug report saved to " + state_.report_saved);
-        } catch (const std::exception& error) {
-            state_.report_error = error.what();
-            log(std::string("Bug report not saved: ") + error.what());
-        }
-        break;
-    case PanelCommand::Kind: {
-        auto enabled = config_.detector.enabled;
-        enabled[kind] = !enabled[kind];
-        if (save([&] { save_knock_types(enabled); }))
-            show(kind_name + " knocks " + (config_.detector.enabled[kind] ? "on" : "off"));
-        break;
-    }
-    case PanelCommand::BlockApp: {
-        if (state_.app_key.empty()) break;
-        auto blocked = config_.blocked_apps;
-        if (!blocked.erase(state_.app_key)) blocked.insert(state_.app_key);
-        const auto name = state_.app_name.empty() ? state_.app_key : state_.app_name;
-        if (save([&] { save_blocked_apps(blocked); }))
-            show(std::string("Knocks ") + (config_.blocked_apps.count(state_.app_key) ? "off" : "on") + " in "
-                + name);
-        break;
-    }
-    case PanelCommand::Calibrate:
-        calibrator_.emplace(click.kind, config_.detector, t);
-        detector_ = KnockDetector(calibrator_->detector_config());
-        calibration_.emplace();
-        calibration_->kind = click.kind;
-        calibration_->wanted = Calibrator::kWanted;
-        calibration_->started_t = t;
-        show("Calibrating " + kind_name + ": knock " + std::to_string(Calibrator::kWanted)
-            + " times, about 1 s apart");
-        break;
-    case PanelCommand::CancelCalibration:
-        if (calibrator_ && calibration_ && calibration_->phase == Phase::Recording)
-            log(heard_summary(*calibrator_));
-        end_calibration();
-        show("Calibration canceled. Nothing saved.");
-        break;
-    case PanelCommand::SaveCalibration:
-        if (!calibrator_ || !calibration_ || !calibration_->trial_passed.value_or(false)) break;
-        try {
-            const auto saved = calibrator_->save();
-            log("Calibrated " + kind_name + " knocks: " + thresholds_text(saved));
-            calibrator_.reset();
-            calibration_.reset();
-            reload();
-            show("Calibration saved");
-            // The tour's Calibrate step marks its card, so the Saved banner is only for Settings.
-            if (tour_)
-                tour_->calibrated[kind] = true;
-            else
-                state_.calibration_saved = click.kind;
-            haptics_.buzz(2, t);
-        } catch (const std::exception& error) {
-            show(std::string("Calibration not saved: ") + error.what(), true);
-        }
-        break;
+
+    case PanelCommand::Calibrate: start_calibration(click.kind, t); break;
+    case PanelCommand::CancelCalibration: cancel_calibration(); break;
+    case PanelCommand::SaveCalibration: save_calibration(t); break;
     }
 }
 
-// Adds each knock and action to the bug report recording, and saves it when its time is up.
+void App::set_knock_action(int count, KnockAction action) {
+    auto actions = config_.knock_actions;
+    actions.set_all(count, action);
+    if (save([&] { save_knock_actions(actions); }))
+        show(std::string("Knocking ") + count_word(count) + ": " + to_string(action));
+}
+
+void App::toggle_kind(KnockKind kind) {
+    const auto i = static_cast<int>(kind);
+    auto enabled = config_.detector.enabled;
+    enabled[i] = !enabled[i];
+    if (save([&] { save_knock_types(enabled); }))
+        show(std::string(to_string(kind)) + " knocks " + (config_.detector.enabled[i] ? "on" : "off"));
+}
+
+void App::toggle_blocked_app() {
+    if (state_.app_key.empty()) return;
+    auto blocked = config_.blocked_apps;
+    if (!blocked.erase(state_.app_key)) blocked.insert(state_.app_key);
+    const auto name = state_.app_name.empty() ? state_.app_key : state_.app_name;
+    if (!save([&] { save_blocked_apps(blocked); })) return;
+    const bool off = config_.blocked_apps.count(state_.app_key) > 0;
+    show(std::string("Knocks ") + (off ? "off" : "on") + " in " + name);
+}
+
+void App::factory_reset() {
+    calibrator_.reset();
+    calibration_.reset();
+    try {
+        reset_user_settings();
+        reload();
+        log("Factory reset: settings and calibration deleted");
+        state_.message.clear();
+        state_.message_is_error = false;
+        state_.calibration_saved.reset();
+        start_tour();
+    } catch (const std::exception& error) {
+        detector_ = KnockDetector(config_.detector);
+        show(std::string("Factory reset failed: ") + error.what(), true);
+    }
+}
+
+// The tour closes even if the flag cannot be saved, so it never traps anyone.
+void App::end_tour() {
+    if (!config_.tour_done) save([&] { save_tour_done(true); });
+    if (tour_) log(tour_->step == Step::Done ? "Tour finished" : "Tour skipped");
+    tour_.reset();
+}
+
+void App::check_for_update() {
+    // A daily check already running answers this press too.
+    if (check_job_.valid() && check_is_automatic_) {
+        check_is_automatic_ = false;
+        state_.update = {UpdateStatus::Checking, "", ""};
+    }
+    if (check_job_.valid() || install_job_.valid()) return;
+    check_is_automatic_ = false;
+    state_.update = {UpdateStatus::Checking, "", ""};
+    start_check();
+}
+
+void App::install_update() {
+    if (!latest_ || check_job_.valid() || install_job_.valid()) return;
+    log("Installing KnockThru " + latest_->version + " from " + latest_->url);
+    state_.update.status = UpdateStatus::Installing;
+    install_progress_ = 0;
+    install_job_ = std::async(std::launch::async,
+        [release = *latest_, work = update_work_, cancel = &cancel_downloads_,
+            progress = &install_progress_] {
+            install_release(release, install_directory(), work, cancel, progress);
+        });
+}
+
+void App::restart_for_update(double t) {
+    if (state_.update.status != UpdateStatus::Installed) return;
+    log("Restarting into KnockThru " + state_.update.latest);
+    try {
+        // knockthru-ctl --install stops this process and starts the new one.
+        start_detached({(install_directory() / "knockthru-ctl").string(), "--install"});
+        state_.update.status = UpdateStatus::Restarting;
+        restart_started_ = t;
+    } catch (const std::exception& error) {
+        log(std::string("Restart failed: ") + error.what());
+        restart_failed(state_.update.latest);
+    }
+}
+
+// The QR code opens a page this headset serves, with the full report. Without a
+// network, it opens the GitHub form directly, which only has room for the versions.
+void App::show_report() {
+    const auto issue = issue_url({kVersion, steamvr_version(), room_view_text(), last_error_});
+    report_server_.reset();
+    try {
+        report_server_ = std::make_unique<ReportServer>(report_text(true, room_view_text()), issue);
+        state_.report_url = report_server_->url();
+        state_.report_full = true;
+        // A recording made before the card closed belongs to this report too.
+        std::error_code missing;
+        if (state_.recorded && fs::exists(recording_path(), missing))
+            report_server_->set_recording(recording_path());
+        log("Serving the bug report at " + state_.report_url);
+    } catch (const std::exception& error) {
+        state_.report_url = issue;
+        state_.report_full = false;
+        log(std::string("Bug report page unavailable: ") + error.what());
+    }
+    state_.report_saved.clear();
+    state_.report_error.clear();
+}
+
+void App::start_recording(double t) {
+    if (recording_ || recording_job_.valid()) return;
+    recording_.emplace();
+    recording_->start = t;
+    recording_->samples.reserve(70000); // 20 s of three devices at 1 kHz, with room to spare
+    state_.recording_knocks = 0;
+    state_.recorded = false;
+    log("Recording knocks for a bug report");
+}
+
+void App::save_report() {
+    try {
+        state_.report_saved = write_report(true, room_view_text()).string();
+        state_.report_error.clear();
+        log("Bug report saved to " + state_.report_saved);
+    } catch (const std::exception& error) {
+        state_.report_error = error.what();
+        log(std::string("Bug report not saved: ") + error.what());
+    }
+}
+
+void App::start_calibration(KnockKind kind, double t) {
+    calibrator_.emplace(kind, config_.detector, t);
+    detector_ = KnockDetector(calibrator_->detector_config());
+    calibration_.emplace();
+    calibration_->kind = kind;
+    calibration_->wanted = Calibrator::kWanted;
+    calibration_->started_t = t;
+    show(std::string("Calibrating ") + to_string(kind) + ": knock " + std::to_string(Calibrator::kWanted)
+        + " times, about 1 s apart");
+}
+
+void App::cancel_calibration() {
+    if (calibrator_ && calibration_ && calibration_->phase == Phase::Recording)
+        log(heard_summary(*calibrator_));
+    end_calibration();
+    show("Calibration canceled. Nothing saved.");
+}
+
+void App::save_calibration(double t) {
+    if (!calibrator_ || !calibration_ || !calibration_->trial_passed.value_or(false)) return;
+    const auto kind = calibrator_->kind();
+    try {
+        const auto saved = calibrator_->save();
+        log(std::string("Calibrated ") + to_string(kind) + " knocks: " + thresholds_text(saved));
+        calibrator_.reset();
+        calibration_.reset();
+        reload();
+        show("Calibration saved");
+        // The tour's Calibrate step marks its card, so the Saved banner is only for Settings.
+        if (tour_)
+            tour_->calibrated[static_cast<int>(kind)] = true;
+        else
+            state_.calibration_saved = kind;
+        haptics_.buzz(2, t);
+    } catch (const std::exception& error) {
+        show(std::string("Calibration not saved: ") + error.what(), true);
+    }
+}
+
+// Saves the recording when its 20 s are up.
 void App::record_knocks(double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event) {
     char line[160];
     for (const auto& knock : knocks) {
@@ -716,7 +622,6 @@ void App::record_knocks(double t, const std::deque<Knock>& knocks, const std::op
     if (panel_) panel_->invalidate();
 }
 
-// Feeds knocks to a running calibration, judges the try step, or acts on a double or triple knock.
 void App::handle_knocks(double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event) {
     // Opens the click stream on the first knock, so it is ready if a triple knock follows.
     if (config_.sounds && !config_.paused && !knocks.empty()) prepare_click();
@@ -790,7 +695,6 @@ void App::handle_knocks(double t, const std::deque<Knock>& knocks, const std::op
     }
 }
 
-// Takes the results of finished background jobs: the recording, Room View, the update check, and the install.
 void App::collect_jobs(double t) {
     if (ready(recording_job_)) {
         try {
@@ -993,7 +897,9 @@ void App::run_test_command(
             double peak = 0, approach = 0;
             if (!(in >> name >> peak >> approach)) throw std::runtime_error("knock needs KIND PEAK APPROACH");
             const auto kind = kind_of(name);
-            const int source = kind == KnockKind::Together ? -1 : kind == KnockKind::Headset ? 0 : 2;
+            int source = 2; // the right controller, for a surface knock
+            if (kind == KnockKind::Together) source = -1;
+            if (kind == KnockKind::Headset) source = 0;
             knocks.push_back(Knock{t, kind, source, {0, 0, 0}, peak, 0, approach});
         } else if (verb == "action") {
             int count = 0;
@@ -1021,7 +927,7 @@ void App::save_app_state() {
     }
 }
 
-// The modification times of the settings files, to notice an edit.
+// Modification times, to notice an edit.
 std::string App::config_stamp() const {
     std::string stamp;
     for (const auto& path : config_files_) {
@@ -1097,8 +1003,7 @@ bool App::toggle_room_view(const std::string& why) {
     return true;
 }
 
-// Runs a knock action. Success buzzes once after knocking twice, and two times after knocking thrice.
-// A failure buzzes 3 times.
+// One buzz after a double, two after a triple, three on failure.
 void App::run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t) {
     const int buzzes = event.count - 1;
     const auto tick_tour = [&] {
@@ -1175,7 +1080,6 @@ void App::restart_failed(const std::string& version) {
               "restart SteamVR."};
 }
 
-// Leaves the calibration walkthrough and goes back to the saved thresholds.
 void App::end_calibration() {
     calibrator_.reset();
     calibration_.reset();
