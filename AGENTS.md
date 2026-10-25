@@ -24,3 +24,8 @@ CI runs the host build, `ctest`, and the Frame build on every pull request.
 - Read poses in `vr::TrackingUniverseStanding`. Poses in the raw universe are wrong on the Frame.
 - `knockthru` and `knockthru-ctl` ship as byte-identical copies. SteamVR identifies apps by executable path, so management commands re-exec through `knockthru-ctl` to keep the resident app's identity.
 - Call every gesture a "knock" in code, docs, and UI text.
+
+## Commits
+
+- Title in the imperative, under 60 characters: "Cut main loop wakeups", "Split panel.cpp by screen".
+- For a speed change, put the before and after numbers from `scripts/measure.sh` or `panel_preview --bench` in the body.
