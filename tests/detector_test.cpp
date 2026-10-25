@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -113,15 +114,42 @@ std::vector<Row> load(const std::string& path) {
     return rows;
 }
 
+// KNOCKTHRU_TEST_RATE="moving_speed=0.2,hold_s=0.5,still_ms=20" overrides
+// PoseRate settings, for sweeps. KNOCKTHRU_TEST_RATE=fixed reads every row, as
+// the app did before PoseRate.
+std::optional<PoseRate> test_rate() {
+    PoseRate rate;
+    const char* set = std::getenv("KNOCKTHRU_TEST_RATE");
+    if (!set) return rate;
+    if (std::string(set) == "fixed") return std::nullopt;
+    std::stringstream list(set);
+    std::string item;
+    while (std::getline(list, item, ',')) {
+        const auto eq = item.find('=');
+        const auto field = item.substr(0, eq);
+        const double value = eq == std::string::npos ? 0 : std::stod(item.substr(eq + 1));
+        if (field == "moving_speed")
+            rate.moving_speed = value;
+        else if (field == "hold_s")
+            rate.hold_s = value;
+        else if (field == "still_ms")
+            rate.still = std::chrono::milliseconds(static_cast<int>(value));
+        else if (field == "idle_ms")
+            rate.idle = std::chrono::milliseconds(static_cast<int>(value));
+        else {
+            std::cerr << "Unknown setting in KNOCKTHRU_TEST_RATE: " << item << "\n";
+            std::exit(2);
+        }
+    }
+    return rate;
+}
+
 // Returns the rows the pose thread would push, reading at the times PoseRate
 // picks. Each read returns the latest pose of each device, stamped with the
 // read time. The recordings keep only changed controller poses, so a read
 // between two of them returns the earlier one again, as SteamVR does.
-// KNOCKTHRU_TEST_RATE=fixed reads every row, as the app did before PoseRate.
 std::vector<Row> as_read(const std::vector<Row>& rows, int* reads = nullptr) {
-    const char* fixed_rate = std::getenv("KNOCKTHRU_TEST_RATE");
-    const bool fixed = fixed_rate && std::string(fixed_rate) == "fixed";
-    PoseRate rate;
+    auto rate = test_rate();
     std::array<std::optional<Row>, 3> latest;
     std::vector<Row> out;
     double next = -1e9;
@@ -131,14 +159,18 @@ std::vector<Row> as_read(const std::vector<Row>& rows, int* reads = nullptr) {
         for (; i < rows.size() && rows[i].t == t; ++i) latest[static_cast<int>(rows[i].device)] = rows[i];
         // Reads land about 1 ms apart, a little early or late. Half a fast step
         // of slack keeps the fast rate reading every row.
-        if (!fixed && t < next - 0.0005) continue;
+        if (rate && t < next - 0.0005) continue;
         int controllers = 0;
+        double fastest = 0;
         for (const auto& row : latest) {
             if (!row) continue;
             out.push_back({t, row->device, row->position, row->velocity});
-            controllers += row->device != Device::Hmd;
+            if (row->device == Device::Hmd) continue;
+            ++controllers;
+            const auto& v = row->velocity;
+            fastest = std::max(fastest, std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]));
         }
-        next = t + std::chrono::duration<double>(rate.next(controllers)).count();
+        if (rate) next = t + std::chrono::duration<double>(rate->next(t, controllers, fastest)).count();
         ++count;
     }
     if (reads) *reads = count;
@@ -146,7 +178,7 @@ std::vector<Row> as_read(const std::vector<Row>& rows, int* reads = nullptr) {
 }
 
 // The headset alone reads at the idle rate. Once a controller turns on, the
-// next read switches to the fast rate, in time for a double half a second later.
+// next read sees it, and a double half a second later counts.
 void pose_rate_tests() {
     std::cout << "pose rate\n";
     std::vector<Row> rows;
@@ -163,8 +195,7 @@ void pose_rate_tests() {
         const double controller_jitter = 0.001 * (ms / 4 % 2 ? 1 : -1);
         rows.push_back({t, Device::Right, {0.2, 0.8, -0.3}, {controller_jitter, -speed, 0}});
     }
-    int reads = 0;
-    const auto read = as_read(rows, &reads);
+    const auto read = as_read(rows);
     const auto first_controller =
         std::find_if(read.begin(), read.end(), [](const Row& row) { return row.device == Device::Right; });
     check(first_controller != read.end() && first_controller->t < 1.05,
@@ -178,7 +209,16 @@ void pose_rate_tests() {
     events = drain(detector, 4, events);
     check(events.size() == 1 && events[0].count == 2, "a double after the controller turns on counts");
     if (std::getenv("KNOCKTHRU_TEST_RATE")) return;
-    check(reads <= 20 + 2000 + 1, "the headset alone reads at 20 Hz");
+    const auto reads_between = [&](double from, double to) {
+        std::vector<double> times;
+        for (const auto& row : read)
+            if (row.t >= from && row.t < to && (times.empty() || times.back() != row.t))
+                times.push_back(row.t);
+        return times.size();
+    };
+    check(reads_between(0, 1) <= 21, "the headset alone reads at 20 Hz");
+    check(reads_between(1.05, 1.4) <= 36, "a still controller reads at 100 Hz");
+    check(reads_between(1.5, 2.2) >= 690, "a moving controller reads at 1 kHz, and for 0.5 s after");
 }
 
 // KNOCKTHRU_TEST_SET="controller_peak=60,max_speed_after=0.4" overrides

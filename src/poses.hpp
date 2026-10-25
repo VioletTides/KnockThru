@@ -9,6 +9,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <functional>
 #include <mutex>
 #include <ostream>
@@ -87,8 +88,8 @@ private:
     std::chrono::steady_clock::time_point next_ = start_;
 };
 
-// Samples poses every millisecond on its own thread, or at PoseRate's idle rate
-// while no controller is tracked. Knock strength is the velocity change between
+// Samples poses every millisecond on its own thread, or slower at the rates
+// PoseRate picks while the controllers are still or off. Knock strength is the velocity change between
 // samples over the time between them, so a main loop busy drawing the panel
 // would stretch those gaps and garble the strength.
 class PoseThread {
@@ -130,9 +131,15 @@ private:
                 std::lock_guard<std::mutex> lock(mutex_);
                 samples_.insert(samples_.end(), read.begin(), read.begin() + count);
             }
-            const auto controllers = std::count_if(
-                read.begin(), read.begin() + count, [](const Sample& s) { return s.device != Device::Hmd; });
-            ticker.tick(rate.next(static_cast<int>(controllers)));
+            int controllers = 0;
+            double fastest = 0;
+            for (std::size_t i = 0; i < count; ++i) {
+                if (read[i].device == Device::Hmd) continue;
+                ++controllers;
+                const auto& v = read[i].velocity;
+                fastest = std::max(fastest, std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]));
+            }
+            ticker.tick(rate.next(t, controllers, fastest));
         }
     }
 
