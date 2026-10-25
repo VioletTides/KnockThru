@@ -147,6 +147,8 @@ public:
         const PanelState& state, std::optional<std::pair<float, float>> hover = std::nullopt, double now = 0);
 
     bool animating() const { return animating_; }
+    // True during the 0.3 s rise of a new view, which wants every display frame.
+    bool transitioning() const { return transitioning_; }
 
     // Hits the controls from the last render, row 0 at the top. Screen changes happen here.
     std::optional<PanelClick> click(float x, float y);
@@ -176,6 +178,7 @@ private:
     std::optional<std::pair<float, float>> hover_;
     double now_ = 0;
     bool animating_ = false;
+    bool transitioning_ = false;
     std::optional<View> view_;
     std::optional<TourView::Step> tour_step_;
     double view_t_ = 0;

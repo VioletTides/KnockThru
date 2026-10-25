@@ -282,6 +282,7 @@ const Canvas& Panel::render(
         canvas_.draw(scratch_, 0, static_cast<int>(std::lround(20 * (1 - anim::ease_out(entering)))),
             anim::ease_out(entering));
     }
+    transitioning_ = entering < 1;
     animating_ = view == View::Pick || view == View::Learn || view == View::Record || view == View::Try
         || view == View::Tour || entering < 1;
     return canvas_;

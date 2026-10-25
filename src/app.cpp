@@ -320,9 +320,12 @@ void App::run() {
         haptics_.update(t);
         // Knocks are judged 50 ms late anyway, and the pose thread keeps sampling every 1 ms.
         // The open panel and queued buzzes get 5 ms, for steady frames and pulse spacing.
+        // A view transition gets 1 ms, so each frame lands close to the display's.
         // With no controller tracked, as in standby, no knock can start, so 100 ms is enough.
         const bool busy = (panel_ && panel_->visible()) || haptics_.pending();
-        clock_.tick(std::chrono::milliseconds(busy ? 5 : controllers ? 20 : 100));
+        int step = busy ? 5 : controllers ? 20 : 100;
+        if (panel_ && panel_->transitioning()) step = 1;
+        clock_.tick(std::chrono::milliseconds(step));
     }
     log("KnockThru stopped");
 }

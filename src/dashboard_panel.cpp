@@ -17,6 +17,9 @@ DashboardPanel::DashboardPanel(const std::filesystem::path& fonts) : panel_(font
     overlay->SetOverlayInputMethod(main_, vr::VROverlayInputMethod_Mouse);
     const vr::HmdVector2_t scale{{Panel::kWidth, Panel::kHeight}};
     overlay->SetOverlayMouseScale(main_, &scale);
+    const float hz = vr::VRSystem()->GetFloatTrackedDeviceProperty(
+        vr::k_unTrackedDeviceIndex_Hmd, vr::Prop_DisplayFrequency_Float);
+    if (hz > 0) frame_ = 1.0 / hz;
     try {
         texture_ = std::make_unique<OverlayTexture>(Panel::kWidth, Panel::kHeight);
     } catch (const std::exception& error) {
@@ -68,11 +71,14 @@ void DashboardPanel::set_bar_icon(bool classic) {
 
 void DashboardPanel::draw(const PanelState& state, double now) {
     double interval = 0.5;
-    if (panel_.animating())
+    if (panel_.transitioning())
+        interval = frame_;
+    else if (panel_.animating())
         interval = 1.0 / 30;
     else if (dirty_)
         interval = 0.05;
-    if (!visible_ || now - last_draw_ < interval) return;
+    // The main loop wakes on whole milliseconds, so a frame may come up to 1 ms early.
+    if (!visible_ || now - last_draw_ < interval - 0.001) return;
     last_draw_ = now;
     dirty_ = false;
     const auto& canvas = panel_.render(state, hover_, now);
