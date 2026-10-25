@@ -6,7 +6,7 @@ The code is C++. Each part of the app lives in its own file pair under `src/`.
 
 ## From a knock to passthrough
 
-1. **Reading motion:** a thread reads the headset and controller poses from SteamVR about once a millisecond (`src/poses.cpp`). Poses are only valid in SteamVR's standing tracking space on the Frame, so KnockThru reads them there.
+1. **Reading motion:** a thread reads the headset and controller poses from SteamVR about once a millisecond (`src/poses.cpp`). Every knock needs a controller that moves first, so the thread reads less often when it can (`src/pose_rate.hpp`). While no controller is tracked, such as in standby, it reads 20 times a second. While both controllers stay under 0.1 m/s, it reads 100 times a second. It goes back to every millisecond on the first read that sees a controller move, and stays there for 0.5 s after the last movement. Poses are only valid in SteamVR's standing tracking space on the Frame, so KnockThru reads them there.
 2. **Finding knocks:** the main loop feeds the poses to the knock detector (`src/knock_detector.cpp`). [How knock detection works](knock-detection.md) explains it.
 3. **Acting:** the action for each kind of knock and count comes from `knock_actions` in `config.json` (`src/knock_actions.cpp`). **Knock actions** in Settings sets every kind the same. By default, knocking twice turns passthrough on or off, and knocking thrice switches its style. The other actions show or hide SteamVR's performance graph, or do nothing. Both controllers buzz once after knocking twice, and two times after knocking thrice. Three buzzes mean something failed.
 

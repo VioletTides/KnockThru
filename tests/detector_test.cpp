@@ -4,12 +4,16 @@
 #include "calibrator.hpp"
 #include "config.hpp"
 #include "knock_detector.hpp"
+#include "pose_rate.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -110,6 +114,113 @@ std::vector<Row> load(const std::string& path) {
     return rows;
 }
 
+// KNOCKTHRU_TEST_RATE="moving_speed=0.2,hold_s=0.5,still_ms=20" overrides
+// PoseRate settings, for sweeps. KNOCKTHRU_TEST_RATE=fixed reads every row, as
+// the app did before PoseRate.
+std::optional<PoseRate> test_rate() {
+    PoseRate rate;
+    const char* set = std::getenv("KNOCKTHRU_TEST_RATE");
+    if (!set) return rate;
+    if (std::string(set) == "fixed") return std::nullopt;
+    std::stringstream list(set);
+    std::string item;
+    while (std::getline(list, item, ',')) {
+        const auto eq = item.find('=');
+        const auto field = item.substr(0, eq);
+        const double value = eq == std::string::npos ? 0 : std::stod(item.substr(eq + 1));
+        if (field == "moving_speed")
+            rate.moving_speed = value;
+        else if (field == "hold_s")
+            rate.hold_s = value;
+        else if (field == "still_ms")
+            rate.still = std::chrono::milliseconds(static_cast<int>(value));
+        else if (field == "idle_ms")
+            rate.idle = std::chrono::milliseconds(static_cast<int>(value));
+        else {
+            std::cerr << "Unknown setting in KNOCKTHRU_TEST_RATE: " << item << "\n";
+            std::exit(2);
+        }
+    }
+    return rate;
+}
+
+// Returns the rows the pose thread would push, reading at the times PoseRate
+// picks. Each read returns the latest pose of each device, stamped with the
+// read time. The recordings keep only changed controller poses, so a read
+// between two of them returns the earlier one again, as SteamVR does.
+std::vector<Row> as_read(const std::vector<Row>& rows, int* reads = nullptr) {
+    auto rate = test_rate();
+    std::array<std::optional<Row>, 3> latest;
+    std::vector<Row> out;
+    double next = -1e9;
+    int count = 0;
+    for (std::size_t i = 0; i < rows.size();) {
+        const double t = rows[i].t;
+        for (; i < rows.size() && rows[i].t == t; ++i) latest[static_cast<int>(rows[i].device)] = rows[i];
+        // Reads land about 1 ms apart, a little early or late. Half a fast step
+        // of slack keeps the fast rate reading every row.
+        if (rate && t < next - 0.0005) continue;
+        int controllers = 0;
+        double fastest = 0;
+        for (const auto& row : latest) {
+            if (!row) continue;
+            out.push_back({t, row->device, row->position, row->velocity});
+            if (row->device == Device::Hmd) continue;
+            ++controllers;
+            const auto& v = row->velocity;
+            fastest = std::max(fastest, std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]));
+        }
+        if (rate) next = t + std::chrono::duration<double>(rate->next(t, controllers, fastest)).count();
+        ++count;
+    }
+    if (reads) *reads = count;
+    return out;
+}
+
+// The headset alone reads at the idle rate. Once a controller turns on, the
+// next read sees it, and a double half a second later counts.
+void pose_rate_tests() {
+    std::cout << "pose rate\n";
+    std::vector<Row> rows;
+    for (int ms = 0; ms < 3000; ++ms) {
+        const double t = ms / 1000.0;
+        const double jitter = 0.001 * (ms % 2 ? 1 : -1);
+        rows.push_back({t, Device::Hmd, {0, 1.6, 0}, {0, jitter, 0}});
+        if (ms < 1000 || ms % 4) continue;
+        double speed = 0;
+        for (const double k : {1.5, 1.75})
+            if (t > k - 0.06 && t <= k) speed = 0.8;
+        // Controllers update about every 4 ms. Each update jitters a little,
+        // so every one counts as a new measurement.
+        const double controller_jitter = 0.001 * (ms / 4 % 2 ? 1 : -1);
+        rows.push_back({t, Device::Right, {0.2, 0.8, -0.3}, {controller_jitter, -speed, 0}});
+    }
+    const auto read = as_read(rows);
+    const auto first_controller =
+        std::find_if(read.begin(), read.end(), [](const Row& row) { return row.device == Device::Right; });
+    check(first_controller != read.end() && first_controller->t < 1.05,
+        "a controller turning on is read within 50 ms");
+    KnockDetector detector;
+    std::vector<KnockEvent> events;
+    for (const auto& row : read) {
+        detector.push(row.device, row.t, row.position, row.velocity);
+        events = drain(detector, row.t, events);
+    }
+    events = drain(detector, 4, events);
+    check(events.size() == 1 && events[0].count == 2, "a double after the controller turns on counts");
+    if (std::getenv("KNOCKTHRU_TEST_RATE")) return;
+    const auto reads_between = [&](double from, double to) {
+        std::vector<double> times;
+        for (const auto& row : read)
+            if (row.t >= from && row.t < to && (times.empty() || times.back() != row.t))
+                times.push_back(row.t);
+        return times.size();
+    };
+    check(reads_between(0, 1) <= 21, "the headset alone reads at 20 Hz");
+    check(reads_between(1.05, 1.4) <= 36, "a still controller reads at 100 Hz");
+    check(reads_between(1.5, 2.2) >= 690, "a moving controller reads at 1 kHz, and for 0.5 s after");
+}
+
 // KNOCKTHRU_TEST_SET="controller_peak=60,max_speed_after=0.4" overrides
 // detector settings, for tuning sweeps.
 DetectorConfig test_config() {
@@ -140,7 +251,7 @@ DetectorConfig test_config() {
 }
 
 std::vector<KnockEvent> replay_events(const std::string& name, const DetectorConfig& config) {
-    const auto rows = load(std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz");
+    const auto rows = as_read(load(std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz"));
     KnockDetector detector(config);
     std::vector<KnockEvent> events;
     for (const auto& row : rows) {
@@ -155,7 +266,9 @@ std::vector<KnockEvent> replay_events(const std::string& name, const DetectorCon
 // `name` is a recording in tests/data, or a path to any .csv.gz recording.
 std::map<std::string, int> replay(const std::string& name) {
     const bool path = name.find('/') != std::string::npos || name.find(".csv") != std::string::npos;
-    const auto rows = load(path ? name : std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz");
+    int reads = 0;
+    const auto rows =
+        as_read(load(path ? name : std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz"), &reads);
     KnockDetector detector(test_config());
     std::map<std::string, int> counts;
     for (const auto& row : rows) {
@@ -175,7 +288,7 @@ std::map<std::string, int> replay(const std::string& name) {
     if (!rows.empty())
         if (auto event = detector.poll(rows.back().t + 1))
             ++counts[std::string(to_string(event->kind)) + "x" + std::to_string(event->count)];
-    std::cout << "  " << name << " (" << rows.size() << " samples):";
+    std::cout << "  " << name << " (" << rows.size() << " samples, " << reads << " reads):";
     for (const auto& [key, value] : counts) std::cout << " " << key << "=" << value;
     std::cout << "\n";
     return counts;
@@ -262,7 +375,7 @@ void replay_tests() {
 
 // Runs a calibration of `kind` on a recording, as the app would.
 Calibrator calibrate(const std::string& name, KnockKind kind) {
-    const auto rows = load(std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz");
+    const auto rows = as_read(load(std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz"));
     Calibrator calibrator(kind, DetectorConfig{}, 0);
     KnockDetector detector(calibrator.detector_config());
     for (const auto& row : rows) {
@@ -367,6 +480,7 @@ int main(int argc, char** argv) {
         return 0;
     }
     synthetic_tests();
+    pose_rate_tests();
     replay_tests();
     calibration_tests();
     calibrated_replay_tests();

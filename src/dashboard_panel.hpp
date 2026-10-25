@@ -23,6 +23,7 @@ public:
     DashboardPanel(const DashboardPanel&) = delete;
 
     bool visible() const { return visible_; }
+    bool transitioning() const { return visible_ && panel_.transitioning(); }
 
     // Handles overlay events. Returns the clicked buttons and sets `shown` when
     // the panel just opened.
@@ -33,9 +34,9 @@ public:
     // The mark in the logo colors when `classic`, or in white for Steam's tint.
     void set_bar_icon(bool classic);
 
-    // Renders 30 times a second while something moves, at most 20 times a second
-    // after a change, and twice a second otherwise, for countdowns and changes
-    // made outside KnockThru. Uploads only changed images.
+    // Renders at the display rate while a new view rises in, 30 times a second while something moves, at most
+    // 20 times a second after a change, and twice a second otherwise, for countdowns and changes made outside
+    // KnockThru. Uploads only changed images.
     void draw(const PanelState& state, double now);
 
 #ifdef KNOCKTHRU_TEST_HOOK
@@ -59,6 +60,7 @@ private:
     vr::VROverlayHandle_t main_ = vr::k_ulOverlayHandleInvalid, thumbnail_ = vr::k_ulOverlayHandleInvalid;
     bool visible_ = false, dirty_ = true;
     double last_draw_ = -1;
+    double frame_ = 1.0 / 90; // the headset's frame time
     std::optional<std::pair<float, float>> hover_;
     std::optional<bool> bar_icon_classic_;
     std::optional<std::uint64_t> uploaded_hash_;
