@@ -5,7 +5,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 build="${1:-$root/build-arm64}"
-version="${KNOCKTHRU_VERSION:-1.1.0}"
+version="${KNOCKTHRU_VERSION:-1.2.0}"
 # KNOCKTHRU_TEST_HOOK=1 builds in the test hook from src/app.cpp. Releases never set it.
 test_hook="${KNOCKTHRU_TEST_HOOK:-}"
 mkdir -p "$build/bin"
