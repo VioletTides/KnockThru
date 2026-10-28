@@ -1,8 +1,18 @@
 # <img src="images/logo-wordmark.svg" alt="KnockThru" width="400">
 
+[![ci](https://github.com/VioletTides/KnockThru/actions/workflows/ci.yml/badge.svg)](https://github.com/VioletTides/KnockThru/actions/workflows/ci.yml)
+
 Knock twice to turn on passthrough and see your room without taking off your Steam Frame. Knock three times to switch between seeing the room through your game and seeing only the room.
 
 ![In the KnockThru panel, knocking twice turns passthrough on, knocking three times switches it to opaque and back, and knocking twice again turns it off](images/hero.gif)
+
+## How it works
+
+KnockThru runs on the Frame itself. It reads controller and headset motion from SteamVR about once a millisecond, finds knocks in that motion, and clicks Room View on the SteamVR dashboard. Every change to the detector gets tested against motion recorded on a Frame.
+
+- [How the app fits together](docs/how-the-app-works.md): what runs where, with diagrams
+- [How knock detection works](docs/knock-detection.md): each rule, and the recording that forced it
+- [The test recordings](docs/test-recordings.md): what the tests replay, and what they must find
 
 ## Install
 
