@@ -4,7 +4,7 @@
 
 Knock twice to turn on passthrough and see your room without taking off your Steam Frame. Knock three times to switch between seeing the room through your game and seeing only the room.
 
-![In the KnockThru panel, knocking twice turns passthrough on, knocking three times switches it to opaque and back, and knocking twice again turns it off](images/hero.gif)
+![The view in the headset: knocking twice fades your room in over VR, knocking three times shows only the room and then both again, and knocking twice more returns to VR](images/hero.gif)
 
 ## How it works
 

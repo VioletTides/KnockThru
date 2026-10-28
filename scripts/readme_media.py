@@ -51,9 +51,11 @@ KEEP_COLORS = (ERROR,)
 CORNER = 18  # rounded GIF corners, in pixels, so each GIF reads as a card on light and dark pages
 
 
-def write_gif(frames, path, step=1):
+def write_gif(frames, path, step=1, palette_size=127, dither="none"):
     """Writes RGB frames to a looping GIF with transparent rounded corners. step 2 keeps every
-    other frame, at half the frame rate, for a long GIF.
+    other frame, at half the frame rate, for a long GIF. palette_size is at most 255, so index 255
+    stays free for transparency. A cross-fade between two scenes needs all 255 and an ordered
+    dither, or its in-between colors snap to the nearest entry at uneven steps and flicker.
 
     ffmpeg picks the palette, which looks better than Pillow's. ffmpeg stores whole frames once
     the frames have transparency, though, so Pillow writes the final GIF: it keeps ffmpeg's colors
@@ -68,10 +70,10 @@ def write_gif(frames, path, step=1):
             Image.new("RGB", frames[0].size, color).save(f"{tmp}/{len(frames) + k:04d}.png")
         palette_png, opaque = Path(tmp) / "palette.png", Path(tmp) / "opaque.gif"
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", f"{tmp}/%04d.png",
-                        "-vf", "palettegen=max_colors=127", str(palette_png)], check=True)
+                        "-vf", f"palettegen=max_colors={palette_size}", str(palette_png)], check=True)
         subprocess.run(
             ["ffmpeg", "-loglevel", "error", "-y", "-framerate", str(FPS / step), "-i", f"{tmp}/%04d.png",
-             "-i", str(palette_png), "-filter_complex", "[0][1]paletteuse=dither=none",
+             "-i", str(palette_png), "-filter_complex", f"[0][1]paletteuse=dither={dither}",
              "-frames:v", str(len(frames)), str(opaque)],
             check=True)
         decoded = Image.open(opaque)
@@ -80,7 +82,7 @@ def write_gif(frames, path, step=1):
             decoded.seek(i)
             colored.append(np.asarray(decoded.convert("RGB")))
     key = lambda pixels: (pixels[..., 0].astype(np.int64) << 16) | (pixels[..., 1].astype(np.int64) << 8) | pixels[..., 2]
-    colors = np.unique(np.concatenate([np.unique(key(f)) for f in colored]))  # at most 127, so 255 stays free
+    colors = np.unique(np.concatenate([np.unique(key(f)) for f in colored]))  # at most palette_size, so 255 stays free
     palette = [int(v) for c in colors for v in ((c >> 16) & 255, (c >> 8) & 255, c & 255)]
     palette += [0] * (768 - len(palette))
     corners = Image.new("L", frames[0].size, 0)
@@ -113,6 +115,19 @@ HEAD = (0.5, 0.29)  # controller head center, as a fraction of the sprite size
 _sprites = {}
 
 
+def solid(image):
+    """Fills the cut-out buttons and stick well with the panel background, so a scene behind
+    the sprite does not show through them. Gaps open to the outside stay clear."""
+    clear = Image.fromarray(((np.asarray(image)[..., 3] < 128) * 255).astype(np.uint8))
+    holes = Image.new("L", (image.width + 2, image.height + 2), 255)
+    holes.paste(clear, (1, 1))
+    ImageDraw.floodfill(holes, (0, 0), 0)  # what stays 255 is enclosed
+    filled = Image.new("RGBA", image.size, BACKGROUND + (255,))
+    filled.alpha_composite(image)
+    image.paste(filled, (0, 0), holes.crop((1, 1, image.width + 1, image.height + 1)))
+    return image
+
+
 def sprite(name, height, angle=0.0):
     """Returns a sprite scaled to a height and rotated about its anchor, plus that anchor.
 
@@ -121,7 +136,7 @@ def sprite(name, height, angle=0.0):
     """
     key = (name, height, round(angle, 1))
     if key not in _sprites:
-        image = Image.open(CAD / f"{name}.png").convert("RGBA")
+        image = solid(Image.open(CAD / f"{name}.png").convert("RGBA"))
         scale = height / image.height
         image = image.resize((round(image.width * scale), height), Image.LANCZOS)
         fx, fy = HEAD if name.startswith("controller") else (0.5, 0.5)
@@ -234,54 +249,161 @@ def buzz(t, action, count):
     return 0.0
 
 
-def burst(draw, x, y, played, scale=1.0, base=BACKGROUND):
-    """Draws impact lines that fly outward and fade into base. played runs from 0 to 1."""
+def burst(image, x, y, played, scale=1.0):
+    """Draws impact lines that fly outward and fade to transparent, so they suit any background.
+    played runs from 0 to 1."""
     if played is None:
         return
     spread, fade = ease_out(played), 1 - ease_in_out(played)
-    color = mix(ACCENT, fade, base)
+    mask = Image.new("L", image.size, 0)
+    draw = ImageDraw.Draw(mask)
     for k in range(8):
         a = k * math.pi / 4 + math.pi / 8
         inner = (16 + 18 * spread) * scale
         outer = inner + (18 - 8 * spread) * scale
         draw.line([(x + math.cos(a) * inner, y + math.sin(a) * inner),
-                   (x + math.cos(a) * outer, y + math.sin(a) * outer)], fill=color, width=max(1, round(4 * scale)))
+                   (x + math.cos(a) * outer, y + math.sin(a) * outer)], fill=round(255 * fade),
+                  width=max(1, round(4 * scale)))
+    image.paste(ACCENT, (0, 0), mask)
 
 
-def knock_pair(image, draw, cx, cy, h, gap, played, swing, scale=1.0, shake=0.0, base=BACKGROUND):
+def knock_pair(image, cx, cy, h, gap, played, swing, scale=1.0, shake=0.0):
     """Two controllers knocking heads at (cx, cy). Each one swings from its wrist."""
     offset = head_radius(h) * 0.95 + swing * gap
     tilt = 30 + 10 * gap  # a wider angle while pulled back
-    burst(draw, cx, cy, played, scale, base)  # behind the controllers
+    burst(image, cx, cy, played, scale)  # behind the controllers
     place(image, "controller-left", cx - offset + shake, cy, h, angle=-round(tilt))
     place(image, "controller-right", cx + offset - shake, cy, h, angle=round(tilt))
 
 
-# Hero: the dashboard panel reacting to knocks.
+# Hero: what you see in the headset as knocks turn passthrough on, switch its style, and turn it off.
+# Both scenes are drawn at 2x and shrunk, for smooth edges.
 
-def hero(panel_dir):
-    width = 800
-    panel_height = round(770 * width / 1200)
-    caption_height = 150
-    panels = {}
-    for name in ("off", "on", "opaque"):
-        image = Image.open(panel_dir / f"readme-{name}.png").convert("RGBA")
-        image = image.resize((width, panel_height), Image.LANCZOS)
-        flat = Image.new("RGB", image.size, BACKGROUND)
-        flat.paste(image, mask=image)
-        panels[name] = flat
+SCENE = (800, 450)
+
+
+def aurora_scene():
+    """A night sky with aurora light rising behind dark mountains, after SteamVR's Aurora home."""
+    w, h = SCENE[0] * 2, SCENE[1] * 2
+    rng = np.random.default_rng(7)
+    horizon = int(h * 0.62)
+    x = np.arange(w) / w
+    # The light shifts across the sky: blue, pink, orange, green, blue.
+    stops = [(0.0, (40, 90, 200)), (0.25, (170, 60, 150)), (0.45, (230, 110, 50)),
+             (0.7, (40, 170, 130)), (1.0, (40, 110, 210))]
+    hue = np.zeros((w, 3))
+    for (x0, c0), (x1, c1) in zip(stops, stops[1:]):
+        part = (x >= x0) & (x <= x1)
+        f = ((x[part] - x0) / (x1 - x0))[:, None]
+        hue[part] = np.array(c0) * (1 - f) + np.array(c1) * f
+    # Vertical rays: smoothed noise across the sky, so the light comes in bands.
+    rays = np.convolve(rng.random(w + 80), np.ones(40) / 40, "same")[40:w + 40]
+    rays += 0.25 * np.convolve(rng.random(w + 16), np.ones(8) / 8, "same")[8:w + 8]
+    rays = (rays - rays.min()) / (rays.max() - rays.min())
+    reach = 0.06 + 0.16 * rays ** 2  # how far each ray rises, as a fraction of the sky
+    rise = (horizon - np.arange(horizon)[:, None]) / horizon
+    glow = np.exp(-rise / reach[None, :]) * (0.35 + 0.65 * rays[None, :])
+    sky = np.full((horizon, w, 3), (4, 5, 10), float) + glow[..., None] * hue[None] * 0.75
+    stars = rng.random((horizon, w)) > 0.9985
+    sky[stars] = np.maximum(sky[stars], 170 * rng.random((stars.sum(), 1)) + 60)
+    ground = np.full((h - horizon, w, 3), (6, 7, 12), float)
+    ground += np.exp(-np.arange(h - horizon) / 50)[:, None, None] * hue[None] * 0.18
+    image = Image.fromarray(np.clip(np.concatenate([sky, ground]), 0, 255).astype(np.uint8))
+    points, px = [(0, horizon)], 0.0
+    while px <= w:
+        points.append((px, horizon - rng.uniform(4, 22) - 28 * max(0, math.sin(px / 170)) ** 3))
+        px += rng.uniform(14, 40)
+    points += [(w, horizon), (w, horizon + 4), (0, horizon + 4)]
+    ImageDraw.Draw(image).polygon(points, fill=(14, 16, 30))
+    return image.resize(SCENE, Image.LANCZOS)
+
+
+def room_scene():
+    """A made-up living room seen head on: a curtained window, a lamp, a couch, a shelf, a plant."""
+    wall, floor, trim = (238, 214, 190), (176, 128, 92), (250, 244, 236)
+    curtain, sofa, wood = (214, 120, 96), (64, 120, 120), (150, 104, 70)
+    leaf, pot, metal = (80, 140, 90), (200, 120, 84), (70, 64, 60)
+    w, h = SCENE[0] * 2, SCENE[1] * 2
+    image = Image.new("RGB", (w, h), wall)
+    draw = ImageDraw.Draw(image)
+    base = h * 0.78  # where everything stands
+    draw.rectangle([0, h * 0.70, w, h], fill=floor)
+    draw.rectangle([0, h * 0.70 - 14, w, h * 0.70], fill=trim)
+
+    # Window: sky and hills clipped to the glass, then the frame, sill, rod, and curtains.
+    x0, y0, x1, y1 = w * 0.10, h * 0.13, w * 0.30, h * 0.50
+    glass = Image.new("RGB", (round(x1 - x0), round(y1 - y0)))
+    g = ImageDraw.Draw(glass)
+    for y in range(glass.height):
+        g.line([(0, y), (glass.width, y)], fill=mix((206, 230, 248), y / glass.height, (150, 200, 240)))
+    g.ellipse([-glass.width * 0.2, glass.height * 0.72, glass.width * 0.8, glass.height * 1.4], fill=(120, 170, 110))
+    g.ellipse([glass.width * 0.4, glass.height * 0.80, glass.width * 1.3, glass.height * 1.4], fill=(100, 156, 96))
+    image.paste(glass, (round(x0), round(y0)))
+    draw.rectangle([x0 - 12, y0 - 12, x1 + 12, y1 + 12], outline=trim, width=12)
+    draw.line([((x0 + x1) / 2, y0), ((x0 + x1) / 2, y1)], fill=trim, width=10)
+    draw.line([(x0, (y0 + y1) / 2), (x1, (y0 + y1) / 2)], fill=trim, width=10)
+    draw.rectangle([x0 - 28, y1 + 12, x1 + 28, y1 + 24], fill=trim)
+    draw.rectangle([x0 - 70, y0 - 50, x1 + 70, y0 - 38], fill=wood)
+    for cx in (x0 - 12, x1 + 12):
+        draw.rounded_rectangle([cx - 38, y0 - 38, cx + 38, y1 + 70], 16, fill=curtain)
+
+    # Floor lamp between the window and the couch.
+    lx = w * 0.385
+    draw.line([(lx, h * 0.30), (lx, base)], fill=metal, width=8)
+    draw.ellipse([lx - 36, base - 10, lx + 36, base + 8], fill=metal)
+    draw.polygon([(lx - 52, h * 0.31), (lx + 52, h * 0.31), (lx + 34, h * 0.20), (lx - 34, h * 0.20)],
+                 fill=(250, 220, 150))
+
+    # Couch with two cushions.
+    left, right, arm = w * 0.45, w * 0.85, w * 0.055
+    back = mix((0, 0, 0), 0.12, sofa)
+    draw.rounded_rectangle([left + arm * 0.6, h * 0.44, right - arm * 0.6, h * 0.62], 34, fill=back)
+    for cx, color in ((w * 0.56, (236, 190, 90)), (w * 0.74, (226, 150, 120))):
+        draw.rounded_rectangle([cx - 70, h * 0.47, cx + 70, h * 0.58], 20, fill=color)
+    draw.rounded_rectangle([left + arm * 0.5, h * 0.57, right - arm * 0.5, h * 0.74], 26, fill=sofa)
+    for x in (left, right - arm):
+        draw.rounded_rectangle([x, h * 0.50, x + arm, h * 0.74], 24, fill=mix((0, 0, 0), 0.2, sofa))
+    for x in (left + arm * 0.4, right - arm * 0.4):
+        draw.rectangle([x - 14, h * 0.74, x + 14, base], fill=mix((0, 0, 0), 0.5, wood))
+
+    # Shelf over the couch: four books and a small plant.
+    sx, sy = (left + right) / 2, h * 0.27
+    x = sx - 130
+    for bw, bh, color in ((22, 74, (200, 90, 70)), (18, 62, (70, 110, 150)),
+                          (26, 84, (230, 180, 80)), (20, 66, (90, 140, 100))):
+        draw.rectangle([x, sy - bh, x + bw, sy], fill=color)
+        x += bw + 6
+    draw.ellipse([sx + 60, sy - 66, sx + 116, sy - 22], fill=leaf)
+    draw.polygon([(sx + 66, sy - 32), (sx + 110, sy - 32), (sx + 104, sy), (sx + 72, sy)], fill=pot)
+    draw.rectangle([sx - 150, sy, sx + 150, sy + 12], fill=wood)
+
+    # Potted tree: trunk, round crown, pot on the floor.
+    px = w * 0.925
+    draw.line([(px, h * 0.40), (px, h * 0.68)], fill=mix((0, 0, 0), 0.3, wood), width=14)
+    for cx, cy, r in ((-0.03, 0.40, 0.055), (0.03, 0.40, 0.055), (0, 0.35, 0.08)):
+        draw.ellipse([px + (cx - r * h / w) * w, (cy - r) * h, px + (cx + r * h / w) * w, (cy + r) * h], fill=leaf)
+    draw.polygon([(px - 56, h * 0.66), (px + 56, h * 0.66), (px + 44, base), (px - 44, base)], fill=pot)
+    return image.resize(SCENE, Image.LANCZOS)
+
+
+def hero():
+    width, height = SCENE
+    caption_height = 140
+    vr, room = aurora_scene(), room_scene()
+    # Translucent shows the room over VR at half strength. Opaque shows only the room.
+    views = {"off": vr, "translucent": Image.blend(vr, room, 0.5), "opaque": room}
     big, small = font(34, bold=True), font(22)
 
     def frame(t, state, after, count, buzzes, before=None):
-        """One frame of a scene. state is (panel, caption, detail). after is the state once the knocks act.
+        """One frame of a scene. state is (view, caption, detail). after is the state once the knocks act.
 
-        At the action the panel cross-fades. The old caption fades out, then the new one rises in.
+        At the action the view cross-fades. The old caption fades out, then the new one rises in.
         """
         action = knock_times(count)[-1] + WAIT if count else None
-        fade = ease_in_out((t - action) / 0.3) if count else 0.0
-        image = Image.new("RGB", (width, caption_height + panel_height), BACKGROUND)
-        panel = panels[state[0]] if fade == 0 else Image.blend(panels[state[0]], panels[after[0]], fade)
-        image.paste(panel, (0, caption_height))
+        fade = ease_in_out((t - action) / 0.5) if count else 0.0
+        image = Image.new("RGB", (width, caption_height + height), BACKGROUND)
+        view = views[state[0]] if fade == 0 else Image.blend(views[state[0]], views[after[0]], fade)
+        image.paste(view, (0, caption_height))
         draw = ImageDraw.Draw(image)
         enter = ease_in_out(t / 0.3) if before else 1.0  # from the previous scene's caption
         if enter < 1:
@@ -291,12 +413,13 @@ def hero(panel_dir):
             caption, shown = (state, 1 - 2 * fade) if fade < 0.5 else (after, 2 * fade - 1)
             rising = fade >= 0.5
         rise = 8 * (1 - ease_out(shown)) if rising else 0
-        draw.text((40, 34 + rise), caption[1], font=big, fill=mix(TEXT, shown))
-        draw.text((40, 86 + rise), caption[2], font=small, fill=mix(DIM, shown))
+        draw.text((40, 30 + rise), caption[1], font=big, fill=mix(TEXT, shown))
+        draw.text((40, 82 + rise), caption[2], font=small, fill=mix(DIM, shown))
         gap = knock_motion(t, count) if count else 1.0
         played = impact(t, count) if count else None
         shake = buzz(t, action, buzzes) if count else 0.0
-        knock_pair(image, draw, width - 150, 50, 120, gap, played, 26, scale=0.8, shake=shake)
+        # Your own hands at the bottom of the view.
+        knock_pair(image, width // 2, caption_height + height - 70, 190, gap, played, 40, scale=1.2, shake=shake)
         return image
 
     frames = []
@@ -304,14 +427,14 @@ def hero(panel_dir):
     def scene(state, duration, after=None, count=0, buzzes=0, before=None):
         frames.extend(frame(i / FPS, state, after or state, count, buzzes, before) for i in range(seconds(duration)))
 
-    off = ("off", "You're in VR", "Passthrough is off.")
-    knock_on = ("off", "Knock twice", "Knock your controllers together.")
-    on = ("on", "Your room appears", "Passthrough on, translucent style.")
-    knock_style = ("on", "Knock three times", "Switch the style.")
-    opaque = ("opaque", "Only the room", "Opaque style hides the game.")
-    knock_back = ("opaque", "Knock three times", "Switch back.")
-    see_through = ("on", "Translucent again", "Passthrough on, translucent style.")
-    knock_off = ("on", "Knock twice", "Back to the game.")
+    off = ("off", "You're in VR", "Passthrough is off")
+    knock_on = ("off", "Knock twice", "Knock your controllers together")
+    on = ("translucent", "Your room fades in", "Translucent: you see both at once")
+    knock_style = ("translucent", "Knock thrice", "Switch the style")
+    opaque = ("opaque", "Only your room", "Opaque: VR is hidden")
+    knock_back = ("opaque", "Knock thrice", "Switch back")
+    see_through = ("translucent", "Room and VR together", "Translucent again")
+    knock_off = ("translucent", "Knock twice", "Back to VR")
 
     def knock_scene(before, state, after, count, buzzes, hold):
         scene(state, knock_times(count)[-1] + WAIT + hold, after, count, buzzes, before)
@@ -323,7 +446,7 @@ def hero(panel_dir):
     # The last knock returns to the opening frame, so the loop has no cut. Each knock
     # changes one thing: two knocks only turn passthrough on or off, three only switch the style.
     knock_scene(see_through, knock_off, off, 2, 1, 1.0)
-    write_gif(frames, IMAGES / "hero.gif")
+    write_gif(frames, IMAGES / "hero.gif", palette_size=255, dither="bayer:bayer_scale=3")
 
 
 # Walkthroughs: the panel's own screens with a pointer. Calibrate goes from the Settings button
@@ -845,11 +968,11 @@ def knock_kinds():
         gap, played, shake = knock_motion(t, count), impact(t, count), buzz(t, action_time(count), count - 1)
 
         # Controllers together.
-        knock_pair(cards, draw, cell // 2, 95, 150, gap, played, 30, shake=shake, base=SURFACE)
+        knock_pair(cards, cell // 2, 95, 150, gap, played, 30, shake=shake)
 
         # One controller on a surface, swinging down from the wrist.
         cx, table_y, h = cell + cell // 2, 210, 150
-        burst(draw, cx, table_y, played, base=SURFACE)
+        burst(cards, cx, table_y, played)
         place(cards, "controller-right", cx + shake, table_y - head_radius(h) * 0.95 - 45 * gap, h,
               angle=round(135 - 12 * gap))
         draw.rectangle([cx - 130, table_y, cx + 130, table_y + 16], fill=TABLE)
@@ -858,7 +981,7 @@ def knock_kinds():
         cx, cy, hw, h = 2 * cell + cell // 2, 110, 160, 130
         hx = cx + 70  # headset center
         edge = hx - hw / 2
-        burst(draw, edge, cy, played, base=SURFACE)
+        burst(cards, edge, cy, played)
         place(cards, "headset-front", hx, cy, round(hw * 600 / 1110))
         place(cards, "controller-left", edge - head_radius(h) * 0.95 - 30 * gap + shake, cy, h,
               angle=round(-30 - 8 * gap))
@@ -914,7 +1037,7 @@ def timing():
         for k in knocks:
             if now >= k:
                 x = x_at(k)
-                burst(draw, x, axis_y, (now - k) / 0.3 if now < k + 0.3 else None)
+                burst(image, x, axis_y, (now - k) / 0.3 if now < k + 0.3 else None)
                 r = 9 * ease_out_back((now - k) / 0.2)
                 draw.ellipse([x - r, axis_y - r, x + r, axis_y + r], fill=TEXT)
                 shown = ease_out((now - k) / 0.25)
@@ -962,10 +1085,10 @@ def main():
         subprocess.run([str(preview), "--readme", tmp], check=True, stdout=subprocess.DEVNULL)
         shutil.copy(Path(tmp) / "readme-off.png", IMAGES / "dashboard.png")
         print("Wrote images/dashboard.png")
-        hero(Path(tmp))
         walkthrough(Path(tmp) / "calibrate", "calibrate")
         walkthrough(Path(tmp) / "update", "update")
         report_gif(Path(tmp))
+    hero()
     knock_kinds()
     timing()
 
