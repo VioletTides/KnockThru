@@ -745,7 +745,7 @@ void App::collect_jobs(double t) {
             state_.room_view.reset();
             const std::string reason = error.what();
             state_.room_view_error = reason.find("debug port") != std::string::npos
-                ? "Turn on CEF Remote Debugging in the Frame's Developer settings."
+                ? "Turn on CEF Remote Debugging in the Frame's Developer settings"
                 : reason;
             if (toggled) {
                 show("Passthrough not changed: " + reason, true);

@@ -8,7 +8,7 @@ body:
     id: what-happened
     attributes:
       label: What went wrong?
-      description: What you did, what you expected, and what happened instead.
+      description: What you did, what you expected, and what happened instead
     validations:
       required: true
   - type: input
@@ -31,5 +31,5 @@ body:
     id: report
     attributes:
       label: Report
-      description: Paste the report your phone copied, or attach knockthru-report.txt from the Frame.
+      description: Paste the report your phone copied, or attach knockthru-report.txt from the Frame
       render: text

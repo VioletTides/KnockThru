@@ -23,10 +23,10 @@ void Panel::report_card(const PanelState& state) {
     canvas_.text(bold_, "Report a problem", x, card.y + 72, 38, kText);
 
     const auto steps = state.report_full
-        ? std::array<const char*, 3>{"Scan this code with your phone.", "Tap Copy report and open GitHub.",
-              "Paste, say what went wrong, and tap Create."}
-        : std::array<const char*, 3>{"Scan this code with your phone.",
-              "Sign in to GitHub and say what went wrong.", "Attach the saved report, then tap Create."};
+        ? std::array<const char*, 3>{"Scan this code with your phone", "Tap Copy report and open GitHub",
+              "Paste, say what went wrong, and tap Create"}
+        : std::array<const char*, 3>{"Scan this code with your phone",
+              "Sign in to GitHub and say what went wrong", "Attach the saved report, then tap Create"};
     float y = card.y + 150;
     for (int i = 0; i < 3; ++i) {
         canvas_.circle(x + 22, y, 22, kAccent);
@@ -52,7 +52,7 @@ void Panel::report_card(const PanelState& state) {
             "Knock the way that goes wrong. Heard " + std::to_string(state.recording_knocks) + " so far.";
     else if (state.recorded)
         record_note = state.report_full ? "Recording added. Your phone gets it in one report file."
-                                        : "Recording saved as knockthru-knocks.csv.gz.";
+                                        : "Recording saved as knockthru-knocks.csv.gz";
     const float record_x = record.x + record.w + 24;
     paragraph(regular_, record_note, record_x, record.y + record.h / 2 - 16, 24, 32, text_w - record.w - 24,
         2, kDim);
@@ -89,7 +89,7 @@ void Panel::report_card(const PanelState& state) {
     const bool saved = !state.report_saved.empty();
     // Offline, the hint above already points here.
     std::string note = state.report_full ? "No phone? Save the report, then attach it to an issue." : "";
-    if (saved) note = "Saved as knockthru-report.txt in your home folder.";
+    if (saved) note = "Saved as knockthru-report.txt in your home folder";
     if (!state.report_error.empty()) note = "Not saved: " + state.report_error;
     // The note sits between the two buttons, next to the one it explains.
     const float note_x = x + 300 + 28, note_w = card.x + card.w - 48 - 240 - 28 - note_x;

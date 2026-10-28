@@ -31,9 +31,9 @@ KnockThru judges each spike about 50 ms after it happens, so the "30 ms later" p
 
 KnockThru works out the kind by checking what the other devices did at the same moment:
 
-- **Headset:** the headset spiked above 25 m/s² within 30 ms of the controller.
-- **Together:** the other controller spiked above 20 m/s² within 40 ms, and the two controllers were less than 15 cm apart.
-- **Surface:** anything else, like a desk, a table, or your leg.
+- **Headset:** the headset spiked above 25 m/s² within 30 ms of the controller
+- **Together:** the other controller spiked above 20 m/s² within 40 ms, and the two controllers were less than 15 cm apart
+- **Surface:** anything else, like a desk, a table, or your leg
 
 A together or headset knock has a second device backing it up. So the controller's spike only needs to reach 40 m/s². A surface knock has no witness, so it needs 60 m/s².
 
@@ -43,11 +43,11 @@ Head shaking moved the headset at up to 22 m/s², under the 25 needed for a head
 
 One knock does nothing. KnockThru groups knocks into a set, and acts on sets of 2 or 3.
 
-- **Bounces merge.** Spikes less than 80 ms apart count as one knock.
-- **Knocks in a set need a small gap.** A surface knock less than 150 ms after the last one counts as a bounce and gets ignored, because a table bounce can land 120 ms after a real knock. Together and headset knocks only need 105 ms, so fast doubles still count.
-- **A set ends after 350 ms of quiet.** Then 2 knocks are a double and 3 are a triple. By default, a double turns passthrough on or off and a triple switches the style. `knock_actions` in [Settings](settings.md) changes that. 4 or more knocks do nothing, so steady clapping never counts.
-- **A set must match.** Every knock in it must be the same kind, from the same controller. Surface knocks must also land within 6 cm of each other.
-- **A set must start from stillness.** It has to begin at least 0.8 s after the last set ended.
+- **Bounces merge:** spikes less than 80 ms apart count as one knock
+- **Knocks in a set need a small gap:** a surface knock less than 150 ms after the last one counts as a bounce and gets ignored, because a table bounce can land 120 ms after a real knock. Together and headset knocks only need 105 ms, so fast doubles still count.
+- **A set ends after 350 ms of quiet:** then 2 knocks are a double and 3 are a triple. By default, a double turns passthrough on or off and a triple switches the style. `knock_actions` in [Settings](settings.md) changes that. 4 or more knocks do nothing, so steady clapping never counts.
+- **A set must match:** every knock in it must be the same kind, from the same controller. Surface knocks must also land within 6 cm of each other.
+- **A set must start from stillness:** it has to begin at least 0.8 s after the last set ended
 
 The last two rules are about clapping runs. Without them, two weak claps right after a clapping run looked like a double. With them, a set that mixes anything is thrown out whole, and the next set has to wait.
 

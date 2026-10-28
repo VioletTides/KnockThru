@@ -901,7 +901,7 @@ def report_gif(panel_dir):
         view.paste(head, (round(area_w / 2 - size[0] / 2), round(head_at[1] + head_size[1] / 2 - size[1] / 2)))
         draw = ImageDraw.Draw(view)
         shown = ease_in_out((t - TURN[1] + 0.2) / 0.4) * clamp(1 - (t - PUT_ON[0]) / 0.3)
-        draw.text((area_w / 2, 30 + 6 * (1 - shown)), "Take off the headset. Scan either lens with your phone.",
+        draw.text((area_w / 2, 30 + 6 * (1 - shown)), "Take off the headset and scan either lens with your phone",
                   font=caption, fill=mix(TEXT, shown), anchor="mm")
         if take_off < 1:  # the panel shrinks away as the headset comes off
             small = panel.resize((round(area_w * (1 - 0.4 * take_off)), round(area_h * (1 - 0.4 * take_off))), Image.LANCZOS)

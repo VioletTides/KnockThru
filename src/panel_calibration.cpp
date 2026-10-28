@@ -57,7 +57,7 @@ void Panel::pick_screen(const PanelState& state) {
         : state.paused ? "KnockThru is off. Turn it on from the main screen to use knocks."
         : !state.enabled[saved]
         ? std::string(kKindTitles[saved]) + " is off. Turn it on from the main screen."
-        : "KnockThru now listens for knocks like the ones you tried.";
+        : "KnockThru now listens for knocks like the ones you tried";
     const float card_h = banner ? 420 : 560;
     for (int k = 0; k < 3; ++k) {
         const Rect card{kMargin + k * 384.0f, 128, 352, card_h};
@@ -92,12 +92,11 @@ void Panel::learn_screen(const PanelState& state) {
         learn_kind_, {box.x + 30, box.y + 60, box.w - 60, 440}, static_cast<float>(std::fmod(now_, 2.0)), 1);
 
     const float x = box.x + box.w + 48, w = kWidth - kMargin - x;
-    canvas_.text(bold_, "Wait for the ring, then knock once.", x, 190, 36, kText);
+    canvas_.text(bold_, "Wait for the ring, then knock once", x, 190, 36, kText);
     float y = 250;
-    for (const std::string& line :
-        {std::string(kKindOnce[k]), std::string("Hold still while the ring fills."),
-            std::string("Do it 10 times. One buzz means it counted."),
-            std::string("Knock as hard as you would to switch passthrough.")}) {
+    for (const std::string& line : {std::string(kKindOnce[k]), std::string("Hold still while the ring fills"),
+             std::string("Do it 10 times, one buzz per knock"),
+             std::string("Knock as hard as you would to switch passthrough")}) {
         y = paragraph(regular_, line, x, y, 28, 40, w, 2, kDim);
         y += 14;
     }
@@ -176,7 +175,7 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
         const auto text = latest == view.too_soon_t ? std::string("Too soon. Wait for the ring.")
             : latest == view.too_light_t
             ? std::string("Too light. Knock a little harder.")
-            : std::string("That looked like ") + kKindNames[static_cast<int>(*view.ignored)] + ".";
+            : std::string("That looked like ") + kKindNames[static_cast<int>(*view.ignored)];
         canvas_.text(regular_, text, x, 670 + 8 * (1 - shown), 26, faded(kError, shown));
     } else if (state.message_is_error) {
         message(state, 670);
@@ -198,10 +197,9 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
 
     const float x = box.x + box.w + 48, w = kWidth - kMargin - x;
     canvas_.text(bold_, "Knock twice", x, 190, 36, kText);
-    canvas_.text(
-        regular_, "All " + std::to_string(view.peaks.size()) + " knocks recorded.", x, 240, 28, kDim);
-    canvas_.text(regular_, "Knock the way you would to switch passthrough.", x, 280, 28, kDim);
-    canvas_.text(regular_, "Passthrough stays as it is.", x, 320, 28, kDim);
+    canvas_.text(regular_, "All " + std::to_string(view.peaks.size()) + " knocks recorded", x, 240, 28, kDim);
+    canvas_.text(regular_, "Knock the way you would to switch passthrough", x, 280, 28, kDim);
+    canvas_.text(regular_, "Passthrough stays as it is", x, 320, 28, kDim);
 
     const Rect status{x, 368, w, 240};
     const float since = static_cast<float>(now_ - view.trial_t);
@@ -216,7 +214,7 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
         const float cx = status.x + 64, cy = status.y + status.h / 2;
         check_mark(cx, cy, 34, anim::ease_out_back(since / 0.3f));
         canvas_.text(bold_, "That worked", cx + 64, cy - 22, 34, kText);
-        canvas_.text(regular_, "Save to keep this calibration.", cx + 64, cy + 24, 26, kText);
+        canvas_.text(regular_, "Save to keep this calibration", cx + 64, cy + 24, 26, kText);
     } else {
         canvas_.rounded_rect(status, kRadius, kSurface);
         const float shake = anim::buzz(since, 0, 2) * 2;

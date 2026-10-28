@@ -86,11 +86,11 @@ Open the SteamVR dashboard and pick the **KnockThru** tab to do everything by ha
 
 ![The KnockThru dashboard tab](images/dashboard.png)
 
-- **Passthrough** and **Style**: switch passthrough and its style by hand. **Translucent** shows the room through your game. **Opaque** shows only the room.
-- **KnockThru On**: turns knocking off for a while without quitting the app.
-- **Controllers together**, **Controller on a surface**, **Knock on the headset**: pick which knock kinds count.
-- **Knocks in** your game: turns knocks off only in the game you're playing, for games where you knock things on purpose.
-- **Settings**: updates, Calibrate, Knock actions, Sounds, Guided tour, Report, and Factory reset.
+- **Passthrough** and **Style**: switch passthrough by hand, and pick **Translucent** (the room through your game) or **Opaque** (only the room)
+- **KnockThru On**: turns knocking off for a while without quitting the app
+- **Controllers together**, **Controller on a surface**, **Knock on the headset**: pick which knock kinds count
+- **Knocks in** your game: turns knocks off only in the game you're playing, for games where you knock things on purpose
+- **Settings**: updates, Calibrate, Knock actions, Sounds, Guided tour, Report, and Factory reset
 
 ## Calibrate
 
@@ -117,11 +117,11 @@ If the install or the restart fails, a card gives the reason. To check right awa
 
 ## Something not working?
 
-- **Soft knocks don't register.** [Calibrate](#calibrate) that knock kind.
-- **Three buzzes after a knock.** KnockThru heard you but could not change passthrough. One cause is that **CEF Remote Debugging** is off. Turn it back on in the Frame's Developer settings. The dashboard tab also shows the reason.
-- **Knocks do nothing in one game.** Check the **Knocks in** switch for that game in the dashboard tab.
-- **Passthrough says "A Steam update moved the Room View button".** KnockThru presses that button through Steam's own dashboard, so a Steam update can break it. Install the KnockThru [update](#updates) that fixes it. If none is out yet, report it.
-- **Anything else.** [Report it](#report-a-problem) from the headset.
+- **Soft knocks don't register**: [Calibrate](#calibrate) that knock kind
+- **Three buzzes after a knock**: KnockThru heard you but could not change passthrough. One cause is that **CEF Remote Debugging** is off. Turn it back on in the Frame's Developer settings. The dashboard tab also shows the reason.
+- **Knocks do nothing in one game**: check the **Knocks in** switch for that game in the dashboard tab
+- **Passthrough says "A Steam update moved the Room View button"**: KnockThru presses that button through Steam's own dashboard, so a Steam update can break it. Install the KnockThru [update](#updates) that fixes it. If none is out yet, report it.
+- **Anything else**: [report it](#report-a-problem) from the headset
 
 ## Report a problem
 
@@ -231,11 +231,11 @@ build/bin/detector_test knockthru-knocks.csv.gz
 
 ## Credits
 
-- [KominoVR/frame-passthrough-shortcuts](https://github.com/KominoVR/frame-passthrough-shortcuts) (MIT): app scaffolding, style switch, and packaging.
-- [toorux/steam-frame-passthrough-toggle](https://github.com/toorux/steam-frame-passthrough-toggle) (MIT): the Room View button click through the debug port.
+- [KominoVR/frame-passthrough-shortcuts](https://github.com/KominoVR/frame-passthrough-shortcuts) (MIT): app scaffolding, style switch, and packaging
+- [toorux/steam-frame-passthrough-toggle](https://github.com/toorux/steam-frame-passthrough-toggle) (MIT): the Room View button click through the debug port
 
 - The controller and headset drawings are rendered from [Valve's Steam Frame CAD files](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) (CC BY-NC-SA 4.0). Those images keep that license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). KnockThru is not associated with or endorsed by Valve.
 
-[MIT licensed](LICENSE).
+[MIT licensed](LICENSE)
 
-Developed with help from coding agents.
+Developed with help from coding agents
