@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Generates the README images in images/.
 
-Usage: python3 scripts/readme_media.py [--build-dir build]
+Usage: python3 scripts/readme_media.py [--build-dir build] [NAME ...]
+
+NAME picks images to write, such as hero or calibrate. Without one, it writes them all.
+The dashboard, calibrate, update, and report images need the panel_preview renders, which
+take over a minute. hero, knock-kinds, and timing do not.
 
 Needs Pillow, numpy, ffmpeg, Chromium, and a host build with the panel_preview target.
 """
@@ -1077,25 +1081,43 @@ def timing():
     write_gif(frames, IMAGES / "timing.gif")
 
 
+PANEL_IMAGES = ("dashboard", "calibrate", "update", "report")  # these need panel_preview's renders
+DRAWN_IMAGES = ("hero", "knock-kinds", "timing")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--build-dir", default="build")
+    parser.add_argument("names", nargs="*", metavar="NAME",
+                        help=f"images to write, all by default: {', '.join(PANEL_IMAGES + DRAWN_IMAGES)}")
     args = parser.parse_args()
-    preview = ROOT / args.build_dir / "bin" / "panel_preview"
-    if not preview.exists():
-        raise SystemExit(f"{preview} is missing. Run: cmake --build {args.build_dir} --target panel_preview")
+    names = args.names or PANEL_IMAGES + DRAWN_IMAGES
+    unknown = sorted(set(names) - set(PANEL_IMAGES + DRAWN_IMAGES))
+    if unknown:
+        parser.error(f"unknown image: {', '.join(unknown)}")
     if not shutil.which("ffmpeg"):
         raise SystemExit("ffmpeg is missing.")
-    with tempfile.TemporaryDirectory() as tmp:
-        subprocess.run([str(preview), "--readme", tmp], check=True, stdout=subprocess.DEVNULL)
-        shutil.copy(Path(tmp) / "readme-off.png", IMAGES / "dashboard.png")
-        print("Wrote images/dashboard.png")
-        walkthrough(Path(tmp) / "calibrate", "calibrate")
-        walkthrough(Path(tmp) / "update", "update")
-        report_gif(Path(tmp))
-    hero()
-    knock_kinds()
-    timing()
+    if any(name in PANEL_IMAGES for name in names):
+        preview = ROOT / args.build_dir / "bin" / "panel_preview"
+        if not preview.exists():
+            raise SystemExit(f"{preview} is missing. Run: cmake --build {args.build_dir} --target panel_preview")
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run([str(preview), "--readme", tmp], check=True, stdout=subprocess.DEVNULL)
+            if "dashboard" in names:
+                shutil.copy(Path(tmp) / "readme-off.png", IMAGES / "dashboard.png")
+                print("Wrote images/dashboard.png")
+            if "calibrate" in names:
+                walkthrough(Path(tmp) / "calibrate", "calibrate")
+            if "update" in names:
+                walkthrough(Path(tmp) / "update", "update")
+            if "report" in names:
+                report_gif(Path(tmp))
+    if "hero" in names:
+        hero()
+    if "knock-kinds" in names:
+        knock_kinds()
+    if "timing" in names:
+        timing()
 
 
 if __name__ == "__main__":

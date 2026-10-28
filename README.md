@@ -213,6 +213,8 @@ README images (needs Pillow, numpy, ffmpeg, and Chromium, after the host build):
 python3 scripts/readme_media.py
 ```
 
+To write only some images, name them, as in `python3 scripts/readme_media.py hero timing`. The hero, knock-kinds, and timing images skip the panel renders and take under 30 s each.
+
 The controller and headset sprites in `images/cad/` come from Valve's CAD files. To render them again, download the STEP files from [Valve's Steam Frame repository](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) into one folder. Then run this, which needs cadquery and opencv-python and takes about 12 minutes:
 
 ```sh
