@@ -65,6 +65,9 @@ std::filesystem::path user_directory();
 // Defaults, then <install>/config.json, then the user config.json, then
 // calibration.json. Missing files are skipped. A bad file throws.
 AppConfig load_config(const std::filesystem::path& install_directory);
+// Like load_config, but a bad file gives the defaults plus any calibration that loads,
+// and `error` says what failed.
+AppConfig load_config_or_defaults(const std::filesystem::path& install_directory, std::string& error);
 
 // Each changes one key in the user config.json and keeps the rest.
 void save_paused(bool paused);

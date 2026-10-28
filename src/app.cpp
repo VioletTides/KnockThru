@@ -175,7 +175,8 @@ private:
 
     const std::array<fs::path, 3> config_files_{install_directory() / "config.json",
         user_directory() / "config.json", user_directory() / "calibration.json"};
-    AppConfig config_ = load_config(install_directory());
+    std::string startup_error_;
+    AppConfig config_ = load_config_or_defaults(install_directory(), startup_error_);
     std::string stamp_ = config_stamp();
     KnockDetector detector_{config_.detector};
     std::optional<Calibrator> calibrator_;
@@ -253,6 +254,8 @@ App::App() {
             log(std::string("Tour not marked done: ") + error.what());
         }
     }
+
+    if (!startup_error_.empty()) show("Settings not loaded: " + startup_error_, true);
 
     state_.version = kVersion;
     if (updated_from_) {

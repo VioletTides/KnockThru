@@ -199,6 +199,23 @@ int main() {
             "a calibrated peak under the floor loads back at the floor");
     }
 
+    if (fs::exists("/dev/full")) {
+        // A temp file that is a symlink to /dev/full fails every flush, like a full disk.
+        save_paused(false);
+        const auto before = read_text(user / "config.json");
+        fs::create_symlink("/dev/full", user / "config.json.tmp");
+        bool threw = false;
+        try {
+            save_paused(true);
+        } catch (const std::exception&) {
+            threw = true;
+        }
+        check(threw, "a failed write throws");
+        check(read_text(user / "config.json") == before, "a failed write keeps the old config.json");
+        check(!fs::is_symlink(user / "config.json.tmp") && !fs::exists(user / "config.json.tmp"),
+            "a failed write removes the temp file");
+    }
+
     fs::remove_all(root);
     return finish();
 }

@@ -182,8 +182,11 @@ void download(const std::string& url, const fs::path& path, int seconds, const s
             *progress = scale
                 * static_cast<float>(std::min(1.0, static_cast<double>(size) / static_cast<double>(length)));
     };
-    const int code = run_program({"curl", "--silent", "--location", "--max-time", std::to_string(seconds),
-                                     "--dump-header", headers, "--output", path.string(), url},
+    // Redirects stay on https, so a hijacked redirect cannot serve a ZIP over plain http.
+    // file is allowed for the first URL only, which tests and local update trials use.
+    const int code = run_program(
+        {"curl", "--silent", "--location", "--proto", "=https,file", "--proto-redir", "=https", "--max-time",
+            std::to_string(seconds), "--dump-header", headers, "--output", path.string(), url},
         cancel, follow);
     if (code == -2) throw Canceled("Download canceled");
     const int status = last_status(headers);
@@ -385,8 +388,8 @@ void replace_files(const fs::path& staging, const fs::path& install) {
             const auto target = install / file;
             fs::create_directories(target.parent_path());
             const auto temp = temporary(file);
-            fs::copy_file(staging / file, temp, fs::copy_options::overwrite_existing);
             written.push_back(temp);
+            fs::copy_file(staging / file, temp, fs::copy_options::overwrite_existing);
             fs::permissions(temp, fs::status(staging / file).permissions());
         }
     } catch (...) {

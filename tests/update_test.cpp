@@ -228,7 +228,7 @@ int main() {
         check(code == -2 && slept < 1, "cancel stops a running program: " + std::to_string(slept) + " s");
 
         // 10.255.255.1 never answers, so curl would wait out its 20 s timeout.
-        setenv("KNOCKTHRU_UPDATE_MANIFEST", "http://10.255.255.1/knockthru.framedrop.json", 1);
+        setenv("KNOCKTHRU_UPDATE_MANIFEST", "https://10.255.255.1/knockthru.framedrop.json", 1);
         cancel = false;
         std::thread canceler2([&] {
             usleep(300000);
