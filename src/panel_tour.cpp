@@ -66,7 +66,7 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
         if (i > 0 && last) list += ways.size() == 2 ? " or " : ", or ";
         list += ways[i];
     }
-    const std::string how = ways.size() > 1 ? "Any of these work: " + list + "." : "Use " + list + ".";
+    const std::string how = ways.size() > 1 ? "Any of these work: " + list : "Use " + list;
     paragraph(regular_, how, x, y, 28, 40, w, 3, kDim);
 
     const Rect status{x, 408, w, 220};
@@ -92,12 +92,12 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
             if (state.opaque) title = *state.opaque ? "Style is opaque" : "Style is translucent";
             // A triple knock while passthrough is off sets the style it opens in.
             detail = state.room_view == false ? "Passthrough is off. It opens in this style."
-                                              : "Knock three times again to switch back.";
+                                              : "Knock three times again to switch back";
         } else {
             const bool on = state.room_view.value_or(false);
             title = on ? "Passthrough is on" : "Passthrough is off";
             if (state.busy) title = "Switching";
-            detail = std::string("Knock twice again to turn it ") + (on ? "off." : "on.");
+            detail = std::string("Knock twice again to turn it ") + (on ? "off" : "on");
         }
         canvas_.text(bold_, canvas_.fit(bold_, title, 34, status.w - 150), cx + 64, cy - 22, 34, kText);
         canvas_.text(
@@ -114,9 +114,9 @@ void Panel::tour_screen(const PanelState& state, const TourView& tour) {
     case Step::Welcome: {
         canvas_.draw(icon(152, IconStyle::Tile), (kWidth - 152) / 2, 150);
         canvas_.text(bold_, "Welcome to KnockThru", cx, 370, 48, kText, Align::Center);
-        canvas_.text(regular_, "Knock to switch passthrough, without the side button.", cx, 440, 30, kDim,
+        canvas_.text(regular_, "Knock to switch passthrough, without the side button", cx, 440, 30, kDim,
             Align::Center);
-        canvas_.text(regular_, "This tour takes a few minutes.", cx, 484, 30, kDim, Align::Center);
+        canvas_.text(regular_, "This tour takes a few minutes", cx, 484, 30, kDim, Align::Center);
         tour_buttons(true, false, true);
         break;
     }
@@ -134,7 +134,7 @@ void Panel::tour_screen(const PanelState& state, const TourView& tour) {
                 PanelClick{PanelCommand::Kind, static_cast<KnockKind>(k)}, state.enabled[k], kKindTitles[k],
                 kKindOnce[k], true, k > 0);
         if (!state.enabled[0] && !state.enabled[1] && !state.enabled[2])
-            canvas_.text(regular_, "Turn on at least one knock to continue.", kMargin, 530, 28, kError);
+            canvas_.text(regular_, "Turn on at least one knock to continue", kMargin, 530, 28, kError);
         tour_buttons(false, false, state.enabled[0] || state.enabled[1] || state.enabled[2]);
         break;
     }
@@ -166,7 +166,7 @@ void Panel::tour_screen(const PanelState& state, const TourView& tour) {
     case Step::Done:
         check_mark(cx, 230, 56, 1);
         canvas_.text(bold_, "You're set", cx, 340, 48, kText, Align::Center);
-        canvas_.text(regular_, "Replay this tour any time from Settings.", cx, 410, 30, kDim, Align::Center);
+        canvas_.text(regular_, "Replay this tour any time from Settings", cx, 410, 30, kDim, Align::Center);
         tour_buttons(false, true, true);
         break;
     }

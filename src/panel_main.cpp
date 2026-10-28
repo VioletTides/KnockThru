@@ -48,7 +48,7 @@ void Panel::style_control(Rect rect, const PanelState& state) {
             Align::Center);
     }
     std::string what;
-    if (state.opaque) what = *state.opaque ? "You see only the room." : "The room shows through your game.";
+    if (state.opaque) what = *state.opaque ? "You see only the room" : "The room shows through your game";
     canvas_.text(regular_, what, rect.x, track.y + track.h + 34, 26, kDim);
 }
 

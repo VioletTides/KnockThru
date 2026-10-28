@@ -30,7 +30,7 @@ body:
     id: why
     attributes:
       label: When would you use it?
-      description: What you were doing when you wanted it.
+      description: What you were doing when you wanted it
       placeholder: I check my frame rate in some games, and I don't want to open a menu each time.
   - type: dropdown
     id: knock-kinds

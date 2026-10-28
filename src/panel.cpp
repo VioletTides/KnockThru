@@ -251,7 +251,7 @@ const Canvas& Panel::render(
         tour_step = state.tour->step;
         tour_screen(state, *state.tour);
         if (screen_ == Screen::SkipTour)
-            confirm_card("Skip the tour?", "You can replay it any time from Settings.", "Keep going",
+            confirm_card("Skip the tour?", "You can replay it any time from Settings", "Keep going",
                 Screen::Main, "Skip", PanelClick{PanelCommand::TourSkip}, false);
     } else if (screen_ == Screen::Main) {
         main_screen(state);

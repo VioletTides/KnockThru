@@ -41,9 +41,8 @@ inline constexpr float kMargin = 40;
 
 inline constexpr const char* kKindTitles[3] = {
     "Controllers together", "Controller on a surface", "Knock on the headset"};
-inline constexpr const char* kKindOnce[3] = {"Knock the controllers together.",
-    "Knock one controller on a surface, like your leg.",
-    "Knock on the side of the headset with a controller."};
+inline constexpr const char* kKindOnce[3] = {"Knock the controllers together",
+    "Knock one controller on a surface, like your leg", "Knock on the side of the headset with a controller"};
 inline constexpr const char* kKindNames[3] = {"a together knock", "a surface knock", "a headset knock"};
 
 inline Color faded(Color color, float alpha) {

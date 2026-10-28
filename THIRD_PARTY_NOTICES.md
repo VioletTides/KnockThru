@@ -69,7 +69,7 @@ domain or MIT terms. The MIT notice is reproduced below for binary distributions
 - Copyright 2022 The Noto Project Authors.
 - License: SIL Open Font License 1.1. The full license is included at
   [assets/fonts/OFL.txt](assets/fonts/OFL.txt).
-- `NotoSans-SemiBold.ttf` and `NotoSans-Regular.ttf` draw the dashboard panel text.
+- `NotoSans-SemiBold.ttf` and `NotoSans-Regular.ttf` draw the dashboard panel text
 
 ## QR Code generator library
 
@@ -77,7 +77,7 @@ domain or MIT terms. The MIT notice is reproduced below for binary distributions
 - Pinned commit: `3c6d0b3cefb4e049dc337e82237c9644399716a8`
 - Copyright (c) Project Nayuki.
 - License: MIT, reproduced below from the top of each file in `third_party/qrcodegen/`.
-- Draws the QR code on the panel's report card.
+- Draws the QR code on the panel's report card
 
 ```text
 Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -143,9 +143,9 @@ SOFTWARE.
 These files are traced or rendered from Valve's Steam Frame CAD files
 (<https://gitlab.steamos.cloud/SteamHardware/SteamFrame>):
 
-- The logo: `images/logo.svg`, `images/logo-wordmark.svg`, and `images/social-preview.png`.
+- The logo: `images/logo.svg`, `images/logo-wordmark.svg`, and `images/social-preview.png`
 - The README drawings: `images/cad/`, `images/hero.gif`, `images/knock-kinds.gif`, `images/calibrate.gif`,
-  `images/update.gif`, `images/report.gif`, and `images/dashboard.png`.
+  `images/update.gif`, `images/report.gif`, and `images/dashboard.png`
 
 Valve Corporation released the CAD files under the Creative Commons
 Attribution-NonCommercial-ShareAlike 4.0 International license. These files use that
