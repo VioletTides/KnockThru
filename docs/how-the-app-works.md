@@ -5,7 +5,9 @@ KnockThru is one program that runs on the Steam Frame itself, not on a PC. Steam
 The code is C++. Each part of the app lives in its own file pair under `src/`. KnockThru talks to these parts of the Frame and to two things outside it:
 
 ```mermaid
-flowchart LR
+flowchart TB
+    accTitle: What KnockThru talks to
+    accDescr: On the Steam Frame, KnockThru gets poses from SteamVR and sends it the dashboard tab, settings, and buzzes. It clicks Room View through the Steam client's debug port, and reads and writes its files in ~/.config/knockthru. Outside the Frame, it checks GitHub releases for updates, and a phone opens its bug report page.
     you([You, knocking])
     subgraph frame [Steam Frame]
         steamvr[SteamVR<br/>poses, overlays, settings, haptics]
@@ -20,10 +22,13 @@ flowchart LR
     steamvr -->|poses| kt
     kt -->|dashboard tab, style and graph settings, buzzes| steamvr
     kt -->|clicks Room View| steam
-    kt <-->|settings, calibration, state, log| files
+    files -->|settings, calibration, state| kt
+    kt -->|settings, calibration, state, log| files
     kt -->|daily update check| github
     phone -->|opens the bug report page| kt
 ```
+
+Rounded ends are you and your phone, square boxes are programs, the cylinder is files, and the gray box is the headset. Each arrow points from the part that sends or starts something to the part that receives it.
 
 ## From a knock to passthrough
 
@@ -35,11 +40,13 @@ The pose thread picks its read rate from what the last read returned:
 
 ```mermaid
 stateDiagram-v2
-    direction LR
+    accTitle: Pose read rate
+    accDescr: The pose thread reads every 50 ms while no controller is tracked, and every 10 ms while the controllers are still. It reads every 1 ms from the first move until 0.5 s after the last one.
     state "Idle: every 50 ms" as Idle
     state "Still: every 10 ms" as Still
     state "Fast: every 1 ms" as Fast
 
+    [*] --> Idle
     Idle --> Still: a controller is tracked and still
     Idle --> Fast: a controller moves faster than 0.1 m/s
     Still --> Fast: a controller moves faster than 0.1 m/s
@@ -51,16 +58,19 @@ stateDiagram-v2
 With the default actions, a double knock runs these steps after the detector reports it:
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false}}}%%
 sequenceDiagram
+    accTitle: A double knock switches passthrough
+    accDescr: The main loop buzzes once and starts the Room View job. The job finds the dashboard bar page, reads the Room View button, clicks it, and reads it again every 100 ms, up to 10 times, until it changes. If the switch fails, the main loop buzzes three times.
     participant C as Controllers
     participant M as Main loop<br/>app.cpp
     participant J as Room View job<br/>own thread, room_view.cpp
     participant B as Dashboard bar<br/>Steam debug port
 
-    M->>M: detector reports a double knock
-    M->>M: knock_actions picks Passthrough
+    Note over M: detector reports a double knock
+    Note over M: knock_actions picks Passthrough
     M->>C: 1 buzz
-    M->>J: toggle_room_view() starts the job
+    M-)J: toggle_room_view() starts the job
     J->>B: find the bar page (GET /json)
     J->>B: read the Room View button state
     J->>B: click the button
@@ -68,7 +78,7 @@ sequenceDiagram
         J->>B: read the button state
     end
     J-->>M: passthrough on or off
-    opt button missing or state unchanged
+    opt the switch failed
         M->>C: 3 buzzes
     end
 ```
