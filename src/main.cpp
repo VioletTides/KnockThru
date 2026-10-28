@@ -72,8 +72,7 @@ int detect(double seconds, const std::string& save_path) {
         });
         const auto event = detector.poll(t);
         for (const auto& knock : detector.take_knocks())
-            std::printf(
-                "%8.3f  knock    %-8s peak %5.0f m/s^2\n", knock.t, to_string(knock.kind), knock.peak);
+            std::printf("%8.3f  knock    %-8s peak %5.0f m/s²\n", knock.t, to_string(knock.kind), knock.peak);
         if (event)
             std::printf("%8.3f  ACTION   %-8s x%d  (reported %.0f ms after the last knock)\n", event->t,
                 to_string(event->kind), event->count, (t - event->t) * 1000);
@@ -110,7 +109,7 @@ int calibrate(const std::string& kind_name) {
                 std::cout << "  heard a " << to_string(knock.kind) << " knock, ignored" << std::endl;
             if (result->heard != Calibrator::Heard::Counted) continue;
             std::cout << "  knock " << calibrator.count() << " of " << Calibrator::kWanted << ": "
-                      << static_cast<int>(knock.peak) << " m/s^2" << std::endl;
+                      << static_cast<int>(knock.peak) << " m/s²" << std::endl;
             haptics.buzz(1, t);
         }
         haptics.update(t);
@@ -161,7 +160,7 @@ int status(int port) {
 
 void usage() {
     std::cout << "KnockThru " << kVersion
-              << ": double knock to toggle Steam Frame passthrough.\n\n"
+              << ": knock twice to toggle Steam Frame passthrough.\n\n"
                  "Run with no arguments to register with SteamVR and start (the same as --install).\n\n"
                  "  --install            Register, turn on SteamVR autostart, and start\n"
                  "  --uninstall          Stop and remove from SteamVR. Keeps ~/.config/knockthru\n"

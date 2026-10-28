@@ -136,8 +136,8 @@ void Panel::actions_screen(const PanelState& state) {
     // config.json can give each kind its own actions. The lists then pick nothing, and a press sets every
     // kind.
     const std::string note = differ
-        ? "Your config.json gives knock kinds different actions. A choice here sets them all."
-        : "Every kind of knock gets these actions. To set kinds apart, edit config.json.";
+        ? "Your config.json gives knock kinds different actions. A choice here sets them all"
+        : "Every kind of knock gets these actions. To set kinds apart, edit config.json";
     if (state.message_is_error)
         message(state, 600);
     else

@@ -55,19 +55,19 @@ stateDiagram-v2
     Fast --> Idle: no controller tracked
 ```
 
-With the default actions, a double knock runs these steps after the detector reports it:
+With the default actions, knocking twice runs these steps after the detector reports it:
 
 ```mermaid
 %%{init: {"sequence": {"mirrorActors": false}}}%%
 sequenceDiagram
-    accTitle: A double knock switches passthrough
+    accTitle: Knocking twice switches passthrough
     accDescr: The main loop buzzes once and starts the Room View job. The job finds the dashboard bar page, reads the Room View button, clicks it, and reads it again every 100 ms, up to 10 times, until it changes. If the switch fails, the main loop buzzes three times.
     participant C as Controllers
     participant M as Main loop<br/>app.cpp
     participant J as Room View job<br/>own thread, room_view.cpp
     participant B as Dashboard bar<br/>Steam debug port
 
-    Note over M: detector reports a double knock
+    Note over M: detector reports two knocks
     Note over M: knock_actions picks Passthrough
     M->>C: 1 buzz
     M-)J: toggle_room_view() starts the job

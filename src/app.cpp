@@ -616,7 +616,7 @@ void App::cancel_calibration() {
     if (calibrator_ && calibration_ && calibration_->phase == Phase::Recording)
         log(heard_summary(*calibrator_));
     end_calibration();
-    show("Calibration canceled. Nothing saved.");
+    show("Calibration canceled. Nothing saved");
 }
 
 void App::save_calibration(double t) {
@@ -704,7 +704,7 @@ Handled App::handle_knocks(
         } else if (calibrator_->seconds_left(t) <= 0) {
             log(heard_summary(*calibrator_));
             show("Time ran out after " + std::to_string(calibrator_->count()) + " of "
-                    + std::to_string(Calibrator::kWanted) + " knocks. Nothing saved.",
+                    + std::to_string(Calibrator::kWanted) + " knocks. Nothing saved",
                 true);
             end_calibration();
         }
@@ -718,7 +718,7 @@ Handled App::handle_knocks(
         const bool passed = event->kind == calibrator_->kind() && event->count == 2;
         calibration_->trial_passed = passed;
         calibration_->trial_heard =
-            std::string("a ") + sequence_name(*event) + " " + to_string(event->kind) + " knock";
+            std::string("a ") + to_string(event->kind) + " knock " + (event->count == 3 ? "thrice" : "twice");
         calibration_->trial_t = t;
         log("Try step heard " + calibration_->trial_heard + (passed ? ": passed" : ": missed"));
         haptics_.buzz(passed ? 1 : 3, t);
@@ -782,7 +782,7 @@ void App::collect_jobs(double t) {
             room_view_failed_ = true;
             state_.room_view.reset();
             state_.room_view_error =
-                "A Steam update moved the Room View button. Update KnockThru in Settings.";
+                "A Steam update moved the Room View button. Update KnockThru in Settings";
             if (toggled) {
                 show("Passthrough not changed: Room View button not found", true);
                 haptics_.buzz(3, t);

@@ -11,7 +11,7 @@ The code is in `src/calibrator.cpp`. The saved result goes to `~/.config/knockth
 1. **Pick** the kind of knock to calibrate: together, surface, or headset.
 2. **Learn** how to knock it, then press Start.
 3. **Record** 10 single knocks within 90 s. A ring fills before each one. One buzz means the knock counted.
-4. **Try** the new thresholds with a double knock. Save unlocks only if the try works. The try never switches passthrough.
+4. **Try** the new thresholds by knocking twice. Save unlocks only if the try works. The try never switches passthrough.
 
 The first 3 s after Start don't count, because the hand coming down from pressing Start once counted as a knock. After each counted knock, the next one has to wait 1 s, which is how long the ring takes to fill.
 

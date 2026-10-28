@@ -66,8 +66,8 @@ void Panel::report_card(const PanelState& state) {
             canvas_.text(regular_, lines[k], x + 64, y + k * 40, 28, kText);
         y += 40 * lines.size() + 36;
     }
-    const std::string hint = state.report_full ? "Hold the phone up to a lens. Use the Frame's Wi-Fi."
-                                               : "The Frame is offline. Save the report below to attach it.";
+    const std::string hint = state.report_full ? "Hold the phone up to a lens. Use the Frame's Wi-Fi"
+                                               : "The Frame is offline. Save the report below to attach it";
     paragraph(regular_, hint, x, y, 26, 36, text_w, 3, kDim);
 
     // Knock problems need the motion itself, so the report can carry a recording.
@@ -76,12 +76,12 @@ void Panel::report_card(const PanelState& state) {
     std::string record_label = state.recorded ? "Record again" : "Record knocks";
     if (recording) record_label = "Recording " + std::to_string(state.recording_left) + " s";
     button(record, record_label, PanelClick{PanelCommand::RecordKnocks}, std::nullopt, false, !recording);
-    std::string record_note = "Knocks missed or wrong? Record 20 s of them.";
+    std::string record_note = "Knocks missed or wrong? Record 20 s of them";
     if (recording)
         record_note =
             "Knock the way that goes wrong. Heard " + std::to_string(state.recording_knocks) + " so far.";
     else if (state.recorded)
-        record_note = state.report_full ? "Recording added. Your phone gets it in one report file."
+        record_note = state.report_full ? "Recording added. Your phone gets it in one report file"
                                         : "Recording saved as knockthru-knocks.csv.gz";
     const float record_x = record.x + record.w + 24;
     paragraph(regular_, record_note, record_x, record.y + record.h / 2 - 16, 24, 32, text_w - record.w - 24,
@@ -93,7 +93,7 @@ void Panel::report_card(const PanelState& state) {
     const float by = card.y + card.h - 48 - 72;
     const bool saved = !state.report_saved.empty();
     // Offline, the hint above already points here.
-    std::string note = state.report_full ? "No phone? Save the report, then attach it to an issue." : "";
+    std::string note = state.report_full ? "No phone? Save the report, then attach it to an issue" : "";
     if (saved) note = "Saved as knockthru-report.txt in your home folder";
     if (!state.report_error.empty()) note = "Not saved: " + state.report_error;
     // The note sits between the two buttons, next to the one it explains.

@@ -54,10 +54,9 @@ void Panel::pick_screen(const PanelState& state) {
     // A saved kind that is turned off, or KnockThru paused, would leave knocks doing nothing.
     const int saved = state.calibration_saved ? static_cast<int>(*state.calibration_saved) : 0;
     const std::string saved_note = !banner ? ""
-        : state.paused ? "KnockThru is off. Turn it on from the main screen to use knocks."
-        : !state.enabled[saved]
-        ? std::string(kKindTitles[saved]) + " is off. Turn it on from the main screen."
-        : "KnockThru now listens for knocks like the ones you tried";
+        : state.paused                     ? "KnockThru is off. Turn it on from the main screen to use knocks"
+        : !state.enabled[saved] ? std::string(kKindTitles[saved]) + " is off. Turn it on from the main screen"
+                                : "KnockThru now listens for knocks like the ones you tried";
     const float card_h = banner ? 420 : 560;
     for (int k = 0; k < 3; ++k) {
         const Rect card{kMargin + k * 384.0f, 128, 352, card_h};
@@ -172,9 +171,9 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
     if (latest >= 0 && hint < 3) {
         const float shown =
             std::min(anim::ease_out(hint / 0.25f), 1 - anim::ease_in_out((hint - 2.5f) / 0.5f));
-        const auto text = latest == view.too_soon_t ? std::string("Too soon. Wait for the ring.")
+        const auto text = latest == view.too_soon_t ? std::string("Too soon. Wait for the ring")
             : latest == view.too_light_t
-            ? std::string("Too light. Knock a little harder.")
+            ? std::string("Too light. Knock a little harder")
             : std::string("That looked like ") + kKindNames[static_cast<int>(*view.ignored)];
         canvas_.text(regular_, text, x, 670 + 8 * (1 - shown), 26, faded(kError, shown));
     } else if (state.message_is_error) {
@@ -220,14 +219,14 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
         const float shake = anim::buzz(since, 0, 2) * 2;
         canvas_.text(bold_, "Not quite", status.x + 40 + shake, status.y + 70, 34, kError);
         float y = status.y + 124;
-        paragraph(regular_, "Heard " + view.trial_heard + ". Try again, or record your knocks again.",
+        paragraph(regular_, "Heard " + view.trial_heard + ". Try again, or record your knocks again",
             status.x + 40, y, 26, 36, status.w - 80, 3, kDim);
     }
 
     button({kMargin, 656, 260, 72}, "Record again", PanelClick{PanelCommand::Calibrate, view.kind},
         std::nullopt);
     const bool passed = view.trial_passed.value_or(false);
-    button({kWidth - kMargin - 260, 656, 260, 72}, "Save",
+    button({kWidth - kMargin - 260, 656, 260, 72}, "Save calibration",
         PanelClick{PanelCommand::SaveCalibration, view.kind}, std::nullopt, true, passed);
     if (state.message_is_error) message(state, 610);
 }
