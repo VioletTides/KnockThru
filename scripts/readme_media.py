@@ -10,6 +10,7 @@ take over a minute. hero, knock-kinds, and timing do not.
 Needs Pillow, numpy, ffmpeg, Chromium, and a host build with the panel_preview target.
 """
 import argparse
+import colorsys
 import math
 import shutil
 import subprocess
@@ -17,7 +18,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 ROOT = Path(__file__).resolve().parent.parent
 IMAGES = ROOT / "images"
@@ -328,71 +329,38 @@ def aurora_scene():
 
 
 def room_scene():
-    """A made-up living room seen head on: a curtained window, a lamp, a couch, a shelf, a plant."""
-    wall, floor, trim = (238, 214, 190), (176, 128, 92), (250, 244, 236)
-    curtain, sofa, wood = (214, 120, 96), (64, 120, 120), (150, 104, 70)
-    leaf, pot, metal = (80, 140, 90), (200, 120, 84), (70, 64, 60)
-    w, h = SCENE[0] * 2, SCENE[1] * 2
-    image = Image.new("RGB", (w, h), wall)
-    draw = ImageDraw.Draw(image)
-    base = h * 0.78  # where everything stands
-    draw.rectangle([0, h * 0.70, w, h], fill=floor)
-    draw.rectangle([0, h * 0.70 - 14, w, h * 0.70], fill=trim)
+    """A living room as the Frame's passthrough shows it: gray, soft, and tinted blue.
 
-    # Window: sky and hills clipped to the glass, then the frame, sill, rod, and curtains.
-    x0, y0, x1, y1 = w * 0.10, h * 0.13, w * 0.30, h * 0.50
-    glass = Image.new("RGB", (round(x1 - x0), round(y1 - y0)))
-    g = ImageDraw.Draw(glass)
-    for y in range(glass.height):
-        g.line([(0, y), (glass.width, y)], fill=mix((206, 230, 248), y / glass.height, (150, 200, 240)))
-    g.ellipse([-glass.width * 0.2, glass.height * 0.72, glass.width * 0.8, glass.height * 1.4], fill=(120, 170, 110))
-    g.ellipse([glass.width * 0.4, glass.height * 0.80, glass.width * 1.3, glass.height * 1.4], fill=(100, 156, 96))
-    image.paste(glass, (round(x0), round(y0)))
-    draw.rectangle([x0 - 12, y0 - 12, x1 + 12, y1 + 12], outline=trim, width=12)
-    draw.line([((x0 + x1) / 2, y0), ((x0 + x1) / 2, y1)], fill=trim, width=10)
-    draw.line([(x0, (y0 + y1) / 2), (x1, (y0 + y1) / 2)], fill=trim, width=10)
-    draw.rectangle([x0 - 28, y1 + 12, x1 + 28, y1 + 24], fill=trim)
-    draw.rectangle([x0 - 70, y0 - 50, x1 + 70, y0 - 38], fill=wood)
-    for cx in (x0 - 12, x1 + 12):
-        draw.rounded_rectangle([cx - 38, y0 - 38, cx + 38, y1 + 70], 16, fill=curtain)
+    The photo is "Living room" by Jarosław Ceborski (CC0, Wikimedia Commons). The tint follows
+    SteamVR's monochrome passthrough: camera brightness times one tint color, at SteamVR's default
+    hue of 0.67. SteamVR's files do not give the tint's saturation, so 0.4 is a guess.
+    """
+    photo = ImageOps.grayscale(Image.open(IMAGES / "photos" / "living-room.jpg"))
+    w, h = SCENE
+    photo = ImageOps.fit(photo, (w, h), Image.LANCZOS, centering=(0.5, 0.6))
+    gray = np.asarray(photo, dtype=np.float32) / 255
 
-    # Floor lamp between the window and the couch.
-    lx = w * 0.385
-    draw.line([(lx, h * 0.30), (lx, base)], fill=metal, width=8)
-    draw.ellipse([lx - 36, base - 10, lx + 36, base + 8], fill=metal)
-    draw.polygon([(lx - 52, h * 0.31), (lx + 52, h * 0.31), (lx + 34, h * 0.20), (lx - 34, h * 0.20)],
-                 fill=(250, 220, 150))
+    # A slight fisheye bend, like the wide-angle cameras.
+    y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+    nx, ny = (x - w / 2) / (w / 2), (y - h / 2) / (w / 2)
+    r2 = nx * nx + ny * ny
+    bend = 1 - 0.06 * r2
+    gray = gray[np.clip(h / 2 + ny * bend * w / 2, 0, h - 1).astype(int),
+                np.clip(w / 2 + nx * bend * w / 2, 0, w - 1).astype(int)]
 
-    # Couch with two cushions.
-    left, right, arm = w * 0.45, w * 0.85, w * 0.055
-    back = mix((0, 0, 0), 0.12, sofa)
-    draw.rounded_rectangle([left + arm * 0.6, h * 0.44, right - arm * 0.6, h * 0.62], 34, fill=back)
-    for cx, color in ((w * 0.56, (236, 190, 90)), (w * 0.74, (226, 150, 120))):
-        draw.rounded_rectangle([cx - 70, h * 0.47, cx + 70, h * 0.58], 20, fill=color)
-    draw.rounded_rectangle([left + arm * 0.5, h * 0.57, right - arm * 0.5, h * 0.74], 26, fill=sofa)
-    for x in (left, right - arm):
-        draw.rounded_rectangle([x, h * 0.50, x + arm, h * 0.74], 24, fill=mix((0, 0, 0), 0.2, sofa))
-    for x in (left + arm * 0.4, right - arm * 0.4):
-        draw.rectangle([x - 14, h * 0.74, x + 14, base], fill=mix((0, 0, 0), 0.5, wood))
+    # Dim, flat, soft, and darker at the edges, matched by eye to a stock passthrough frame.
+    gray = 0.10 + 0.62 * gray ** 1.15
+    soft = Image.fromarray((gray * 255).astype(np.uint8)).resize((w // 3, h // 3), Image.BILINEAR)
+    gray = np.asarray(soft.resize((w, h), Image.BICUBIC), dtype=np.float32) / 255
+    gray = np.clip(gray * (1 - 0.2 * np.clip(r2, 0, 1.5)), 0, 1)
 
-    # Shelf over the couch: four books and a small plant.
-    sx, sy = (left + right) / 2, h * 0.27
-    x = sx - 130
-    for bw, bh, color in ((22, 74, (200, 90, 70)), (18, 62, (70, 110, 150)),
-                          (26, 84, (230, 180, 80)), (20, 66, (90, 140, 100))):
-        draw.rectangle([x, sy - bh, x + bw, sy], fill=color)
-        x += bw + 6
-    draw.ellipse([sx + 60, sy - 66, sx + 116, sy - 22], fill=leaf)
-    draw.polygon([(sx + 66, sy - 32), (sx + 110, sy - 32), (sx + 104, sy), (sx + 72, sy)], fill=pot)
-    draw.rectangle([sx - 150, sy, sx + 150, sy + 12], fill=wood)
-
-    # Potted tree: trunk, round crown, pot on the floor.
-    px = w * 0.925
-    draw.line([(px, h * 0.40), (px, h * 0.68)], fill=mix((0, 0, 0), 0.3, wood), width=14)
-    for cx, cy, r in ((-0.03, 0.40, 0.055), (0.03, 0.40, 0.055), (0, 0.35, 0.08)):
-        draw.ellipse([px + (cx - r * h / w) * w, (cy - r) * h, px + (cx + r * h / w) * w, (cy + r) * h], fill=leaf)
-    draw.polygon([(px - 56, h * 0.66), (px + 56, h * 0.66), (px + 44, base), (px - 44, base)], fill=pot)
-    return image.resize(SCENE, Image.LANCZOS)
+    # Tint in linear light, scaled so the tint changes the hue but not the brightness.
+    tint = np.array(colorsys.hsv_to_rgb(0.67, 0.4, 1.0))
+    tint /= tint @ (0.2126, 0.7152, 0.0722)
+    linear = np.where(gray <= 0.04045, gray / 12.92, ((gray + 0.055) / 1.055) ** 2.4)
+    rgb = np.clip(linear[..., None] * tint, 0, 1)
+    rgb = np.where(rgb <= 0.0031308, rgb * 12.92, 1.055 * rgb ** (1 / 2.4) - 0.055)
+    return Image.fromarray((rgb * 255).round().astype(np.uint8))
 
 
 def hero():
@@ -410,8 +378,11 @@ def hero():
         """
         action = knock_times(count)[-1] + WAIT if count else None
         fade = ease_in_out((t - action) / 0.5) if count else 0.0
+        # The view steps at half the frame rate while it fades. Each step changes every pixel of the
+        # photo, so showing each step twice halves the GIF's largest cost.
+        step = ease_in_out((math.floor(t * FPS / 2) * 2 / FPS - action) / 0.5) if count else 0.0
         image = Image.new("RGB", (width, caption_height + height), BACKGROUND)
-        view = views[state[0]] if fade == 0 else Image.blend(views[state[0]], views[after[0]], fade)
+        view = views[state[0]] if step == 0 else Image.blend(views[state[0]], views[after[0]], step)
         image.paste(view, (0, caption_height))
         draw = ImageDraw.Draw(image)
         enter = ease_in_out(t / 0.3) if before else 1.0  # from the previous scene's caption
@@ -455,7 +426,7 @@ def hero():
     # The last knock returns to the opening frame, so the loop has no cut. Each knock
     # changes one thing: two knocks only turn passthrough on or off, three only switch the style.
     knock_scene(see_through, knock_off, off, 2, 1, 1.0)
-    write_gif(frames, IMAGES / "hero.gif", palette_size=255, dither="bayer:bayer_scale=3")
+    write_gif(frames, IMAGES / "hero.gif", palette_size=255, dither="bayer:bayer_scale=5")
 
 
 # Walkthroughs: the panel's own screens with a pointer. Calibrate goes from the Settings button
