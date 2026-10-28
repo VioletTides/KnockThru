@@ -6,6 +6,8 @@ Knock twice to turn on passthrough and see your room without taking off your Ste
 
 ![The view in the headset: knocking twice fades your room in over VR, knocking three times shows only the room and then both again, and knocking twice more returns to VR](images/hero.gif)
 
+<sub>Simulated passthrough. [Photo](https://commons.wikimedia.org/wiki/File:Living_room_(Unsplash).jpg) by Jarosław Ceborski (CC0).</sub>
+
 ## How it works
 
 KnockThru runs on the Frame itself. It reads controller and headset motion from SteamVR about once a millisecond, finds knocks in that motion, and clicks Room View on the SteamVR dashboard. Every change to the detector gets tested against motion recorded on a Frame.
@@ -213,7 +215,9 @@ README images (needs Pillow, numpy, ffmpeg, and Chromium, after the host build):
 python3 scripts/readme_media.py
 ```
 
-To write only some images, name them, as in `python3 scripts/readme_media.py hero timing`. The hero, knock-kinds, and timing images skip the panel renders and take under 30 s each.
+To write only some images, name them, as in `python3 scripts/readme_media.py hero timing`. The hero, knock-kinds, and timing images skip the panel renders and take under 40 s each.
+
+The hero's room is `images/photos/living-room.jpg`, a CC0 photo from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Living_room_(Unsplash).jpg). `room_scene()` in `scripts/readme_media.py` turns it gray and tints it with SteamVR's default passthrough hue.
 
 The controller and headset sprites in `images/cad/` come from Valve's CAD files. To render them again, download the STEP files from [Valve's Steam Frame repository](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) into one folder. Then run this, which needs cadquery and opencv-python and takes about 12 minutes:
 
