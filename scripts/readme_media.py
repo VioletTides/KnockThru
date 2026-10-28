@@ -986,7 +986,7 @@ def knock_kinds():
               angle=round(135 - 12 * gap))
         draw.rectangle([cx - 130, table_y, cx + 130, table_y + 16], fill=TABLE)
 
-        # The left controller count the left side of the headset.
+        # The left controller counts the left side of the headset.
         cx, cy, hw, h = 2 * cell + cell // 2, 110, 160, 130
         hx = cx + 70  # headset center
         edge = hx - hw / 2

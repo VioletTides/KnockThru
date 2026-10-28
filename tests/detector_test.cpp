@@ -158,8 +158,7 @@ std::vector<Row> load(const std::string& path) {
 }
 
 // KNOCKTHRU_TEST_RATE="moving_speed=0.2,hold_s=0.5,still_ms=20" overrides
-// PoseRate settings, for sweeps. KNOCKTHRU_TEST_RATE=fixed reads every row, as
-// the app did before PoseRate.
+// PoseRate settings, for sweeps. KNOCKTHRU_TEST_RATE=fixed reads every row.
 std::optional<PoseRate> test_rate() {
     PoseRate rate;
     const char* set = std::getenv("KNOCKTHRU_TEST_RATE");
@@ -493,7 +492,7 @@ void calibrated_replay_tests() {
         check(doubles >= least, name + " calibrated: at least " + std::to_string(least) + " doubles");
     }
     // The calibration that let the strap bumps through. Its soft together knocks
-    // peaked as low as 20 m/s^2, under today's together floor.
+    // peaked as low as 20 m/s^2, under the together floor.
     Calibration soft;
     soft[KnockKind::Together] = KindCalibration{20, 0.203, {}, {}};
     soft[KnockKind::Surface] = KindCalibration{59.8, 0.249, {}, {}};
