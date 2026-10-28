@@ -28,9 +28,11 @@ std::vector<KnockEvent> drain(KnockDetector& detector, double now, std::vector<K
 }
 
 // Simulates one controller resting at `position`, with knocks at the given
-// times. Each knock is a fast approach (0.8 m/s) that stops dead.
+// times. Each knock is a fast approach (0.8 m/s) that stops dead. Fills
+// `sequences` with every finished sequence when given.
 std::vector<KnockEvent> synthetic(const std::vector<double>& knock_times, DetectorConfig config = {},
-    Device device = Device::Right, Vec3 position = {0.2, 0.8, -0.3}, double duration = 3.0) {
+    Device device = Device::Right, Vec3 position = {0.2, 0.8, -0.3}, double duration = 3.0,
+    std::deque<Sequence>* sequences = nullptr) {
     KnockDetector detector(config);
     std::vector<KnockEvent> events;
     const double dt = 1.0 / 233;
@@ -43,8 +45,19 @@ std::vector<KnockEvent> synthetic(const std::vector<double>& knock_times, Detect
         detector.push(device, t, position, {jitter, -speed, 0});
         detector.push(Device::Hmd, t, {0, 1.6, 0}, {0, jitter, 0});
         events = drain(detector, t, events);
+        if (sequences)
+            for (auto& sequence : detector.take_sequences()) sequences->push_back(std::move(sequence));
     }
     return events;
+}
+
+// The verdicts of every sequence in a synthetic run, oldest first.
+std::vector<SequenceVerdict> verdicts(const std::vector<double>& knock_times, DetectorConfig config = {}) {
+    std::deque<Sequence> sequences;
+    synthetic(knock_times, config, Device::Right, {0.2, 0.8, -0.3}, 3.0, &sequences);
+    std::vector<SequenceVerdict> out;
+    for (const auto& sequence : sequences) out.push_back(sequence.verdict);
+    return out;
 }
 
 void synthetic_tests() {
@@ -72,6 +85,16 @@ void synthetic_tests() {
     DetectorConfig no_surface;
     no_surface.enabled[static_cast<int>(KnockKind::Surface)] = false;
     check(synthetic({1.0, 1.25}, no_surface).empty(), "a turned-off kind does nothing");
+
+    using V = SequenceVerdict;
+    check(verdicts({1.0, 1.25}) == std::vector<V>{V::Action}, "a double's sequence is an action");
+    check(verdicts({1.0}) == std::vector<V>{V::WrongCount}, "a single knock is the wrong count");
+    check(verdicts({0.75, 1.3, 1.55}) == std::vector<V>{V::WrongCount, V::NotQuiet},
+        "a double 550 ms after another knock was not quiet before");
+    check(verdicts({1.0, 1.25}, no_surface) == std::vector<V>{V::KindOff}, "a turned-off kind says so");
+    DetectorConfig slow;
+    slow.min_approach[static_cast<int>(KnockKind::Surface)] = 2;
+    check(verdicts({1.0, 1.25}, slow) == std::vector<V>{V::TooSlow}, "a slow double is too slow");
 }
 
 struct Row {
@@ -274,10 +297,18 @@ std::map<std::string, int> replay(const std::string& name) {
     for (const auto& row : rows) {
         detector.push(row.device, row.t, row.position, row.velocity);
         auto event = detector.poll(row.t);
-        if (std::getenv("KNOCKTHRU_TEST_VERBOSE"))
+        if (std::getenv("KNOCKTHRU_TEST_VERBOSE")) {
             for (const auto& knock : detector.take_knocks())
                 std::cout << "    knock " << knock.t << " " << to_string(knock.kind) << " source "
                           << knock.source << " peak " << knock.peak << "\n";
+            for (const auto& c : detector.take_candidates())
+                std::cout << "    spike " << c.knock.t << " " << to_string(c.knock.kind) << " source "
+                          << c.knock.source << " peak " << c.knock.peak << " of " << c.threshold << ": "
+                          << to_string(c.verdict) << "\n";
+            for (const auto& sequence : detector.take_sequences())
+                std::cout << "    sequence of " << sequence.knocks.size() << ": "
+                          << to_string(sequence.verdict) << "\n";
+        }
         if (event) {
             if (std::getenv("KNOCKTHRU_TEST_VERBOSE"))
                 std::cout << "    " << event->t << " " << to_string(event->kind) << "x" << event->count
