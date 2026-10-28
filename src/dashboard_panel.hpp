@@ -24,6 +24,8 @@ public:
 
     bool visible() const { return visible_; }
     bool transitioning() const { return visible_ && panel_.transitioning(); }
+    // True while the debug view is on screen, which stays so when the dashboard closes.
+    bool debug_open() const { return panel_.debug_open(); }
 
     // Handles overlay events. Returns the clicked buttons and sets `shown` when
     // the panel just opened.

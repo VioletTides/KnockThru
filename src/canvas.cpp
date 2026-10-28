@@ -211,6 +211,16 @@ void Canvas::polygon(const std::vector<std::vector<Point>>& rings, Color color) 
     }
 }
 
+void Canvas::line(Point from, Point to, float width, Color color) {
+    const float dx = to.x - from.x, dy = to.y - from.y, length = std::sqrt(dx * dx + dy * dy);
+    if (length <= 0) return;
+    // Half the width along the normal, on each side.
+    const float nx = -dy / length * width / 2, ny = dx / length * width / 2;
+    polygon({{{from.x + nx, from.y + ny}, {to.x + nx, to.y + ny}, {to.x - nx, to.y - ny},
+                {from.x - nx, from.y - ny}}},
+        color);
+}
+
 void Canvas::arc(float cx, float cy, float inner, float outer, float from, float to, Color color) {
     const int x0 = static_cast<int>(std::floor(cx - outer - 1)),
               x1 = static_cast<int>(std::ceil(cx + outer + 1));

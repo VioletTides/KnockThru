@@ -60,6 +60,8 @@ public:
     void circle(float cx, float cy, float radius, Color color);
     // Fills closed rings with the even-odd rule, so a ring inside another cuts a hole.
     void polygon(const std::vector<std::vector<Point>>& rings, Color color);
+    // A straight line `width` pixels thick with flat ends.
+    void line(Point from, Point to, float width, Color color);
     // A ring between two radii, limited to angles from `from` to `to` (radians,
     // 0 points right, counterclockwise on screen).
     void arc(float cx, float cy, float inner, float outer, float from, float to, Color color);

@@ -97,6 +97,26 @@ void synthetic_tests() {
     check(verdicts({1.0, 1.25}, slow) == std::vector<V>{V::TooSlow}, "a slow double is too slow");
 }
 
+// A spike after which the controller keeps moving is not a knock.
+void moving_after_test() {
+    KnockDetector detector;
+    std::vector<Verdict> verdicts;
+    std::vector<KnockEvent> events;
+    const double dt = 1.0 / 233;
+    for (double t = 0; t < 2.0; t += dt) {
+        // Still until 1 s, then straight to 1 m/s, which is above surface_speed_after.
+        const double speed = t > 1.0 ? 1.0 : 0;
+        const double jitter = 0.001 * ((static_cast<int>(t / dt) % 2) ? 1 : -1);
+        detector.push(Device::Right, t, {0.2, 0.8, -0.3}, {jitter, -speed, 0});
+        detector.push(Device::Hmd, t, {0, 1.6, 0}, {0, jitter, 0});
+        events = drain(detector, t, events);
+        for (const auto& candidate : detector.take_candidates()) verdicts.push_back(candidate.verdict);
+    }
+    check(
+        verdicts == std::vector<Verdict>{Verdict::MovingAfter}, "a spike followed by motion is MovingAfter");
+    check(detector.take_knocks().empty() && events.empty(), "a spike followed by motion is not a knock");
+}
+
 struct Row {
     double t;
     Device device;
@@ -511,6 +531,7 @@ int main(int argc, char** argv) {
         return 0;
     }
     synthetic_tests();
+    moving_after_test();
     pose_rate_tests();
     replay_tests();
     calibration_tests();

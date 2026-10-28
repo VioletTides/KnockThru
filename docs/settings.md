@@ -23,8 +23,8 @@ Put your settings in `~/.config/knockthru/config.json`. This file survives updat
   }
   ```
 - `paused`: `true` while the **KnockThru On** switch is off. Knocks do nothing then.
-- `detector`: overrides for the knock detector's settings, such as `confirmed_peak` or `max_gap_s`. `src/knock_detector.hpp` gives each one with its unit. Calibration sets the peaks for you. **Keep after restart** in the debug window writes this key, except for calibrated peaks, which it writes to `calibration.json`.
-- `debug`: `true` adds a Debug row to Settings, which opens the debug window. The default is `false`.
+- `detector`: overrides for the knock detector's settings, such as `confirmed_peak` or `max_gap_s`. `src/knock_detector.hpp` gives each one with its unit. Calibration sets the peaks for you. **Keep after restart** in the debug view writes this key, except for calibrated peaks, which it writes to `calibration.json`.
+- `debug`: `true` adds a Debug view row to Settings. The row opens the debug view in the KnockThru dashboard tab, and Back returns to Settings. The default is `false`.
 - `tour_done`: `true` once the first-run tour is finished or skipped. Set it to `false` to see the tour the next time you open the KnockThru tab. Settings also has a Replay button.
 
 Calibration writes `~/.config/knockthru/calibration.json`, with one entry per calibrated kind. **Factory reset** in Settings deletes it along with `config.json`.

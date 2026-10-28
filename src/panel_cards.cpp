@@ -10,6 +10,36 @@ namespace knockthru {
 
 using namespace panel_style;
 
+namespace panel_style {
+
+// The code on white with a 4-module quiet zone, in whole pixels per module.
+void draw_qr(Canvas& canvas, Rect white, const std::string& text) {
+    canvas.rounded_rect(white, kRadius, {255, 255, 255});
+    if (text.empty()) return;
+    const auto qr = qrcodegen::QrCode::encodeText(text.c_str(), qrcodegen::QrCode::Ecc::MEDIUM);
+    const int size = qr.getSize(), module = static_cast<int>(white.w) / (size + 8);
+    const float origin_x = std::floor(white.x + (white.w - module * size) / 2);
+    const float origin_y = std::floor(white.y + (white.h - module * size) / 2);
+    // Each run of dark modules in a row is one rectangle, so no seams show between them.
+    // Radius 0.5 fills solid. Radius 0 gives every pixel half coverage in rounded_rect.
+    for (int my = 0; my < size; ++my) {
+        for (int mx = 0; mx < size;) {
+            if (!qr.getModule(mx, my)) {
+                ++mx;
+                continue;
+            }
+            int end = mx;
+            while (end < size && qr.getModule(end, my)) ++end;
+            canvas.rounded_rect({origin_x + mx * module, origin_y + my * module,
+                                    static_cast<float>((end - mx) * module), static_cast<float>(module)},
+                0.5f, {0, 0, 0});
+            mx = end;
+        }
+    }
+}
+
+} // namespace panel_style
+
 // The report card over Settings. A phone held to a lens scans the QR code and
 // opens a page the headset serves, which copies the full report and opens the
 // GitHub form. Without a network, the code opens the form directly, and Save to
@@ -57,32 +87,7 @@ void Panel::report_card(const PanelState& state) {
     paragraph(regular_, record_note, record_x, record.y + record.h / 2 - 16, 24, 32, text_w - record.w - 24,
         2, kDim);
 
-    // The code on white with a 4-module quiet zone, in whole pixels per module.
-    const Rect white{card.x + card.w - 48 - box, card.y + 48, box, box};
-    canvas_.rounded_rect(white, kRadius, {255, 255, 255});
-    if (!state.report_url.empty()) {
-        const auto qr =
-            qrcodegen::QrCode::encodeText(state.report_url.c_str(), qrcodegen::QrCode::Ecc::MEDIUM);
-        const int size = qr.getSize(), module = static_cast<int>(box) / (size + 8);
-        const float origin_x = std::floor(white.x + (box - module * size) / 2);
-        const float origin_y = std::floor(white.y + (box - module * size) / 2);
-        // Each run of dark modules in a row is one rectangle, so no seams show between them.
-        // Radius 0.5 fills solid. Radius 0 gives every pixel half coverage in rounded_rect.
-        for (int my = 0; my < size; ++my) {
-            for (int mx = 0; mx < size;) {
-                if (!qr.getModule(mx, my)) {
-                    ++mx;
-                    continue;
-                }
-                int end = mx;
-                while (end < size && qr.getModule(end, my)) ++end;
-                canvas_.rounded_rect({origin_x + mx * module, origin_y + my * module,
-                                         static_cast<float>((end - mx) * module), static_cast<float>(module)},
-                    0.5f, {0, 0, 0});
-                mx = end;
-            }
-        }
-    }
+    draw_qr(canvas_, {card.x + card.w - 48 - box, card.y + 48, box, box}, state.report_url);
 
     // Without a phone, the file is the way to get the full report into an issue.
     const float by = card.y + card.h - 48 - 72;

@@ -14,11 +14,11 @@ endif()
 include(cmake/OpenVRLoader.cmake)
 find_package(Threads REQUIRED)
 
-add_library(knockthru_core STATIC src/knock_detector.cpp src/knock_actions.cpp src/config.cpp src/calibrator.cpp src/update.cpp src/report.cpp src/report_server.cpp src/room_view.cpp)
+add_library(knockthru_core STATIC src/knock_detector.cpp src/knock_actions.cpp src/config.cpp src/calibrator.cpp src/update.cpp src/report.cpp src/report_server.cpp src/room_view.cpp src/debug_model.cpp src/usage.cpp)
 target_include_directories(knockthru_core PUBLIC src third_party/json)
 target_compile_options(knockthru_core PRIVATE -Wall -Wextra -Wpedantic)
 
-add_library(knockthru_ui STATIC src/canvas.cpp src/panel.cpp src/panel_main.cpp src/panel_calibration.cpp src/panel_cards.cpp src/panel_tour.cpp third_party/qrcodegen/qrcodegen.cpp)
+add_library(knockthru_ui STATIC src/canvas.cpp src/debug_view.cpp src/panel.cpp src/panel_main.cpp src/panel_calibration.cpp src/panel_cards.cpp src/panel_debug.cpp src/panel_tour.cpp third_party/qrcodegen/qrcodegen.cpp)
 target_include_directories(knockthru_ui PUBLIC src)
 target_include_directories(knockthru_ui SYSTEM PRIVATE third_party/stb third_party/qrcodegen)
 target_link_libraries(knockthru_ui PUBLIC knockthru_core)
@@ -49,6 +49,11 @@ target_link_libraries(config_test PRIVATE knockthru_core)
 target_compile_options(config_test PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME config COMMAND config_test)
 
+add_executable(debug_model_test tests/debug_model_test.cpp)
+target_link_libraries(debug_model_test PRIVATE knockthru_core)
+target_compile_options(debug_model_test PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME debug_model COMMAND debug_model_test)
+
 add_executable(update_test tests/update_test.cpp)
 target_link_libraries(update_test PRIVATE knockthru_core)
 target_compile_options(update_test PRIVATE -Wall -Wextra -Wpedantic)
@@ -59,6 +64,12 @@ target_link_libraries(room_view_test PRIVATE knockthru_core Threads::Threads)
 target_compile_options(room_view_test PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME room_view COMMAND room_view_test)
 set_tests_properties(room_view PROPERTIES SKIP_RETURN_CODE 77)
+
+add_executable(debug_render_test tests/debug_render_test.cpp)
+target_link_libraries(debug_render_test PRIVATE knockthru_ui)
+target_compile_options(debug_render_test PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_definitions(debug_render_test PRIVATE KNOCKTHRU_FONTS="${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts")
+add_test(NAME debug_render COMMAND debug_render_test)
 
 # Renders the dashboard panel in sample states to PNG files, for review.
 add_executable(panel_preview tests/panel_preview.cpp)

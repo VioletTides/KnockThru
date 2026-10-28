@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace knockthru::panel_style {
 
@@ -34,6 +35,8 @@ inline constexpr Color kOnError{40, 14, 12};
 inline constexpr Color kActive{34, 62, 94};
 inline constexpr Color kActiveHover{40, 72, 108};
 inline constexpr Color kTable{120, 92, 70};
+// The headset trace on the debug graph, apart from the blue left trace, the yellow right trace, and errors.
+inline constexpr Color kHeadsetTrace{185, 140, 255};
 
 // Containers use a 16 px radius. Switches and the style control are pills.
 inline constexpr float kRadius = 16;
@@ -54,6 +57,8 @@ inline Color faded(Color color, float alpha) {
 void draw_sprite(Canvas& canvas, const sprites::Sprite& sprite, float x, float y, float height, float angle);
 // Impact lines that fly outward from (x, y) and fade. `played` runs from 0 to 1.
 void burst(Canvas& canvas, float x, float y, std::optional<float> played, float scale);
+// Draws `text` as a QR code on a white rounded square.
+void draw_qr(Canvas& canvas, Rect white, const std::string& text);
 inline float head_radius(float height) { return 0.288f * height; } // measured on the controller sprites
 
 } // namespace knockthru::panel_style

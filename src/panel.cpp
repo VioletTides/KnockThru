@@ -99,10 +99,10 @@ void Panel::switch_control(float right, float cy, bool on, bool enabled, float s
 
 // A danger button is red when primary, and has a red label otherwise.
 void Panel::button(Rect rect, const std::string& label, std::optional<PanelClick> click,
-    std::optional<Screen> go_to, bool primary, bool enabled, bool danger) {
+    std::optional<Screen> go_to, bool primary, bool enabled, bool danger, float size) {
     if (!enabled) {
         canvas_.rounded_rect(rect, kRadius, kSurfaceHover);
-        canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, 28, kFaint, Align::Center);
+        canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, size, kFaint, Align::Center);
         return;
     }
     const bool hover = hovered(rect);
@@ -114,8 +114,33 @@ void Panel::button(Rect rect, const std::string& label, std::optional<PanelClick
         fill = hover ? kAccentHover : kAccent;
     }
     canvas_.rounded_rect(rect, kRadius, fill);
-    canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, 28, ink, Align::Center);
+    canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, size, ink, Align::Center);
     targets_.push_back({rect, click, go_to});
+}
+
+// A pill track with one segment per name. The selected segment is filled with `raised` and the hovered one
+// lights up. Returns the segments, for the caller's targets.
+std::vector<Rect> Panel::segments(Rect track, const std::vector<std::string>& names,
+    std::optional<int> selected, float size, Color raised) {
+    canvas_.rounded_rect(track, track.h / 2, kSurface);
+    const float w = (track.w - 12) / names.size();
+    std::vector<Rect> out;
+    for (std::size_t i = 0; i < names.size(); ++i) {
+        const Rect segment{track.x + 6 + i * w, track.y + 6, w, track.h - 12};
+        const bool on = selected == static_cast<int>(i);
+        if (on)
+            canvas_.rounded_rect(segment, segment.h / 2, raised);
+        else if (hovered(segment))
+            canvas_.rounded_rect(segment, segment.h / 2, kSurfaceHover);
+        canvas_.text(bold_, names[i], segment.x + segment.w / 2, segment.y + segment.h / 2, size,
+            on ? kText : kDim, Align::Center);
+        out.push_back(segment);
+    }
+    return out;
+}
+
+float Panel::pill_width(const std::string& label, float padding) {
+    return canvas_.measure(bold_, label, 22) + 2 * padding;
 }
 
 void Panel::header(const std::string& title) {
@@ -221,6 +246,7 @@ const Canvas& Panel::render(
         screen_ = Screen::Pick; // canceled or saved
     }
     was_calibrating_ = calibration.has_value();
+    if (screen_ == Screen::Debug && !state.debug) screen_ = Screen::Settings; // debug turned off
     if (state.tour && !was_touring_) screen_ = Screen::Main; // just started
     if (!state.tour && was_touring_) screen_ = Screen::Main; // finished or skipped
     was_touring_ = state.tour.has_value();
@@ -235,6 +261,7 @@ const Canvas& Panel::render(
     case Screen::Report: view = View::Report; break;
     case Screen::Pick: view = View::Pick; break;
     case Screen::Actions: view = View::Actions; break;
+    case Screen::Debug: view = View::Debug; break;
     case Screen::Learn:
     case Screen::SkipTour: break;
     }
@@ -269,6 +296,8 @@ const Canvas& Panel::render(
         pick_screen(state);
     } else if (screen_ == Screen::Actions) {
         actions_screen(state);
+    } else if (screen_ == Screen::Debug) {
+        debug_screen(*state.debug);
     } else {
         learn_screen(state);
     }
@@ -292,7 +321,7 @@ const Canvas& Panel::render(
     }
     transitioning_ = entering < 1;
     animating_ = view == View::Pick || view == View::Learn || view == View::Record || view == View::Try
-        || view == View::Tour || entering < 1;
+        || view == View::Tour || view == View::Debug || entering < 1;
     return canvas_;
 }
 
@@ -305,6 +334,8 @@ std::optional<PanelClick> Panel::click(float x, float y) {
             screen_ = *target.go_to;
             if (target.learn) learn_kind_ = *target.learn;
         }
+        if (target.tab) debug_tab_ = *target.tab;
+        if (target.all_settings) debug_all_ = *target.all_settings;
         return target.click ? target.click : PanelClick{PanelCommand::Navigate};
     }
     return std::nullopt;

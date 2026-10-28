@@ -26,7 +26,7 @@ struct AppConfig {
     bool sounds = true;
     bool tour_done = false;
     bool check_updates = true;
-    bool debug = false; // shows the debug window
+    bool debug = false; // shows the debug view
     KnockActions knock_actions;
 };
 
@@ -74,14 +74,11 @@ void save_sounds(bool sounds);
 // Writes the table, or removes the key when every action is the default.
 void save_knock_actions(const KnockActions& actions);
 void save_tour_done(bool done);
-void save_debug(bool debug);
 
-// Writes every detector number in `tuned` that differs from `loaded.detector`. A number from
-// calibration goes into the `peak` of its kind in calibration.json, which loads after config.json
-// and would override it. Every other number goes into the `detector` object of the user
-// config.json. Loading raises a calibrated peak under Calibrator::floor() to the floor, so such a
-// value does not load back unchanged. partner_peak always goes to config.json, and loading
-// lowers it to two thirds of the together peak.
+// Writes each detector number in `tuned` that differs from `loaded.detector`. A calibrated number goes
+// to its kind's `peak` in calibration.json, which would override config.json. The rest go to config.json.
+// Loading raises a calibrated peak to Calibrator::floor() and lowers partner_peak to two thirds of the
+// together peak, so those two may not load back unchanged.
 void save_detector(const DetectorConfig& tuned, const AppConfig& loaded);
 
 // Deletes only the user config.json and calibration.json.

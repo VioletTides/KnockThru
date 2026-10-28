@@ -135,8 +135,8 @@ int main() {
 
     // Debug flag and detector sources.
     check(!load_config(install).debug, "debug starts false");
-    save_debug(true);
-    check(load_config(install).debug, "save_debug(true) loads back");
+    std::ofstream(user / "config.json") << R"({"debug": true})";
+    check(load_config(install).debug, "debug: true loads");
     fs::remove(user / "config.json");
 
     fs::create_directories(install);

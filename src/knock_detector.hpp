@@ -122,9 +122,8 @@ public:
     // Changes the thresholds and keeps the pose history, so knocks right after the change still count.
     void set_config(const DetectorConfig& config) { config_ = config; }
 
-    // The sequence still open, oldest knock first, and whether it already cannot act.
+    // The sequence still open, oldest knock first.
     const std::deque<Knock>& sequence() const { return sequence_; }
-    bool mixed() const { return mixed_ != SequenceVerdict::Action; }
 
 private:
     struct Sample {

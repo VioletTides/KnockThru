@@ -1,6 +1,7 @@
 #pragma once
 
 #include "canvas.hpp"
+#include "debug_view.hpp"
 #include "knock_actions.hpp"
 #include "knock_detector.hpp"
 
@@ -76,6 +77,7 @@ struct PanelState {
     KnockActions knock_actions;
     std::string app_key, app_name; // the running game, empty when none
     bool app_blocked = false;
+    const DebugView* debug = nullptr; // set while config.json has "debug": true. Settings then opens it
     std::optional<CalibrationView> calibration;
     std::optional<TourView> tour;
     std::optional<KnockKind> calibration_saved;
@@ -125,6 +127,12 @@ enum class PanelCommand {
     SaveReport, // to the home folder
     RecordKnocks,
     SetKnockAction, // sets every kind at once
+    TuneDown, // the detector number at PanelClick::tunable, one step
+    TuneUp,
+    UndoTuning,
+    KeepTuning, // saves the tuned numbers
+    TestBuzz,
+    TestClick,
 };
 
 struct PanelClick {
@@ -132,6 +140,7 @@ struct PanelClick {
     KnockKind kind = KnockKind::Together; // for Kind and Calibrate
     int count = 0; // for SetKnockAction
     KnockAction action = KnockAction::None;
+    int tunable = 0; // for TuneDown and TuneUp
 };
 
 // Draws the dashboard tab into an RGBA image.
@@ -147,6 +156,8 @@ public:
         const PanelState& state, std::optional<std::pair<float, float>> hover = std::nullopt, double now = 0);
 
     bool animating() const { return animating_; }
+    // True while the debug view is on screen, which stays so when the dashboard closes.
+    bool debug_open() const { return screen_ == Screen::Debug; }
     // True during the 0.3 s rise of a new view, which wants every display frame.
     bool transitioning() const { return transitioning_; }
 
@@ -157,20 +168,25 @@ public:
     static void draw_icon(Canvas& canvas, IconStyle style = IconStyle::Tile);
 
 private:
-    enum class Screen { Main, Settings, Reset, Report, Pick, Learn, SkipTour, Actions };
+    enum class Screen { Main, Settings, Reset, Report, Pick, Learn, SkipTour, Actions, Debug };
     // What is on screen, for transitions: a screen, a calibration phase, or the tour.
-    enum class View { Main, Settings, Reset, Report, Pick, Learn, Record, Try, Tour, Actions };
+    enum class View { Main, Settings, Reset, Report, Pick, Learn, Record, Try, Tour, Actions, Debug };
+    enum class DebugTab { Live, Tuning, Status };
     struct Target {
         Rect rect;
         std::optional<PanelClick> click = {};
         std::optional<Screen> go_to = {};
         std::optional<KnockKind> learn = {};
+        std::optional<DebugTab> tab = {};
+        std::optional<bool> all_settings = {};
     };
 
     Font bold_, regular_;
     Canvas canvas_, scratch_, background_;
     Screen screen_ = Screen::Main;
     KnockKind learn_kind_ = KnockKind::Together;
+    DebugTab debug_tab_ = DebugTab::Live;
+    bool debug_all_ = false; // the Tuning tab shows every detector number
     bool saved_dismissed_ = false;
     bool was_calibrating_ = false;
     bool was_touring_ = false;
@@ -218,7 +234,23 @@ private:
     void button_row(Rect rect, const std::string& title, const std::string& detail, const std::string& label,
         std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger, bool divider = true);
     void button(Rect rect, const std::string& label, std::optional<PanelClick> click,
-        std::optional<Screen> go_to, bool primary = false, bool enabled = true, bool danger = false);
+        std::optional<Screen> go_to, bool primary = false, bool enabled = true, bool danger = false,
+        float size = 28);
+    std::vector<Rect> segments(Rect track, const std::vector<std::string>& names, std::optional<int> selected,
+        float size, Color raised);
+    float pill_width(const std::string& label, float padding);
+    void debug_screen(const DebugView& view);
+    void debug_live(const DebugView& view, Rect area);
+    void debug_tuning(const DebugView& view, Rect area);
+    void debug_stepper(Rect rect, const Tunable& tunable, int index);
+    void debug_footer(const DebugView& view, Rect rect);
+    void debug_status(const DebugView& view, Rect area);
+    void debug_graph(Rect rect, const DebugView& view, int points);
+    void set_dots(float x, float cy, float radius, int filled);
+    void list_card(Rect rect, int rows, float row_height = 80);
+    void list_row(
+        Rect rect, const std::string& label, const std::string& detail, float reserve, bool hover_fill);
+    void feed_rows(Rect rect, const std::vector<FeedEntry>& entries);
     void switch_control(float right, float cy, bool on, bool enabled, float scale);
     void message(const PanelState& state, float y);
 };

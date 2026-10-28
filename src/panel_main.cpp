@@ -33,20 +33,12 @@ void Panel::passthrough_tile(Rect rect, const PanelState& state) {
 void Panel::style_control(Rect rect, const PanelState& state) {
     canvas_.text(bold_, "Style", rect.x, rect.y + 16, 28, kText);
     const Rect track{rect.x, rect.y + 46, rect.w, 84};
-    canvas_.rounded_rect(track, track.h / 2, kSurface);
-    const char* names[2] = {"Translucent", "Opaque"};
-    for (int i = 0; i < 2; ++i) {
-        const Rect half{track.x + 6 + i * (track.w - 12) / 2, track.y + 6, (track.w - 12) / 2, track.h - 12};
-        const bool selected = state.opaque && *state.opaque == (i == 1);
-        if (selected) {
-            canvas_.rounded_rect(half, half.h / 2, kRaisedHover);
-        } else {
-            if (hovered(half)) canvas_.rounded_rect(half, half.h / 2, kSurfaceHover);
-            if (state.opaque) targets_.push_back({half, PanelClick{PanelCommand::Style}, std::nullopt});
-        }
-        canvas_.text(bold_, names[i], half.x + half.w / 2, half.y + half.h / 2, 28, selected ? kText : kDim,
-            Align::Center);
-    }
+    std::optional<int> selected;
+    if (state.opaque) selected = *state.opaque ? 1 : 0;
+    const auto halves = segments(track, {"Translucent", "Opaque"}, selected, 28, kRaisedHover);
+    for (int i = 0; i < 2; ++i)
+        if (state.opaque && selected != i)
+            targets_.push_back({halves[i], PanelClick{PanelCommand::Style}, std::nullopt});
     std::string what;
     if (state.opaque) what = *state.opaque ? "You see only the room" : "The room shows through your game";
     canvas_.text(regular_, what, rect.x, track.y + track.h + 34, 26, kDim);
@@ -109,8 +101,10 @@ void Panel::settings_screen(const PanelState& state) {
     button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Main);
     canvas_.text(bold_, "Settings", kMargin + 172, 68, 38, kText);
     update_control(state);
-    const float top = 128, w = kWidth - 2 * kMargin, row = 92;
-    canvas_.rounded_rect({kMargin, top, w, 6 * row}, kRadius, kSurface);
+    // The debug row is a seventh, so the rows shrink to keep the card's height.
+    const int rows = state.debug ? 7 : 6;
+    const float top = 128, w = kWidth - 2 * kMargin, card = 6 * 92, row = card / rows;
+    canvas_.rounded_rect({kMargin, top, w, card}, kRadius, kSurface);
     button_row({kMargin, top, w, row}, "Knocks getting missed?", "KnockThru learns how hard you knock",
         "Calibrate", std::nullopt, Screen::Pick, false, false);
     button_row({kMargin, top + row, w, row}, "Knock actions", "What knocking twice or thrice does", "Change",
@@ -121,9 +115,12 @@ void Panel::settings_screen(const PanelState& state) {
         PanelClick{PanelCommand::StartTour}, std::nullopt, false);
     button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
         PanelClick{PanelCommand::ShowReport}, Screen::Report, false);
-    button_row({kMargin, top + 5 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset",
-        std::nullopt, Screen::Reset, true);
-    if (state.message_is_error) message(state, top + 6 * row + 40);
+    if (state.debug)
+        button_row({kMargin, top + 5 * row, w, row}, "Debug view", "Live knock decisions and tuning", "Open",
+            std::nullopt, Screen::Debug, false);
+    button_row({kMargin, top + (rows - 1) * row, w, row}, "Factory reset", "Delete settings and calibration",
+        "Reset", std::nullopt, Screen::Reset, true);
+    if (state.message_is_error) message(state, top + card + 40);
 }
 
 // Knock twice and Knock thrice side by side, each a list of actions where one press picks.

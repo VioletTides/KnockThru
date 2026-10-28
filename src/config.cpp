@@ -194,8 +194,6 @@ void save_knock_actions(const KnockActions& actions) {
 
 void save_tour_done(bool done) { update_user_config("tour_done", done); }
 
-void save_debug(bool debug) { update_user_config("debug", debug); }
-
 void save_detector(const DetectorConfig& tuned, const AppConfig& loaded) {
     auto tuned_copy = tuned;
     auto loaded_copy = loaded.detector;
