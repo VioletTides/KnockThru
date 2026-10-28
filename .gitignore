@@ -1,6 +1,11 @@
+# Build output
 /build*/
 /dist/
 /.zig-cache/
-*.log
 /compile_commands.json
+
+# Logs
+*.log
+
+# Local notes for Claude Code
 /CLAUDE.md
