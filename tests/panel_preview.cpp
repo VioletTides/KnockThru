@@ -385,15 +385,9 @@ int readme(const std::filesystem::path& out) {
     state.app_key = "steam.app.620980";
     state.app_name = "Beat Saber";
     shot(panel, state, 10, out / "readme-off.png");
-    state.room_view = true;
-    shot(panel, state, 20, out / "readme-on.png");
-    state.opaque = true;
-    shot(panel, state, 30, out / "readme-opaque.png");
     // The report card, opened from Settings. The README script dims its sample QR code.
     Panel report_panel(KNOCKTHRU_FONTS);
     PanelState report = state;
-    report.opaque = false;
-    report.room_view = false;
     report.version = "0.2.0";
     report.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
     report.report_full = true;
