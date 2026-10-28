@@ -51,6 +51,34 @@ One knock does nothing. KnockThru groups knocks into a set, and acts on sets of 
 
 The last two rules are about clapping runs. Without them, two weak claps right after a clapping run looked like a double. With them, a set that mixes anything is thrown out whole, and the next set has to wait.
 
+This is how the detector moves through a set (`src/knock_detector.cpp`):
+
+```mermaid
+stateDiagram-v2
+    accTitle: How knocks group into a set
+    accDescr: From Waiting, a knock 0.8 s or more after the last set starts a set, and a knock sooner than that throws the set out. Matching knocks join the set. After 350 ms with no knock, a set of 2 or 3 knocks acts, and anything else does nothing.
+    state "Waiting" as Waiting
+    state "In a set" as Set
+    state "Thrown out" as Out
+    state "Act on the double or triple" as Act
+    state judge <<choice>>
+
+    [*] --> Waiting
+    Waiting --> Set: a knock 0.8 s or more after the last set
+    Waiting --> Out: a knock less than 0.8 s after the last set
+    Set --> Set: same kind, same controller
+    Set --> Out: another kind or controller, or a surface knock more than 6 cm away
+    Out --> Out: any knock
+    Set --> judge: 350 ms with no knock
+    Out --> Waiting: 350 ms with no knock
+    judge --> Act: 2 or 3 knocks
+    judge --> Waiting: 1, or 4 or more knocks
+    Act --> Waiting
+
+```
+
+A set also does nothing if none of its knocks approached fast enough ([How calibration works](calibration.md)), or if `knock_types` turns its kind off.
+
 The 350 ms wait plus the 50 ms judging delay is why passthrough switches about 0.4 s after your last knock.
 
 ## How the rules were found
