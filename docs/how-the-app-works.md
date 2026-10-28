@@ -2,13 +2,76 @@
 
 KnockThru is one program that runs on the Steam Frame itself, not on a PC. SteamVR starts it as an overlay app, the same kind of app as a desktop or chat overlay. It shows up as a tab on the SteamVR dashboard.
 
-The code is C++. Each part of the app lives in its own file pair under `src/`.
+The code is C++. Each part of the app lives in its own file pair under `src/`. KnockThru talks to these parts of the Frame and to two things outside it:
+
+```mermaid
+flowchart LR
+    you([You, knocking])
+    subgraph frame [Steam Frame]
+        steamvr[SteamVR<br/>poses, overlays, settings, haptics]
+        kt[KnockThru]
+        steam[Steam client<br/>dashboard bar, debug port 8080]
+        files[(~/.config/knockthru)]
+    end
+    github[GitHub releases]
+    phone([Phone on the same Wi-Fi])
+
+    you -->|controller motion| steamvr
+    steamvr -->|poses| kt
+    kt -->|dashboard tab, style and graph settings, buzzes| steamvr
+    kt -->|clicks Room View| steam
+    kt <-->|settings, calibration, state, log| files
+    kt -->|daily update check| github
+    phone -->|opens the bug report page| kt
+```
 
 ## From a knock to passthrough
 
 1. **Reading motion:** a thread reads the headset and controller poses from SteamVR about once a millisecond (`src/poses.cpp`). Every knock needs a controller that moves first, so the thread reads less often when it can (`src/pose_rate.hpp`). While no controller is tracked, such as in standby, it reads 20 times a second. While both controllers stay under 0.1 m/s, it reads 100 times a second. It goes back to every millisecond on the first read that sees a controller move, and stays there for 0.5 s after the last movement. Poses are only valid in SteamVR's standing tracking space on the Frame, so KnockThru reads them there.
 2. **Finding knocks:** the main loop feeds the poses to the knock detector (`src/knock_detector.cpp`). [How knock detection works](knock-detection.md) explains it.
 3. **Acting:** the action for each kind of knock and count comes from `knock_actions` in `config.json` (`src/knock_actions.cpp`). **Knock actions** in Settings sets every kind the same. By default, knocking twice turns passthrough on or off, and knocking thrice switches its style. The other actions show or hide SteamVR's performance graph, or do nothing. Both controllers buzz once after knocking twice, and two times after knocking thrice. Three buzzes mean something failed.
+
+The pose thread picks its read rate from what the last read returned:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "Idle: every 50 ms" as Idle
+    state "Still: every 10 ms" as Still
+    state "Fast: every 1 ms" as Fast
+
+    Idle --> Still: a controller is tracked and still
+    Idle --> Fast: a controller moves faster than 0.1 m/s
+    Still --> Fast: a controller moves faster than 0.1 m/s
+    Fast --> Still: 0.5 s with no movement
+    Still --> Idle: no controller tracked
+    Fast --> Idle: no controller tracked
+```
+
+With the default actions, a double knock runs these steps after the detector reports it:
+
+```mermaid
+sequenceDiagram
+    participant C as Controllers
+    participant M as Main loop<br/>app.cpp
+    participant J as Room View job<br/>own thread, room_view.cpp
+    participant B as Dashboard bar<br/>Steam debug port
+
+    M->>M: detector reports a double knock
+    M->>M: knock_actions picks Passthrough
+    M->>C: 1 buzz
+    M->>J: toggle_room_view() starts the job
+    J->>B: find the bar page (GET /json)
+    J->>B: read the Room View button state
+    J->>B: click the button
+    loop every 100 ms, up to 10 times
+        J->>B: read the button state
+    end
+    J-->>M: passthrough on or off
+    opt button missing or state unchanged
+        M->>C: 3 buzzes
+    end
+```
 
 Knocks do nothing while KnockThru is paused, or in a game where you turned knocks off.
 
