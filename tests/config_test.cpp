@@ -1,5 +1,6 @@
 // Config tests: the tour flag and factory reset, in a scratch user directory.
 #include "check.hpp"
+#include "calibrator.hpp"
 #include "config.hpp"
 
 #include <cstdlib>
@@ -130,6 +131,72 @@ int main() {
             "state survives a save and load");
         std::ofstream(user / "state.json") << "not json";
         check(load_state().steamvr_version.empty(), "a damaged state file gives defaults");
+    }
+
+    // Debug flag and detector sources.
+    check(!load_config(install).debug, "debug starts false");
+    save_debug(true);
+    check(load_config(install).debug, "save_debug(true) loads back");
+    fs::remove(user / "config.json");
+
+    fs::create_directories(install);
+    std::ofstream(install / "config.json")
+        << R"({"detector": {"max_gap_s": 0.3, "merge_s": 0.07, "partner_peak": 40}})";
+    std::ofstream(user / "config.json") << R"({"detector": {"merge_s": 0.06, "same_spot": 0.05}})";
+    calibration = {};
+    calibration.surface = KindCalibration{90, 0.5, {}, {}};
+    calibration.together = KindCalibration{45, 0.5, {}, {}};
+    save_calibration(calibration);
+    {
+        const auto loaded = load_config(install);
+        const auto& sources = loaded.detector_sources;
+        check(sources.size() == 16 && sources.at("headset_peak") == Source::Default,
+            "every detector key has a source, and untouched keys are Default");
+        check(sources.at("max_gap_s") == Source::Install, "an install value has the Install source");
+        check(sources.at("merge_s") == Source::User && loaded.detector.merge_s == 0.06,
+            "a user value overrides the install value and has the User source");
+        check(sources.at("same_spot") == Source::User, "a user value has the User source");
+        check(sources.at("controller_peak") == Source::Calibration && loaded.detector.controller_peak == 90
+                && sources.at("confirmed_peak") == Source::Calibration
+                && sources.at("headset_knock_peak") == Source::Default,
+            "calibrated kinds have the Calibration source");
+        check(sources.at("partner_peak") == Source::Calibration && loaded.detector.partner_peak == 30,
+            "partner_peak is Calibration when calibration lowers it");
+    }
+    calibration.together->peak = 90;
+    save_calibration(calibration);
+    check(load_config(install).detector_sources.at("partner_peak") == Source::Install,
+        "partner_peak keeps its source when calibration leaves it");
+    calibration.together->peak = 45;
+    save_calibration(calibration);
+
+    // Saving tuned detector numbers.
+    std::ofstream(user / "config.json") << R"({"sounds": false, "detector": {"same_spot": 0.05}})";
+    {
+        const auto loaded = load_config(install);
+        auto tuned = loaded.detector;
+        save_detector(tuned, loaded);
+        check(read_text(user / "config.json").find("merge_s") == std::string::npos
+                && read_text(user / "calibration.json").find("\"peak\": 90") != std::string::npos,
+            "unchanged values are not written");
+        tuned.max_gap_s = 0.33;
+        tuned.controller_peak = 100;
+        save_detector(tuned, loaded);
+        const auto saved = load_config(install);
+        check(saved.detector.max_gap_s == 0.33 && saved.detector_sources.at("max_gap_s") == Source::User,
+            "a plain value goes to config.json");
+        check(!saved.sounds && saved.detector.same_spot == 0.05, "saving a detector keeps the other keys");
+        check(read_text(user / "config.json").find("controller_peak") == std::string::npos,
+            "a calibrated peak stays out of config.json");
+        check(saved.detector.controller_peak == 100
+                && saved.detector_sources.at("controller_peak") == Source::Calibration,
+            "a calibrated peak goes to calibration.json and loads back");
+        check(load_calibration().surface->approach == 0.5, "saving a peak keeps the rest of the calibration");
+        tuned = saved.detector;
+        tuned.controller_peak = 10;
+        save_detector(tuned, saved);
+        check(load_config(install).detector.controller_peak == Calibrator::floor(KnockKind::Surface),
+            "a calibrated peak under the floor loads back at the floor");
     }
 
     fs::remove_all(root);
