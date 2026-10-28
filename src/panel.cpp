@@ -33,12 +33,20 @@ void burst(Canvas& canvas, float x, float y, std::optional<float> played, float 
     const float spread = anim::ease_out(*played), fade = 1 - anim::ease_in_out(*played);
     for (int k = 0; k < 8; ++k) {
         const float a = k * anim::kPi / 4 + anim::kPi / 8, dx = std::cos(a), dy = std::sin(a);
-        const float inner = (16 + 18 * spread) * scale, outer = inner + (18 - 8 * spread) * scale;
-        const float half = 2 * scale, nx = -dy * half, ny = dx * half;
-        canvas.polygon(
-            {{{x + dx * inner + nx, y + dy * inner + ny}, {x + dx * outer + nx, y + dy * outer + ny},
-                {x + dx * outer - nx, y + dy * outer - ny}, {x + dx * inner - nx, y + dy * inner - ny}}},
-            faded(kAccent, fade));
+        const float inner = (20 + 14 * spread) * scale, outer = inner + (8 - 2 * spread) * scale;
+        // A short ray with round ends, shaped like the rays in images/logo.svg. A single polygon keeps the
+        // faded color from doubling where separate end circles would overlap the bar.
+        const float half = 3.2f * scale;
+        std::vector<Point> ray;
+        for (const float end : {outer, inner}) {
+            const float cx = x + dx * end, cy = y + dy * end,
+                        turn = end == outer ? -anim::kPi / 2 : anim::kPi / 2;
+            for (int i = 0; i <= 8; ++i) {
+                const float b = a + turn + i * anim::kPi / 8;
+                ray.push_back({cx + std::cos(b) * half, cy + std::sin(b) * half});
+            }
+        }
+        canvas.polygon({ray}, faded(kAccent, fade));
     }
 }
 

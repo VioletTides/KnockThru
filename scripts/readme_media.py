@@ -250,21 +250,26 @@ def buzz(t, action, count):
 
 
 def burst(image, x, y, played, scale=1.0):
-    """Draws impact lines that fly outward and fade to transparent, so they suit any background.
-    played runs from 0 to 1."""
+    """Eight short rays with round ends, shaped like the rays in images/logo.svg. They fly out and
+    fade to transparent, so they suit any background. played runs from 0 to 1."""
     if played is None:
         return
     spread, fade = ease_out(played), 1 - ease_in_out(played)
-    mask = Image.new("L", image.size, 0)
+    up = 4  # drawn at 4x and shrunk, so the round ends come out smooth
+    reach = math.ceil(44 * scale) + 4
+    mask = Image.new("L", (2 * reach * up, 2 * reach * up), 0)
     draw = ImageDraw.Draw(mask)
+    r = 3.2 * scale * up
     for k in range(8):
         a = k * math.pi / 4 + math.pi / 8
-        inner = (16 + 18 * spread) * scale
-        outer = inner + (18 - 8 * spread) * scale
-        draw.line([(x + math.cos(a) * inner, y + math.sin(a) * inner),
-                   (x + math.cos(a) * outer, y + math.sin(a) * outer)], fill=round(255 * fade),
-                  width=max(1, round(4 * scale)))
-    image.paste(ACCENT, (0, 0), mask)
+        inner = (20 + 14 * spread) * scale
+        outer = inner + (8 - 2 * spread) * scale
+        ends = [((reach + math.cos(a) * d) * up, (reach + math.sin(a) * d) * up) for d in (inner, outer)]
+        draw.line(ends, fill=255, width=round(2 * r))
+        for ex, ey in ends:
+            draw.ellipse([ex - r, ey - r, ex + r, ey + r], fill=255)
+    mask = mask.resize((2 * reach, 2 * reach), Image.LANCZOS).point(lambda v: round(v * fade))
+    image.paste(ACCENT, (round(x) - reach, round(y) - reach), mask)
 
 
 def knock_pair(image, cx, cy, h, gap, played, swing, scale=1.0, shake=0.0):
