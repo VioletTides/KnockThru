@@ -91,7 +91,7 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
             title = "Style switched";
             if (state.opaque) title = *state.opaque ? "Style is opaque" : "Style is translucent";
             // A triple knock while passthrough is off sets the style it opens in.
-            detail = state.room_view == false ? "Passthrough is off. It opens in this style"
+            detail = state.room_view == false ? "Passthrough is off: it opens in this style"
                                               : "Knock thrice again to switch back";
         } else {
             const bool on = state.room_view.value_or(false);
@@ -116,7 +116,6 @@ void Panel::tour_screen(const PanelState& state, const TourView& tour) {
         canvas_.text(bold_, "Welcome to KnockThru", cx, 370, 48, kText, Align::Center);
         canvas_.text(regular_, "Knock to switch passthrough, without the side button", cx, 440, 30, kDim,
             Align::Center);
-        canvas_.text(regular_, "This tour takes a few minutes", cx, 484, 30, kDim, Align::Center);
         tour_buttons(true, false, true);
         break;
     }
@@ -132,7 +131,7 @@ void Panel::tour_screen(const PanelState& state, const TourView& tour) {
         for (int k = 0; k < 3; ++k)
             switch_row({kMargin, 136 + k * 112.0f, w, 112},
                 PanelClick{PanelCommand::Kind, static_cast<KnockKind>(k)}, state.enabled[k], kKindTitles[k],
-                kKindOnce[k], true, k > 0);
+                k == 0 ? "" : kKindOnce[k], true, k > 0);
         if (!state.enabled[0] && !state.enabled[1] && !state.enabled[2])
             canvas_.text(regular_, "Turn on at least one knock to continue", kMargin, 530, 28, kError);
         tour_buttons(false, false, state.enabled[0] || state.enabled[1] || state.enabled[2]);

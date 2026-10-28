@@ -119,6 +119,7 @@ private:
     void handle_click(const PanelClick& click, double t);
     void set_knock_action(int count, KnockAction action);
     void toggle_kind(KnockKind kind);
+    void turn_on_kind(KnockKind kind);
     void toggle_blocked_app();
     void factory_reset();
     void end_tour();
@@ -436,6 +437,7 @@ void App::handle_click(const PanelClick& click, double t) {
         break;
     case PanelCommand::SetKnockAction: set_knock_action(click.count, click.action); break;
     case PanelCommand::Kind: toggle_kind(click.kind); break;
+    case PanelCommand::TurnOnKind: turn_on_kind(click.kind); break;
     case PanelCommand::BlockApp: toggle_blocked_app(); break;
     case PanelCommand::FactoryReset: factory_reset(); break;
 
@@ -486,6 +488,16 @@ void App::toggle_kind(KnockKind kind) {
     enabled[i] = !enabled[i];
     if (save([&] { save_knock_types(enabled); }))
         show(std::string(to_string(kind)) + " knocks " + (config_.detector.enabled[i] ? "on" : "off"));
+}
+
+// Turns knocks of `kind` on, for the Saved banner after a calibration.
+void App::turn_on_kind(KnockKind kind) {
+    const auto i = static_cast<int>(kind);
+    if (config_.detector.enabled[i]) return;
+    auto enabled = config_.detector.enabled;
+    enabled[i] = true;
+    if (!save([&] { save_knock_types(enabled); })) return;
+    show(std::string(to_string(kind)) + " knocks on");
 }
 
 void App::toggle_blocked_app() {
@@ -827,7 +839,7 @@ void App::collect_jobs(double t) {
                 log(std::string("Daily update check failed: ") + error.what());
             } else {
                 state_.update = {UpdateStatus::Failed, "", error.what()};
-                show(std::string("Update check failed: ") + error.what(), true);
+                show(error.what(), true); // the Settings header says "Check failed"
             }
         }
         if (panel_) panel_->invalidate();
@@ -1032,8 +1044,8 @@ void App::run_test_command(
     const std::string& line, double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event) {
     static const std::map<std::string, PanelCommand> commands{{"RoomView", PanelCommand::RoomView},
         {"Style", PanelCommand::Style}, {"Pause", PanelCommand::Pause}, {"Kind", PanelCommand::Kind},
-        {"BlockApp", PanelCommand::BlockApp}, {"Calibrate", PanelCommand::Calibrate},
-        {"CancelCalibration", PanelCommand::CancelCalibration},
+        {"TurnOnKind", PanelCommand::TurnOnKind}, {"BlockApp", PanelCommand::BlockApp},
+        {"Calibrate", PanelCommand::Calibrate}, {"CancelCalibration", PanelCommand::CancelCalibration},
         {"SaveCalibration", PanelCommand::SaveCalibration}, {"Sounds", PanelCommand::Sounds},
         {"StartTour", PanelCommand::StartTour}, {"TourNext", PanelCommand::TourNext},
         {"TourBack", PanelCommand::TourBack}, {"TourSkip", PanelCommand::TourSkip},

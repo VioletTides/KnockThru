@@ -162,7 +162,7 @@ void calibration(const std::filesystem::path& out, const PanelState& idle) {
     shot(panel, state, 70.6, out / "calibrate-4-try.png");
     frames(panel, state, out, "try", 71, 2.6);
     state.calibration->trial_passed = false;
-    state.calibration->trial_heard = "a triple surface knock";
+    state.calibration->trial_heard = "a surface knock thrice";
     state.calibration->trial_t = 74;
     shot(panel, state, 74.6, out / "calibrate-4-try-miss.png");
     state.calibration->trial_passed = true;
@@ -173,6 +173,9 @@ void calibration(const std::filesystem::path& out, const PanelState& idle) {
     shot(panel, state, 80, out / "calibrate-saved.png");
     state.enabled[static_cast<int>(KnockKind::Surface)] = false;
     shot(panel, state, 81, out / "calibrate-saved-kind-off.png");
+    state.enabled[static_cast<int>(KnockKind::Surface)] = true;
+    state.paused = true;
+    shot(panel, state, 82, out / "calibrate-saved-paused.png");
 }
 
 // The tour's six steps, with the knock and calibrate steps before and after they finish.
@@ -602,6 +605,10 @@ int main(int argc, char** argv) {
     busy.app_blocked = true;
     busy.enabled = {true, false, true};
     panel.render(busy).write_png(out / "panel-paused.png");
+    // Paused with no game running, where the rows draw disabled.
+    busy.app_key.clear();
+    busy.app_name.clear();
+    panel.render(busy).write_png(out / "panel-paused-no-game.png");
 
     PanelState broken;
     broken.room_view_error = "Turn on CEF Remote Debugging in the Frame's Developer settings.";
@@ -656,13 +663,13 @@ int main(int argc, char** argv) {
         Panel main_panel(KNOCKTHRU_FONTS);
         main_panel.render(updated).write_png(out / "panel-updated.png");
         updated.update_notice = UpdateNotice{true,
-            "Version 0.2.0 was not installed. The downloaded ZIP does not match "
-            "its SHA-256. Nothing changed. You still have version 0.1.0."};
+            "Version 0.2.0 was not installed. The download did not match its checksum. "
+            "Nothing changed. You still have version 0.1.0."};
         main_panel.render(updated).write_png(out / "panel-update-failed.png");
     }
     update.version = "0.1.0";
-    update.update = {UpdateView::Status::Failed, "", "Cannot reach GitHub. Check the Wi-Fi connection."};
-    update.message = "Update check failed: Cannot reach GitHub. Check the Wi-Fi connection.";
+    update.update = {UpdateView::Status::Failed, "", "Cannot reach GitHub: check the Wi-Fi"};
+    update.message = "Cannot reach GitHub: check the Wi-Fi";
     update.message_is_error = true;
     settings_panel.render(update).write_png(out / "panel-settings-update-failed.png");
     update.update = {};

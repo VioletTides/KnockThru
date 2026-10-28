@@ -173,7 +173,7 @@ std::string report_page(const std::string& report, const std::string& issue_link
 <ol>
 <li>Sign in to GitHub if it asks.</li>
 <li>Paste into the <b>Report</b> box.</li>
-<li>Say what went wrong, then tap <b>Create</b>.</li>
+<li>Say what went wrong, then press <b>Create</b>.</li>
 </ol>
 <p>Copy didn't work? <a href=")HTML"
             + html_escape(download)
@@ -184,7 +184,7 @@ std::string report_page(const std::string& report, const std::string& issue_link
             + html_escape(bundle) + R"HTML(" download>Download the report file</a></li>
 <li><a class="button" href=")HTML"
             + html_escape(issue_link) + R"HTML(">Open GitHub</a></li>
-<li>Sign in if it asks. Attach <b class="file">knockthru-report.zip</b> from your downloads, say what went wrong, then tap <b>Create</b>.</li>
+<li>Sign in if it asks. Attach <b class="file">knockthru-report.zip</b> from your downloads, say what went wrong, then press <b>Create</b>.</li>
 </ol>)HTML";
     return R"HTML(<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -219,7 +219,7 @@ textarea:focus-visible{outline:3px solid var(--link);outline-offset:3px}
 @media (prefers-reduced-motion: reduce){button:active,a.button:active{transform:none}}
 </style></head><body><main>
 <h1>KnockThru bug report</h1>
-<p>Sent from your Frame. GitHub gets nothing until you tap Create.</p>
+<p>Sent from your Frame. GitHub gets nothing until you press Create.</p>
 )HTML" + steps
         + R"HTML(
 <details><summary>See the report</summary><label for="report">Report text</label><textarea id="report" readonly>)HTML"

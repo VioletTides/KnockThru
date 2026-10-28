@@ -131,8 +131,8 @@ You can send a bug report from the headset with your phone. You need a GitHub ac
 
 1. Open **Settings** in the KnockThru tab and press **Report**.
 2. Take off the headset. Hold your phone up to either lens and scan the QR code. Your phone must be on the same Wi-Fi as the Frame.
-3. On your phone, tap **Copy report and open GitHub**.
-4. Paste the report, say what went wrong, and tap **Create**.
+3. On your phone, press **Copy report and open GitHub**.
+4. Paste the report, say what went wrong, and press **Create**.
 
 The new issue already has your KnockThru and SteamVR versions filled in.
 

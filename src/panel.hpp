@@ -107,6 +107,7 @@ enum class PanelCommand {
     Style,
     Pause,
     Kind,
+    TurnOnKind, // turns a kind on without toggling it off
     BlockApp,
     Calibrate,
     CancelCalibration,
@@ -214,9 +215,10 @@ private:
     void tour_knock_step(const PanelState& state, const TourView& tour);
     void tour_buttons(bool first, bool last, bool complete);
     void confirm_card(const std::string& title, const std::string& text, const std::string& cancel,
-        Screen cancel_to, const std::string& confirm, PanelClick confirm_click, bool danger);
+        Screen cancel_to, const std::string& confirm, PanelClick confirm_click, bool danger,
+        bool cancel_primary = false);
     void steps(int current, int total);
-    void check_mark(float cx, float cy, float radius, float pop);
+    void check_mark(float cx, float cy, float radius, float pop, std::optional<Color> fill = std::nullopt);
     void knock_scene(KnockKind kind, Rect box, float t, int knocks);
     void settings_screen(const PanelState& state);
     void actions_screen(const PanelState& state);

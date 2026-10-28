@@ -88,7 +88,7 @@ void Panel::switch_control(float right, float cy, bool on, bool enabled, float s
     Color fill = kRaisedHover, knob = kKnobOff;
     if (!enabled) {
         fill = kSurfaceHover;
-        knob = kFaint;
+        knob = kDim;
     } else if (on) {
         fill = kAccent;
         knob = kText;
@@ -102,7 +102,7 @@ void Panel::button(Rect rect, const std::string& label, std::optional<PanelClick
     std::optional<Screen> go_to, bool primary, bool enabled, bool danger, float size) {
     if (!enabled) {
         canvas_.rounded_rect(rect, kRadius, kSurfaceHover);
-        canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, size, kFaint, Align::Center);
+        canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, size, kDim, Align::Center);
         return;
     }
     const bool hover = hovered(rect);
@@ -158,11 +158,11 @@ void Panel::switch_row(Rect rect, std::optional<PanelClick> click, bool on, cons
     if (enabled && hovered(rect)) canvas_.rounded_rect(rect, kRadius, kSurfaceHover);
     if (divider) canvas_.rounded_rect({rect.x + 24, rect.y, rect.w - 48, 1.5f}, 0, kHairline);
     const float title_y = detail.empty() ? rect.y + rect.h / 2 : rect.y + rect.h / 2 - 17;
-    canvas_.text(bold_, canvas_.fit(bold_, title, 30, rect.w - 150), rect.x + 24, title_y, 30,
-        enabled ? kText : kFaint);
+    canvas_.text(
+        bold_, canvas_.fit(bold_, title, 30, rect.w - 150), rect.x + 24, title_y, 30, enabled ? kText : kDim);
     if (!detail.empty())
         canvas_.text(regular_, canvas_.fit(regular_, detail, 26, rect.w - 150), rect.x + 24,
-            rect.y + rect.h / 2 + 21, 26, enabled ? kDim : kFaint);
+            rect.y + rect.h / 2 + 21, 26, kDim);
     switch_control(rect.x + rect.w - 24, rect.y + rect.h / 2, on, enabled, 1);
     if (enabled && click) targets_.push_back({rect, click, std::nullopt});
 }
@@ -172,8 +172,9 @@ void Panel::button_row(Rect rect, const std::string& title, const std::string& d
     const std::string& label, std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger,
     bool divider) {
     if (divider) canvas_.rounded_rect({rect.x + 24, rect.y, rect.w - 48, 1.5f}, 0, kHairline);
-    canvas_.text(bold_, title, rect.x + 24, rect.y + rect.h / 2 - 17, 30, kText);
-    canvas_.text(regular_, detail, rect.x + 24, rect.y + rect.h / 2 + 21, 26, kDim);
+    canvas_.text(bold_, title, rect.x + 24, detail.empty() ? rect.y + rect.h / 2 : rect.y + rect.h / 2 - 17,
+        30, kText);
+    if (!detail.empty()) canvas_.text(regular_, detail, rect.x + 24, rect.y + rect.h / 2 + 21, 26, kDim);
     button({rect.x + rect.w - 24 - 170, rect.y + rect.h / 2 - 30, 170, 60}, label, click, go_to, false, true,
         danger);
 }
@@ -188,9 +189,9 @@ void Panel::steps(int current, int total) {
         canvas_.rounded_rect({left + i * (w + gap), y, w, 8}, 4, i < current ? kAccent : kRaised);
 }
 
-// A check mark drawn as two bars on an accent circle. `pop` scales it from 0 to 1.
-void Panel::check_mark(float cx, float cy, float radius, float pop) {
-    canvas_.circle(cx, cy, radius * pop, kAccent);
+// A check mark drawn as two bars on an accent circle, or on `fill`. `pop` scales it from 0 to 1.
+void Panel::check_mark(float cx, float cy, float radius, float pop, std::optional<Color> fill) {
+    canvas_.circle(cx, cy, radius * pop, fill.value_or(kAccent));
     const float s = pop * radius / 34;
     canvas_.polygon({{{cx - 16 * s, cy}, {cx - 6 * s, cy + 11 * s}, {cx - 6 * s, cy + 20 * s},
                         {cx - 21 * s, cy + 5 * s}}},
@@ -279,7 +280,7 @@ const Canvas& Panel::render(
         tour_screen(state, *state.tour);
         if (screen_ == Screen::SkipTour)
             confirm_card("Skip the tour?", "You can replay it any time from Settings", "Keep going",
-                Screen::Main, "Skip tour", PanelClick{PanelCommand::TourSkip}, false);
+                Screen::Main, "Skip tour", PanelClick{PanelCommand::TourSkip}, false, true);
     } else if (screen_ == Screen::Main) {
         main_screen(state);
     } else if (screen_ == Screen::Settings) {

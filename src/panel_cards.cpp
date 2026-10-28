@@ -46,17 +46,17 @@ void draw_qr(Canvas& canvas, Rect white, const std::string& text) {
 // headset writes the report to a file for the person to attach.
 void Panel::report_card(const PanelState& state) {
     targets_.clear();
-    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
+    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 215});
     const Rect card{80, 60, kWidth - 160, 650};
     canvas_.rounded_rect(card, kRadius, kSurface);
     const float box = 380, x = card.x + 48, text_w = card.w - 96 - box - 40;
     canvas_.text(bold_, "Report a problem", x, card.y + 72, 38, kText);
 
     const auto steps = state.report_full
-        ? std::array<const char*, 3>{"Scan this code with your phone", "Tap Copy report and open GitHub",
-              "Paste, say what went wrong, and tap Create"}
+        ? std::array<const char*, 3>{"Scan this code with your phone", "Press Copy report and open GitHub",
+              "Paste, say what went wrong, and press Create"}
         : std::array<const char*, 3>{"Scan this code with your phone",
-              "Sign in to GitHub and say what went wrong", "Attach the saved report, then tap Create"};
+              "Sign in to GitHub and say what went wrong", "Attach the saved report, then press Create"};
     float y = card.y + 150;
     for (int i = 0; i < 3; ++i) {
         canvas_.circle(x + 22, y, 22, kAccent);
@@ -66,8 +66,8 @@ void Panel::report_card(const PanelState& state) {
             canvas_.text(regular_, lines[k], x + 64, y + k * 40, 28, kText);
         y += 40 * lines.size() + 36;
     }
-    const std::string hint = state.report_full ? "Hold the phone up to a lens. Use the Frame's Wi-Fi"
-                                               : "The Frame is offline. Save the report below to attach it";
+    const std::string hint = state.report_full ? "Hold the phone up to a lens, on the Frame's Wi-Fi"
+                                               : "The Frame is offline: save the report below";
     paragraph(regular_, hint, x, y, 26, 36, text_w, 3, kDim);
 
     // Knock problems need the motion itself, so the report can carry a recording.
@@ -76,12 +76,12 @@ void Panel::report_card(const PanelState& state) {
     std::string record_label = state.recorded ? "Record again" : "Record knocks";
     if (recording) record_label = "Recording " + std::to_string(state.recording_left) + " s";
     button(record, record_label, PanelClick{PanelCommand::RecordKnocks}, std::nullopt, false, !recording);
-    std::string record_note = "Knocks missed or wrong? Record 20 s of them";
+    std::string record_note = "Knocks missed or wrong? Record 20 s";
     if (recording)
         record_note =
-            "Knock the way that goes wrong. Heard " + std::to_string(state.recording_knocks) + " so far.";
+            "Knock the way that goes wrong. Heard " + std::to_string(state.recording_knocks) + " so far";
     else if (state.recorded)
-        record_note = state.report_full ? "Recording added. Your phone gets it in one report file"
+        record_note = state.report_full ? "Recording added to the report file your phone gets"
                                         : "Recording saved as knockthru-knocks.csv.gz";
     const float record_x = record.x + record.w + 24;
     paragraph(regular_, record_note, record_x, record.y + record.h / 2 - 16, 24, 32, text_w - record.w - 24,
@@ -93,7 +93,7 @@ void Panel::report_card(const PanelState& state) {
     const float by = card.y + card.h - 48 - 72;
     const bool saved = !state.report_saved.empty();
     // Offline, the hint above already points here.
-    std::string note = state.report_full ? "No phone? Save the report, then attach it to an issue" : "";
+    std::string note = state.report_full ? "No phone? Save the report and attach it to an issue" : "";
     if (saved) note = "Saved as knockthru-report.txt in your home folder";
     if (!state.report_error.empty()) note = "Not saved: " + state.report_error;
     // The note sits between the two buttons, next to the one it explains.
@@ -105,31 +105,41 @@ void Panel::report_card(const PanelState& state) {
         canvas_.text(regular_, line, note_x, ny, 24, state.report_error.empty() ? kDim : kError);
         ny += 32;
     }
-    button({x, by, 300, 72}, saved ? "Saved" : "Save to headset", PanelClick{PanelCommand::SaveReport},
-        std::nullopt, false, !saved);
+    const Rect save{x, by, 300, 72};
+    if (saved) {
+        // A disabled button that says why: the check mark and its label are drawn here, centered together.
+        canvas_.rounded_rect(save, kRadius, kSurfaceHover);
+        const float r = 16, gap = 14, label_w = canvas_.measure(bold_, "Saved", 28);
+        const float left = save.x + (save.w - (2 * r + gap + label_w)) / 2, cy = save.y + save.h / 2;
+        check_mark(left + r, cy, r, 1, kDim);
+        canvas_.text(bold_, "Saved", left + 2 * r + gap, cy, 28, kDim);
+    } else {
+        button(save, "Save to headset", PanelClick{PanelCommand::SaveReport}, std::nullopt);
+    }
     button({card.x + card.w - 48 - 240, by, 240, 72}, "Done", PanelClick{PanelCommand::CloseReport},
         Screen::Settings, true);
 }
 
 // A confirm card over the screen below it. Only its two buttons respond.
 void Panel::confirm_card(const std::string& title, const std::string& text, const std::string& cancel,
-    Screen cancel_to, const std::string& confirm, PanelClick confirm_click, bool danger) {
+    Screen cancel_to, const std::string& confirm, PanelClick confirm_click, bool danger,
+    bool cancel_primary) {
     targets_.clear();
-    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
+    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 215});
     const Rect card{220, 190, kWidth - 440, 390};
     canvas_.rounded_rect(card, kRadius, kSurface);
     canvas_.text(bold_, title, card.x + 48, card.y + 72, 38, kText);
     paragraph(regular_, text, card.x + 48, card.y + 140, 28, 40, card.w - 96, 3, kText);
     const float by = card.y + card.h - 48 - 72;
-    button({card.x + 48, by, 240, 72}, cancel, std::nullopt, cancel_to);
-    button(
-        {card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, Screen::Main, true, true, danger);
+    button({card.x + 48, by, 240, 72}, cancel, std::nullopt, cancel_to, cancel_primary);
+    button({card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, Screen::Main, !cancel_primary,
+        true, danger);
 }
 
 // The update result over the screen below it. Only OK responds.
 void Panel::update_card(const UpdateNotice& notice) {
     targets_.clear();
-    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
+    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 215});
     // The card grows with the text, from one to three lines.
     const float w = kWidth - 440;
     const auto lines = canvas_.wrap(regular_, notice.text, 28, w - 96, 3);
