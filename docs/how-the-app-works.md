@@ -5,7 +5,7 @@ KnockThru is one program that runs on the Steam Frame itself, not on a PC. Steam
 The code is C++. Each part of the app lives in its own file pair under `src/`. KnockThru talks to these parts of the Frame and to two things outside it:
 
 ```mermaid
-flowchart LR
+flowchart TB
     you([You, knocking])
     subgraph frame [Steam Frame]
         steamvr[SteamVR<br/>poses, overlays, settings, haptics]
@@ -35,7 +35,6 @@ The pose thread picks its read rate from what the last read returned:
 
 ```mermaid
 stateDiagram-v2
-    direction LR
     state "Idle: every 50 ms" as Idle
     state "Still: every 10 ms" as Still
     state "Fast: every 1 ms" as Fast
@@ -51,14 +50,15 @@ stateDiagram-v2
 With the default actions, a double knock runs these steps after the detector reports it:
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false}}}%%
 sequenceDiagram
     participant C as Controllers
     participant M as Main loop<br/>app.cpp
     participant J as Room View job<br/>own thread, room_view.cpp
     participant B as Dashboard bar<br/>Steam debug port
 
-    M->>M: detector reports a double knock
-    M->>M: knock_actions picks Passthrough
+    Note over M: detector reports a double knock
+    Note over M: knock_actions picks Passthrough
     M->>C: 1 buzz
     M->>J: toggle_room_view() starts the job
     J->>B: find the bar page (GET /json)
