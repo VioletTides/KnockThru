@@ -40,13 +40,18 @@ void draw_qr(Canvas& canvas, Rect white, const std::string& text) {
 
 } // namespace panel_style
 
+// Clears the targets and dims the screen below a card, so only the card responds.
+void Panel::scrim() {
+    targets_.clear();
+    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 215});
+}
+
 // The report card over Settings. A phone held to a lens scans the QR code and
 // opens a page the headset serves, which copies the full report and opens the
 // GitHub form. Without a network, the code opens the form directly, and Save to
 // headset writes the report to a file for the person to attach.
 void Panel::report_card(const PanelState& state) {
-    targets_.clear();
-    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 215});
+    scrim();
     const Rect card{80, 60, kWidth - 160, 650};
     canvas_.rounded_rect(card, kRadius, kSurface);
     const float box = 380, x = card.x + 48, text_w = card.w - 96 - box - 40;
@@ -124,8 +129,7 @@ void Panel::report_card(const PanelState& state) {
 void Panel::confirm_card(const std::string& title, const std::string& text, const std::string& cancel,
     Screen cancel_to, const std::string& confirm, PanelClick confirm_click, bool danger,
     bool cancel_primary) {
-    targets_.clear();
-    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 215});
+    scrim();
     const Rect card{220, 190, kWidth - 440, 390};
     canvas_.rounded_rect(card, kRadius, kSurface);
     canvas_.text(bold_, title, card.x + 48, card.y + 72, 38, kText);
@@ -138,8 +142,7 @@ void Panel::confirm_card(const std::string& title, const std::string& text, cons
 
 // The update result over the screen below it. Only OK responds.
 void Panel::update_card(const UpdateNotice& notice) {
-    targets_.clear();
-    canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 215});
+    scrim();
     // The card grows with the text, from one to three lines.
     const float w = kWidth - 440;
     const auto lines = canvas_.wrap(regular_, notice.text, 28, w - 96, 3);

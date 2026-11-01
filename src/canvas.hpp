@@ -38,7 +38,6 @@ public:
     };
     const Glyph& glyph(char32_t codepoint, float size);
     float kerning(char32_t left, char32_t right, float size) const;
-    float ascent(float size) const;
 
 private:
     struct Impl;

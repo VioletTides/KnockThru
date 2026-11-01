@@ -1,5 +1,7 @@
 #include "canvas.hpp"
 
+#include "animation.hpp"
+
 #define STB_TRUETYPE_IMPLEMENTATION
 #define STBTT_STATIC
 #include <stb_truetype.h>
@@ -29,8 +31,6 @@ std::u32string decode_utf8(const std::string& text) {
     }
     return out;
 }
-
-constexpr float kTau = 6.2831853f; // one turn, in radians
 
 float clamp01(float value) { return std::min(1.0f, std::max(0.0f, value)); }
 
@@ -70,12 +70,6 @@ const Font::Glyph& Font::glyph(char32_t codepoint, float size) {
 float Font::kerning(char32_t left, char32_t right, float size) const {
     return stbtt_GetCodepointKernAdvance(&impl_->info, static_cast<int>(left), static_cast<int>(right))
         * stbtt_ScaleForPixelHeight(&impl_->info, size);
-}
-
-float Font::ascent(float size) const {
-    int ascent = 0, descent = 0, gap = 0;
-    stbtt_GetFontVMetrics(&impl_->info, &ascent, &descent, &gap);
-    return ascent * stbtt_ScaleForPixelHeight(&impl_->info, size);
 }
 
 Canvas::Canvas(int width, int height)
@@ -226,7 +220,7 @@ void Canvas::arc(float cx, float cy, float inner, float outer, float from, float
               x1 = static_cast<int>(std::ceil(cx + outer + 1));
     const int y0 = static_cast<int>(std::floor(cy - outer - 1)),
               y1 = static_cast<int>(std::ceil(cy + outer + 1));
-    const bool full = to - from >= kTau - 0.001f; // a whole turn, give or take float rounding
+    const bool full = to - from >= 2 * anim::kPi - 0.001f; // a whole turn, give or take float rounding
     for (int y = y0; y < y1; ++y) {
         for (int x = x0; x < x1; ++x) {
             const float dx = x + 0.5f - cx, dy = cy - (y + 0.5f);
@@ -236,8 +230,8 @@ void Canvas::arc(float cx, float cy, float inner, float outer, float from, float
                 // Brings the angle into one turn starting at `from`, so arcs that
                 // reach past -pi or pi draw whole.
                 float angle = std::atan2(dy, dx);
-                while (angle < from) angle += kTau;
-                while (angle >= from + kTau) angle -= kTau;
+                while (angle < from) angle += 2 * anim::kPi;
+                while (angle >= from + 2 * anim::kPi) angle -= 2 * anim::kPi;
                 const float outside = std::min(angle - from, to - angle);
                 // Round the arc ends by softening a few pixels past each end.
                 coverage *= clamp01(outside * r + 0.5f);
@@ -262,20 +256,12 @@ float Canvas::measure(Font& font, const std::u32string& text, float size) {
 
 std::string Canvas::fit(Font& font, const std::string& utf8, float size, float width) {
     if (measure(font, utf8, size) <= width) return utf8;
-    auto text = decode_utf8(utf8);
+    std::string text = utf8;
     while (!text.empty()) {
-        text.pop_back();
-        std::string out;
-        for (const char32_t c : text) {
-            if (c < 0x80)
-                out += static_cast<char>(c);
-            else if (c < 0x800)
-                out += {static_cast<char>(0xC0 | (c >> 6)), static_cast<char>(0x80 | (c & 0x3F))};
-            else
-                out += {static_cast<char>(0xE0 | (c >> 12)), static_cast<char>(0x80 | ((c >> 6) & 0x3F)),
-                    static_cast<char>(0x80 | (c & 0x3F))};
-        }
-        out += "...";
+        // Drop the last character: its continuation bytes, then its lead byte.
+        while (!text.empty() && (static_cast<unsigned char>(text.back()) & 0xC0) == 0x80) text.pop_back();
+        if (!text.empty()) text.pop_back();
+        const std::string out = text + "...";
         if (measure(font, out, size) <= width) return out;
     }
     return "";

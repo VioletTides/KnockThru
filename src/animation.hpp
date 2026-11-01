@@ -49,18 +49,18 @@ inline float keyframes(float t, std::initializer_list<Key> keys) {
 // every 0.3 s.
 constexpr float kFirstKnock = 0.5f, kKnockGap = 0.3f;
 
-inline float knock_time(int i, float start = kFirstKnock) { return start + i * kKnockGap; }
+inline float knock_time(int i) { return kFirstKnock + i * kKnockGap; }
 
 // How far a controller is from the contact point, from 0 (touching) to 1 (rest).
 // Each knock pulls back a little, speeds up into the contact, and rebounds. After
 // the last knock it settles back to rest.
-inline float knock_motion(float t, int knocks, float start = kFirstKnock) {
-    const float first = knock_time(0, start), last = knock_time(knocks - 1, start);
+inline float knock_motion(float t, int knocks) {
+    const float first = knock_time(0), last = knock_time(knocks - 1);
     if (t <= first)
         return keyframes(t,
             {{first - 0.3f, 1.0f, ease_in_out}, {first - 0.13f, 1.18f, ease_in_out}, {first, 0.0f, ease_in}});
     for (int i = 1; i < knocks; ++i) {
-        const float contact = knock_time(i, start), previous = knock_time(i - 1, start);
+        const float contact = knock_time(i), previous = knock_time(i - 1);
         if (t <= contact)
             return keyframes(t,
                 {{previous, 0.0f, ease_in}, {contact - kKnockGap / 2, 0.55f, ease_out},
@@ -70,9 +70,9 @@ inline float knock_motion(float t, int knocks, float start = kFirstKnock) {
 }
 
 // How far the latest impact has played, from 0 (just made contact) to 1 (faded), or nothing.
-inline std::optional<float> impact(float t, int knocks, float start = kFirstKnock) {
+inline std::optional<float> impact(float t, int knocks) {
     for (int i = knocks - 1; i >= 0; --i) {
-        const float contact = knock_time(i, start);
+        const float contact = knock_time(i);
         if (contact <= t && t < contact + 0.3f) return (t - contact) / 0.3f;
     }
     return std::nullopt;

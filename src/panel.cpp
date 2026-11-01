@@ -58,13 +58,12 @@ Panel::Panel(const std::filesystem::path& fonts)
     background_.rounded_rect({0, 0, kWidth, kHeight}, 28, kBackground);
 }
 
-// Drawing the icon from its outlines is slow, so each size and style is drawn once and kept.
-const Canvas& Panel::icon(int size, IconStyle style) {
-    const auto key = std::make_pair(size, style);
-    auto found = icons_.find(key);
+// Drawing the icon from its outlines is slow, so each size is drawn once and kept.
+const Canvas& Panel::icon(int size) {
+    auto found = icons_.find(size);
     if (found == icons_.end()) {
-        found = icons_.emplace(key, Canvas(size, size)).first;
-        draw_icon(found->second, style);
+        found = icons_.emplace(size, Canvas(size, size)).first;
+        draw_icon(found->second);
     }
     return found->second;
 }
@@ -143,9 +142,10 @@ float Panel::pill_width(const std::string& label, float padding) {
     return canvas_.measure(bold_, label, 22) + 2 * padding;
 }
 
-void Panel::header(const std::string& title) {
-    canvas_.draw(icon(56, IconStyle::Tile), static_cast<int>(kMargin), 40);
-    canvas_.text(bold_, title, kMargin + 76, 68, 38, kText);
+// The Back button and a title, at the top of every screen below Settings or Main.
+void Panel::back_header(const std::string& title, Screen back_to) {
+    button({kMargin, 36, 140, 64}, "Back", std::nullopt, back_to);
+    canvas_.text(bold_, title, kMargin + 172, 68, 38, kText);
 }
 
 void Panel::message(const PanelState& state, float y) {
