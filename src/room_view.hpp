@@ -17,7 +17,7 @@ struct DashboardChanged : std::runtime_error {
 // Approach from toorux/steam-frame-passthrough-toggle (MIT).
 class RoomView {
 public:
-    explicit RoomView(int port = 8080) : port_(port) {}
+    explicit RoomView(int port) : port_(port) {}
 
     // Whether Room View is on. Throws if the port or the button is missing,
     // DashboardChanged for the button.
@@ -29,7 +29,7 @@ public:
     // Tints the white bar icon of `overlay_key` with its button's text color, grey when idle
     // and white on hover, like Steam's own icons. Lasts until the page reloads. `tint` false
     // removes it.
-    void tint_icon(const std::string& overlay_key, bool tint = true) const;
+    void tint_icon(const std::string& overlay_key, bool tint) const;
 
 private:
     int port_;

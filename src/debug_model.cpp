@@ -14,8 +14,6 @@ std::string number(double value, int decimals) {
 
 namespace {
 
-double norm(const Vec3& v) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
-
 std::string title_of(int source) {
     if (source < 0) return "Both controllers";
     if (source == static_cast<int>(Device::Left)) return "Left controller";
@@ -101,11 +99,8 @@ void DebugModel::push(const PoseSample& sample) {
     // SteamVR repeats the last pose between controller updates, as the detector also assumes.
     if (last_t_[d] >= 0 && (sample.velocity == last_velocity_[d] || sample.t <= last_t_[d])) return;
     float accel = 0;
-    if (last_t_[d] >= 0) {
-        const Vec3 change{sample.velocity[0] - last_velocity_[d][0],
-            sample.velocity[1] - last_velocity_[d][1], sample.velocity[2] - last_velocity_[d][2]};
-        accel = static_cast<float>(norm(change) / (sample.t - last_t_[d]));
-    }
+    if (last_t_[d] >= 0)
+        accel = static_cast<float>(acceleration(last_velocity_[d], sample.velocity, sample.t - last_t_[d]));
     last_t_[d] = sample.t;
     last_velocity_[d] = sample.velocity;
     ring_.push_back({sample.device, sample.t, accel});

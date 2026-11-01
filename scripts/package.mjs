@@ -23,7 +23,7 @@ function crc32(bytes) {
 
 // Small ZIP32 writer with explicit Unix modes, so Linux executable bits survive
 // cross-platform packaging. All file names are relative, UTF-8, and use '/'.
-export function createZip(entries) {
+function createZip(entries) {
   if (entries.length > 65535) throw new Error('Too many ZIP entries');
   const local = [], central = [];
   let offset = 0;
@@ -74,17 +74,15 @@ export function createZip(entries) {
   return Buffer.concat([...local, directory, end]);
 }
 
-export function verifyBinary(bytes, platform) {
-  if (platform === 'linux-arm64') {
-    if (bytes.length < 64 || bytes.subarray(0, 4).toString('hex') !== '7f454c46' ||
-        bytes[4] !== 2 || bytes[5] !== 1 || bytes.readUInt16LE(18) !== 183) {
-      throw new Error('linux-arm64 requires a 64-bit little-endian AArch64 ELF executable');
-    }
-    if (![2, 3].includes(bytes.readUInt16LE(16))) throw new Error('ELF file is not executable');
-  } else throw new Error(`Unknown platform: ${platform}`);
+function verifyBinary(bytes) {
+  if (bytes.length < 64 || bytes.subarray(0, 4).toString('hex') !== '7f454c46' ||
+      bytes[4] !== 2 || bytes[5] !== 1 || bytes.readUInt16LE(18) !== 183) {
+    throw new Error('linux-arm64 requires a 64-bit little-endian AArch64 ELF executable');
+  }
+  if (![2, 3].includes(bytes.readUInt16LE(16))) throw new Error('ELF file is not executable');
 }
 
-export function publicBaseUrl(value) {
+function publicBaseUrl(value) {
   const url = new URL(value);
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
     throw new Error('--base-url must be an HTTPS directory URL without credentials, a query, or a fragment');
@@ -108,28 +106,24 @@ function collectFiles(directory, prefix, entries) {
   }
 }
 
-export function packageRelease(options) {
+function packageRelease(options) {
   const root = path.resolve(options.root ?? projectRoot);
   const version = options.version ?? '1.0.0';
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error('Version must be semver, e.g. 1.0.0');
-  const platform = options.platform ?? 'linux-arm64';
-  const binaryName = appName;
-  const binaryPath = path.resolve(options.buildDir ?? path.join(root, 'build-arm64'), 'bin', binaryName);
+  const binaryPath = path.resolve(options.buildDir ?? path.join(root, 'build-arm64'), 'bin', appName);
   const binary = fs.readFileSync(binaryPath);
-  verifyBinary(binary, platform);
-  const entries = [{ name: binaryName, data: binary, mode: 0o755 }];
-  if (platform === 'linux-arm64') {
-    const controlPath = path.join(path.dirname(binaryPath), controlName);
-    if (!fs.existsSync(controlPath) || !fs.lstatSync(controlPath).isFile()) {
-      throw new Error(`Linux release requires a regular management companion: ${controlName}`);
-    }
-    const control = fs.readFileSync(controlPath);
-    verifyBinary(control, platform);
-    if (!control.equals(binary)) {
-      throw new Error(`${controlName} must match the main executable exactly; rebuild with scripts/build-arm64.sh`);
-    }
-    entries.push({ name: controlName, data: control, mode: 0o755 });
+  verifyBinary(binary);
+  const entries = [{ name: appName, data: binary, mode: 0o755 }];
+  const controlPath = path.join(path.dirname(binaryPath), controlName);
+  if (!fs.existsSync(controlPath) || !fs.lstatSync(controlPath).isFile()) {
+    throw new Error(`Linux release requires a regular management companion: ${controlName}`);
   }
+  const control = fs.readFileSync(controlPath);
+  verifyBinary(control);
+  if (!control.equals(binary)) {
+    throw new Error(`${controlName} must match the main executable exactly; rebuild with scripts/build-arm64.sh`);
+  }
+  entries.push({ name: controlName, data: control, mode: 0o755 });
   for (const filename of ['config.json', 'actions.json']) {
     JSON.parse(fs.readFileSync(path.join(root, 'assets', filename), 'utf8'));
   }
@@ -138,39 +132,30 @@ export function packageRelease(options) {
     entries.push({ name: filename, data: fs.readFileSync(path.join(root, filename)), mode: 0o644 });
   }
   for (const filename of ['THIRD_PARTY_NOTICES.md', 'images/framedrop-button.svg']) {
-    const source = path.join(root, filename);
-    if (fs.existsSync(source)) entries.push({ name: filename, data: fs.readFileSync(source), mode: 0o644 });
+    entries.push({ name: filename, data: fs.readFileSync(path.join(root, filename)), mode: 0o644 });
   }
-  const compilerNotices = path.join(root, 'third_party/toolchain-licenses');
-  if (fs.existsSync(compilerNotices)) collectFiles(compilerNotices, 'third_party/toolchain-licenses', entries);
+  collectFiles(path.join(root, 'third_party/toolchain-licenses'), 'third_party/toolchain-licenses', entries);
   const names = new Set();
   for (const entry of entries) {
     if (names.has(entry.name)) throw new Error(`Duplicate archive entry: ${entry.name}`);
     names.add(entry.name);
   }
-  const zipName = `${appName}-${version}-${platform}.zip`;
+  const zipName = `${appName}-${version}-linux-arm64.zip`;
   const outputDir = path.resolve(options.outputDir ?? path.join(root, 'dist'));
   const base = options.baseUrl ? publicBaseUrl(options.baseUrl) : undefined;
-  if (options.fileUrl && !base) throw new Error('--file-url requires --base-url');
   const zip = createZip(entries);
   const sha256 = createHash('sha256').update(zip).digest('hex');
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(path.join(outputDir, zipName), zip);
   fs.writeFileSync(path.join(outputDir, `${zipName}.sha256`), `${sha256}  ${zipName}\n`);
   const result = { archive: path.join(outputDir, zipName), sha256 };
-  if (base && platform === 'linux-arm64') {
+  if (base) {
     const manifestName = `${appName}.framedrop.json`;
-    const fileUrl = options.fileUrl ? new URL(options.fileUrl) : new URL(zipName, base);
-    if (fileUrl.protocol !== 'https:' || fileUrl.username || fileUrl.password || fileUrl.search || fileUrl.hash ||
-        !fileUrl.pathname.endsWith(`/${zipName}`)) {
-      throw new Error('--file-url must be an HTTPS URL ending in the release ZIP filename');
-    }
-    const manifest = { schema: 'framedrop.install/v1', name: displayName, files: [{ url: fileUrl.href, sha256 }] };
+    const manifest = { schema: 'framedrop.install/v1', name: displayName, files: [{ url: new URL(zipName, base).href, sha256 }] };
     fs.writeFileSync(path.join(outputDir, manifestName), JSON.stringify(manifest, null, 2) + '\n');
-    const manifestUrl = options.installManifestUrl ?? latestManifestUrl(base, manifestName);
-    const installUrl = 'https://framedropvr.com/install?manifest=' + encodeURIComponent(manifestUrl);
+    const manifestUrl = latestManifestUrl(base, manifestName);
     result.manifest = path.join(outputDir, manifestName);
-    result.installUrl = installUrl;
+    result.installUrl = 'https://framedropvr.com/install?manifest=' + encodeURIComponent(manifestUrl);
   }
   return result;
 }
@@ -185,10 +170,10 @@ function latestManifestUrl(base, manifestName) {
 
 function main(args) {
   if (args.includes('--help')) {
-    console.log('node scripts/package.mjs --build-dir build-arm64 --version 1.0.0 --platform linux-arm64 [--output-dir dist] [--base-url https://host/releases/v1.0.0/] [--file-url https://host/download/knockthru-1.0.0-linux-arm64.zip] [--install-manifest-url https://host/releases/latest/download/knockthru.framedrop.json]');
+    console.log('node scripts/package.mjs --build-dir build-arm64 --version 1.0.0 [--output-dir dist] [--base-url https://host/releases/v1.0.0/]');
     return;
   }
-  const mapping = { '--build-dir': 'buildDir', '--version': 'version', '--platform': 'platform', '--output-dir': 'outputDir', '--base-url': 'baseUrl', '--file-url': 'fileUrl', '--install-manifest-url': 'installManifestUrl' };
+  const mapping = { '--build-dir': 'buildDir', '--version': 'version', '--output-dir': 'outputDir', '--base-url': 'baseUrl' };
   const options = {};
   for (let i = 0; i < args.length; i += 2) {
     if (!mapping[args[i]] || !args[i + 1] || args[i + 1].startsWith('--')) throw new Error(`Unknown option or missing value: ${args[i]}`);

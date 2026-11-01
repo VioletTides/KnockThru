@@ -8,8 +8,6 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <cstdlib>
-#include <ctime>
 #include <deque>
 #include <fstream>
 #include <sstream>
@@ -23,9 +21,10 @@ namespace fs = std::filesystem;
 
 namespace {
 
-fs::path home_directory() {
-    const auto home = std::getenv("HOME");
-    return home && *home ? home : "/tmp";
+// Where the report files go.
+fs::path report_directory() {
+    const auto home = home_directory();
+    return home.empty() ? fs::path("/tmp") : home;
 }
 
 // The last `count` lines of a text file, or a note if it is missing.
@@ -55,9 +54,9 @@ std::string os_name() {
 
 } // namespace
 
-fs::path report_path() { return home_directory() / "knockthru-report.txt"; }
+fs::path report_path() { return report_directory() / "knockthru-report.txt"; }
 
-fs::path recording_path() { return home_directory() / "knockthru-knocks.csv.gz"; }
+fs::path recording_path() { return report_directory() / "knockthru-knocks.csv.gz"; }
 
 void write_recording(const KnockRecording& recording) {
     const auto csv = user_directory() / "knocks.csv";
@@ -78,27 +77,33 @@ void write_recording(const KnockRecording& recording) {
     for (const auto& line : recording.heard) summary << line << "\n";
 }
 
+std::string registration_text(bool only_if_installed) {
+    auto* apps = vr::VRApplications();
+    const bool installed = apps->IsApplicationInstalled(kAppKey);
+    std::string text = std::string("Registered with SteamVR: ") + (installed ? "yes" : "no") + "\n";
+    if (installed || !only_if_installed) {
+        const auto pid = apps->GetApplicationProcessId(kAppKey);
+        text += std::string("Starts with SteamVR: ")
+            + (apps->GetApplicationAutoLaunch(kAppKey) ? "yes" : "no")
+            + "\nRunning: " + (pid ? "yes, pid " + std::to_string(pid) : "no") + "\n";
+    }
+    return text;
+}
+
 std::string report_text(bool vr, const std::string& room_view) {
     std::ostringstream out;
-    const auto now = std::time(nullptr);
-    char stamp[32];
-    std::strftime(stamp, sizeof stamp, "%F %T", std::localtime(&now));
-    out << "KnockThru bug report, " << stamp << "\n\n";
+    out << "KnockThru bug report, " << time_text("%F %T") << "\n\n";
     out << "KnockThru: " << kVersion << "\n";
     out << "Program: " << executable().string() << "\n";
     out << "System: " << os_name() << "\n";
     if (vr) {
-        auto* apps = vr::VRApplications();
         out << "SteamVR: " << steamvr_version() << "\n";
         const auto remembered = load_state();
         if (!remembered.steamvr_since.empty())
             out << "SteamVR seen since: " << remembered.steamvr_since
                 << (remembered.steamvr_previous.empty() ? "" : ", before that " + remembered.steamvr_previous)
                 << "\n";
-        out << "Registered with SteamVR: " << (apps->IsApplicationInstalled(kAppKey) ? "yes" : "no") << "\n";
-        out << "Starts with SteamVR: " << (apps->GetApplicationAutoLaunch(kAppKey) ? "yes" : "no") << "\n";
-        const auto pid = apps->GetApplicationProcessId(kAppKey);
-        out << "Running: " << (pid ? "yes, pid " + std::to_string(pid) : std::string("no")) << "\n";
+        out << registration_text(false);
         try {
             out << "Style: " << to_string(read_style()) << "\n";
         } catch (const std::exception& error) {
@@ -121,9 +126,8 @@ std::string report_text(bool vr, const std::string& room_view) {
         out << "\n== " << (user / name).string() << " ==\n" << tail(user / name, 400);
     out << "\n== " << (user / "application.log").string() << ", last 300 lines ==\n"
         << tail(user / "application.log", 300);
-    const auto home = std::getenv("HOME");
-    if (home && *home) {
-        const auto steam_log = fs::path(home) / ".local/share/Steam/logs/vrclient_knockthru.txt";
+    if (const auto home = home_directory(); !home.empty()) {
+        const auto steam_log = home / ".local/share/Steam/logs/vrclient_knockthru.txt";
         out << "\n== " << steam_log.string() << ", last 100 lines ==\n" << tail(steam_log, 100);
     }
     return out.str();

@@ -11,6 +11,17 @@ using Vec3 = std::array<double, 3>;
 
 enum class Device { Hmd, Left, Right };
 
+// One reading of a tracked device's pose.
+struct PoseSample {
+    Device device;
+    double t;
+    Vec3 position, velocity;
+};
+
+double norm(const Vec3& v);
+// m/s^2, the change from velocity `from` to velocity `to` over `seconds`.
+double acceleration(const Vec3& from, const Vec3& to, double seconds);
+
 enum class KnockKind { Together, Surface, Headset };
 const char* to_string(KnockKind kind);
 std::optional<KnockKind> parse_knock_kind(const std::string& name);

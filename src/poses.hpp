@@ -61,10 +61,6 @@ public:
         }
     }
 
-    static void feed(KnockDetector& detector, double t, Device device, const vr::TrackedDevicePose_t& pose) {
-        detector.push(device, t, position_of(pose), velocity_of(pose));
-    }
-
     static void write_csv(std::ostream& out, double t, Device device, const vr::TrackedDevicePose_t& pose) {
         write_csv_row(out, t, device, position_of(pose), velocity_of(pose), pose.vAngularVelocity.v);
     }
@@ -108,12 +104,6 @@ private:
 // would stretch those gaps and garble the strength.
 class PoseThread {
 public:
-    struct Sample {
-        Device device;
-        double t;
-        Vec3 position, velocity;
-    };
-
     explicit PoseThread(const Clock& clock) : thread_([this, &clock] { loop(clock); }) {}
     ~PoseThread() {
         stop_ = true;
@@ -123,7 +113,7 @@ public:
 
     // Fills `samples` with the samples since the last call, oldest first. The two
     // buffers trade places, so both keep their capacity and neither allocates again.
-    void take(std::vector<Sample>& samples) {
+    void take(std::vector<PoseSample>& samples) {
         samples.clear();
         std::lock_guard<std::mutex> lock(mutex_);
         samples.swap(samples_);
@@ -137,7 +127,7 @@ private:
         while (!stop_) {
             const auto now = std::chrono::steady_clock::now();
             const double t = clock.seconds_at(now);
-            std::array<Sample, 3> read;
+            std::array<PoseSample, 3> read;
             std::size_t count = 0;
             sampler.sample(
                 [&](Device device, const vr::TrackedDevicePose_t& pose) {
@@ -153,15 +143,14 @@ private:
             for (std::size_t i = 0; i < count; ++i) {
                 if (read[i].device == Device::Hmd) continue;
                 ++controllers;
-                const auto& v = read[i].velocity;
-                fastest = std::max(fastest, std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]));
+                fastest = std::max(fastest, norm(read[i].velocity));
             }
             ticker.tick(rate.next(t, controllers, fastest), now);
         }
     }
 
     std::mutex mutex_;
-    std::vector<Sample> samples_;
+    std::vector<PoseSample> samples_;
     std::atomic<bool> stop_{false};
     std::thread thread_; // last, so it starts after the members it uses
 };

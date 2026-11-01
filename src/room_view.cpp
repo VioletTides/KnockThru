@@ -1,5 +1,7 @@
 #include "room_view.hpp"
 
+#include "http.hpp"
+
 #include <json.hpp>
 
 #include <arpa/inet.h>
@@ -8,7 +10,6 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include <cctype>
 #include <chrono>
 #include <cstdint>
 #include <random>
@@ -32,6 +33,9 @@ constexpr const char* kFindButton = R"JS(
   };
   const button = [...document.querySelectorAll('[role="button"]')].find(roomViewAction);
 )JS";
+
+constexpr const char* kConnectionClosed = "Steam debug port closed the connection";
+constexpr const char* kButtonMissing = "Room View button not found on the SteamVR dashboard";
 
 class Socket {
 public:
@@ -63,7 +67,7 @@ public:
         std::string data(count, '\0');
         for (std::size_t got = 0; got < count;) {
             const auto n = ::recv(fd_, data.data() + got, count - got, 0);
-            if (n <= 0) throw std::runtime_error("Steam debug port closed the connection");
+            if (n <= 0) throw std::runtime_error(kConnectionClosed);
             got += static_cast<std::size_t>(n);
         }
         return data;
@@ -110,8 +114,7 @@ std::string websocket_read(Socket& socket) {
         length = 0;
         for (const char byte : bytes) length = (length << 8) | static_cast<unsigned char>(byte);
     }
-    if ((static_cast<unsigned char>(head[0]) & 0x0F) == 8)
-        throw std::runtime_error("Steam debug port closed the connection");
+    if ((static_cast<unsigned char>(head[0]) & 0x0F) == 8) throw std::runtime_error(kConnectionClosed);
     return socket.receive(length); // the server never masks its frames
 }
 
@@ -121,11 +124,9 @@ std::string bar_websocket_path(int port) {
     // Steam keeps the connection open despite Connection: close, so read
     // exactly Content-Length bytes instead of waiting for the socket to close.
     auto headers = socket.receive_headers();
-    for (auto& c : headers) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    const auto field = headers.find("\r\ncontent-length:");
-    if (field == std::string::npos) throw std::runtime_error("Steam debug port sent no target list");
-    const auto length = std::stoul(headers.substr(field + 17));
-    for (const auto& target : json::parse(socket.receive(length))) {
+    const auto length = content_length(headers);
+    if (!length) throw std::runtime_error("Steam debug port sent no target list");
+    for (const auto& target : json::parse(socket.receive(*length))) {
         const auto url = target.value("url", "");
         const std::string key = "vrOverlayKey=valve.steam.gamepadui.bar";
         const auto at = url.find(key);
@@ -173,7 +174,7 @@ std::string RoomView::evaluate(const std::string& expression) const {
 bool RoomView::active() const {
     const auto state = evaluate(std::string("(() => {") + kFindButton
         + "  if (!button) return 'missing';\n  return roomViewAction(button).active ? 'on' : 'off';\n})()");
-    if (state == "missing") throw DashboardChanged("Room View button not found on the SteamVR dashboard");
+    if (state == "missing") throw DashboardChanged(kButtonMissing);
     return state == "on";
 }
 
@@ -181,7 +182,7 @@ bool RoomView::toggle() const {
     const bool before = active();
     const auto clicked = evaluate(std::string("(() => {") + kFindButton
         + "  if (!button) return 'missing';\n  button.click();\n  return 'clicked';\n})()");
-    if (clicked != "clicked") throw DashboardChanged("Room View button not found on the SteamVR dashboard");
+    if (clicked != "clicked") throw DashboardChanged(kButtonMissing);
     // The button state updates after SteamVR applies the change.
     for (int attempt = 0; attempt < 10; ++attempt) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));

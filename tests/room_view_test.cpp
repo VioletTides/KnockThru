@@ -17,7 +17,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <string>
 #include <thread>
 
@@ -50,11 +49,6 @@ let value;
 try { value = (EXPRESSION); } finally { fs.writeFileSync(statePath, JSON.stringify(state)); }
 process.stdout.write(JSON.stringify(value));
 )JS";
-
-std::string read(const fs::path& path) {
-    std::ifstream stream(path, std::ios::binary);
-    return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
-}
 
 // A Steam client debug port on 127.0.0.1 with two targets, the bar and its popup.
 class FakeDebugPort {

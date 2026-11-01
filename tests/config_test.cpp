@@ -7,22 +7,12 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <iterator>
 #include <string>
 
 #include <unistd.h>
 
 using namespace knockthru;
 namespace fs = std::filesystem;
-
-namespace {
-
-std::string read_text(const fs::path& path) {
-    std::ifstream stream(path);
-    return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
-}
-
-} // namespace
 
 int main() {
     const auto root = fs::temp_directory_path() / ("knockthru-config-test-" + std::to_string(getpid()));
@@ -32,12 +22,7 @@ int main() {
     const auto user = user_directory();
     const auto install = root / "install"; // has no config.json, so defaults apply
 
-    try {
-        reset_user_settings();
-        check(true, "reset with no files does not throw");
-    } catch (const std::exception& error) {
-        check(false, std::string("reset with no files does not throw: ") + error.what());
-    }
+    check(!expect_throw([] { reset_user_settings(); }), "reset with no files does not throw");
 
     check(!load_config(install).tour_done, "tour_done starts false");
     save_tour_done(true);
@@ -64,13 +49,8 @@ int main() {
     check(flags.paused && flags.classic_bar_icon && !flags.sounds && flags.tour_done && !flags.check_updates,
         "every true or false setting loads from config.json");
     std::ofstream(user / "config.json") << R"({"sounds": "yes"})";
-    try {
-        load_config(install);
-        check(false, "a setting that is not true or false is rejected");
-    } catch (const std::exception& error) {
-        check(std::string(error.what()).find("sounds must be true or false") != std::string::npos,
-            "a setting that is not true or false is rejected");
-    }
+    check(expect_throw([&] { load_config(install); }, "sounds must be true or false"),
+        "a setting that is not true or false is rejected");
     fs::remove(user / "config.json");
 
     // Knock actions: defaults, a partial table from the file, a bad action, and saving.
@@ -89,13 +69,8 @@ int main() {
              R"({"knock_actions": {"headset": {"4": "style"}}})",
              R"({"knock_actions": {"elbow": {"2": "style"}}})"}) {
         std::ofstream(user / "config.json", std::ios::trunc) << bad;
-        try {
-            load_config(install);
-            check(false, std::string("knock_actions rejects ") + bad);
-        } catch (const std::exception& error) {
-            check(std::string(error.what()).find("knock_actions maps") != std::string::npos,
-                std::string("knock_actions rejects ") + bad);
-        }
+        check(expect_throw([&] { load_config(install); }, "knock_actions maps"),
+            std::string("knock_actions rejects ") + bad);
     }
     fs::remove(user / "config.json");
     auto changed = KnockActions{};
@@ -107,7 +82,7 @@ int main() {
     save_knock_actions(KnockActions{});
     check(load_config(install).knock_actions.is_default() && !load_config(install).sounds
             && std::ifstream(user / "config.json")
-            && read_text(user / "config.json").find("knock_actions") == std::string::npos,
+            && read(user / "config.json").find("knock_actions") == std::string::npos,
         "saving the defaults removes knock_actions and keeps other settings");
     fs::remove(user / "config.json");
 
@@ -176,8 +151,8 @@ int main() {
         const auto loaded = load_config(install);
         auto tuned = loaded.detector;
         save_detector(tuned, loaded);
-        check(read_text(user / "config.json").find("merge_s") == std::string::npos
-                && read_text(user / "calibration.json").find("\"peak\": 90") != std::string::npos,
+        check(read(user / "config.json").find("merge_s") == std::string::npos
+                && read(user / "calibration.json").find("\"peak\": 90") != std::string::npos,
             "unchanged values are not written");
         tuned.max_gap_s = 0.33;
         tuned.controller_peak = 100;
@@ -186,7 +161,7 @@ int main() {
         check(saved.detector.max_gap_s == 0.33 && saved.detector_sources.at("max_gap_s") == Source::User,
             "a plain value goes to config.json");
         check(!saved.sounds && saved.detector.same_spot == 0.05, "saving a detector keeps the other keys");
-        check(read_text(user / "config.json").find("controller_peak") == std::string::npos,
+        check(read(user / "config.json").find("controller_peak") == std::string::npos,
             "a calibrated peak stays out of config.json");
         check(saved.detector.controller_peak == 100
                 && saved.detector_sources.at("controller_peak") == Source::Calibration,
@@ -202,16 +177,10 @@ int main() {
     if (fs::exists("/dev/full")) {
         // A temp file that is a symlink to /dev/full fails every flush, like a full disk.
         save_paused(false);
-        const auto before = read_text(user / "config.json");
+        const auto before = read(user / "config.json");
         fs::create_symlink("/dev/full", user / "config.json.tmp");
-        bool threw = false;
-        try {
-            save_paused(true);
-        } catch (const std::exception&) {
-            threw = true;
-        }
-        check(threw, "a failed write throws");
-        check(read_text(user / "config.json") == before, "a failed write keeps the old config.json");
+        check(expect_throw([] { save_paused(true); }), "a failed write throws");
+        check(read(user / "config.json") == before, "a failed write keeps the old config.json");
         check(!fs::is_symlink(user / "config.json.tmp") && !fs::exists(user / "config.json.tmp"),
             "a failed write removes the temp file");
     }

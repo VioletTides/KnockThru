@@ -43,7 +43,8 @@ void write_json(const fs::path& path, const json& value) {
     fs::rename(temporary, path);
 }
 
-// Every detector number a config.json can set, by key.
+} // namespace
+
 std::map<std::string, double*> detector_fields(DetectorConfig& d) {
     return {{"controller_peak", &d.controller_peak}, {"confirmed_peak", &d.confirmed_peak},
         {"partner_peak", &d.partner_peak}, {"headset_peak", &d.headset_peak},
@@ -53,6 +54,8 @@ std::map<std::string, double*> detector_fields(DetectorConfig& d) {
         {"same_spot", &d.same_spot}, {"merge_s", &d.merge_s}, {"min_gap_s", &d.min_gap_s},
         {"fast_gap_s", &d.fast_gap_s}, {"max_gap_s", &d.max_gap_s}, {"quiet_before_s", &d.quiet_before_s}};
 }
+
+namespace {
 
 // The kind whose calibration sets a detector key, if any.
 std::optional<KnockKind> calibrated_kind(const std::string& key) {
@@ -91,8 +94,7 @@ void merge(AppConfig& config, const json& file, const fs::path& path, Source sou
             // default.
             const auto bad = [&] {
                 fail("knock_actions maps together, surface, or headset to counts 2 and 3, each passthrough, "
-                     "style, "
-                     "perf_graph, or none");
+                     "style, perf_graph, or none");
             };
             if (!value.is_object()) bad();
             config.knock_actions = {};
@@ -132,12 +134,17 @@ void merge(AppConfig& config, const json& file, const fs::path& path, Source sou
 
 } // namespace
 
+fs::path home_directory() {
+    const auto home = std::getenv("HOME");
+    return home && *home ? fs::path(home) : fs::path();
+}
+
 fs::path user_directory() {
     if (const auto xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg && fs::path(xdg).is_absolute())
         return fs::path(xdg) / "knockthru";
-    const auto home = std::getenv("HOME");
-    if (!home || !*home) throw std::runtime_error("HOME is not set");
-    return fs::path(home) / ".config" / "knockthru";
+    const auto home = home_directory();
+    if (home.empty()) throw std::runtime_error("HOME is not set");
+    return home / ".config" / "knockthru";
 }
 
 namespace {
@@ -291,7 +298,6 @@ Calibration load_calibration() {
     const auto path = user_directory() / "calibration.json";
     const auto file = read_json(path);
     Calibration calibration;
-    bool legacy = false;
     for (const auto kind : {KnockKind::Together, KnockKind::Surface, KnockKind::Headset}) {
         const char* key = to_string(kind);
         if (!file.contains(key)) continue;
@@ -299,44 +305,28 @@ Calibration load_calibration() {
             throw std::runtime_error(path.string() + ": " + key + " " + what);
         };
         const auto& entry = file[key];
+        if (!entry.is_object()) fail("must be an object");
         KindCalibration out;
-        if (entry.is_number()) {
-            out.peak = entry.get<double>();
-            legacy = true;
-        } else if (entry.is_object()) {
-            const auto number = [&](const char* field, double& value) {
-                if (!entry.contains(field)) return;
-                if (!entry[field].is_number()) fail(std::string(field) + " must be a number");
-                value = entry[field].get<double>();
-            };
-            const auto numbers = [&](const char* field, std::vector<double>& values) {
-                if (!entry.contains(field)) return;
-                if (!entry[field].is_array()) fail(std::string(field) + " must be a list of numbers");
-                for (const auto& value : entry[field]) {
-                    if (!value.is_number()) fail(std::string(field) + " must be a list of numbers");
-                    values.push_back(value.get<double>());
-                }
-            };
-            if (!entry.contains("peak")) fail("needs a peak");
-            number("peak", out.peak);
-            number("approach", out.approach);
-            numbers("peaks", out.peaks);
-            numbers("speeds", out.speeds);
-        } else {
-            fail("must be a number or an object");
-        }
+        const auto number = [&](const char* field, double& value) {
+            if (!entry.contains(field)) return;
+            if (!entry[field].is_number()) fail(std::string(field) + " must be a number");
+            value = entry[field].get<double>();
+        };
+        const auto numbers = [&](const char* field, std::vector<double>& values) {
+            if (!entry.contains(field)) return;
+            if (!entry[field].is_array()) fail(std::string(field) + " must be a list of numbers");
+            for (const auto& value : entry[field]) {
+                if (!value.is_number()) fail(std::string(field) + " must be a list of numbers");
+                values.push_back(value.get<double>());
+            }
+        };
+        if (!entry.contains("peak")) fail("needs a peak");
+        number("peak", out.peak);
+        number("approach", out.approach);
+        numbers("peaks", out.peaks);
+        numbers("speeds", out.speeds);
         calibration[kind] = out;
     }
-    // Older files shared one threshold between together and headset knocks.
-    const auto peak_only = [](double peak) {
-        KindCalibration out;
-        out.peak = peak;
-        return out;
-    };
-    if (legacy && !calibration.headset && calibration.together)
-        calibration.headset = peak_only(calibration.together->peak);
-    if (legacy && !calibration.together && calibration.headset)
-        calibration.together = peak_only(calibration.headset->peak);
     return calibration;
 }
 

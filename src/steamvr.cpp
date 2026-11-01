@@ -20,12 +20,16 @@ std::ofstream log_file;
 
 } // namespace
 
-void log(const std::string& message) {
+std::string time_text(const char* format) {
     const auto now = std::time(nullptr);
-    char stamp[32];
-    std::strftime(stamp, sizeof stamp, "%F %T", std::localtime(&now));
+    char text[32];
+    std::strftime(text, sizeof text, format, std::localtime(&now));
+    return text;
+}
+
+void log(const std::string& message) {
     std::cout << message << std::endl;
-    if (log_file.is_open()) log_file << stamp << "  " << message << std::endl;
+    if (log_file.is_open()) log_file << time_text("%F %T") << "  " << message << std::endl;
 }
 
 void open_log() {

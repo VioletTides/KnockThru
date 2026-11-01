@@ -59,11 +59,6 @@ void Calibrator::finish_burst() {
 
 double Calibrator::seconds_left(double now) const { return std::max(0.0, kSeconds - (now - start_)); }
 
-double Calibrator::weakest() const {
-    if (peaks_.empty()) throw std::logic_error("No knocks recorded");
-    return *std::min_element(peaks_.begin(), peaks_.end());
-}
-
 double Calibrator::floor(KnockKind kind) {
     switch (kind) {
     case KnockKind::Surface: return 50;

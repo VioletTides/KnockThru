@@ -10,12 +10,6 @@
 
 namespace knockthru {
 
-struct PoseSample {
-    Device device;
-    double t;
-    Vec3 position, velocity;
-};
-
 // One line of the feed, in the words the debug view shows.
 struct FeedEntry {
     double t; // detector clock, seconds
