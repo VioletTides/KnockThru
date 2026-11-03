@@ -134,9 +134,8 @@ void Panel::main_screen(const PanelState& state) {
 void Panel::settings_screen(const PanelState& state) {
     back_header("Settings", Screen::Main);
     update_control(state);
-    // The debug row is a seventh, so the rows shrink to keep the card's height.
-    const int rows = state.debug ? 7 : 6;
-    const float top = 128, w = kWidth - 2 * kMargin, card = 6 * 92, row = card / rows;
+    // Seven rows share the height of six, at 92 px each.
+    const float top = 128, w = kWidth - 2 * kMargin, card = 6 * 92, row = card / 7;
     canvas_.rounded_rect({kMargin, top, w, card}, kRadius, kSurface);
     button_row({kMargin, top, w, row}, "Knocks getting missed?", "KnockThru learns how hard you knock",
         "Calibrate", std::nullopt, Screen::Pick, false, false);
@@ -148,11 +147,10 @@ void Panel::settings_screen(const PanelState& state) {
         PanelClick{PanelCommand::StartTour}, std::nullopt, false);
     button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
         PanelClick{PanelCommand::ShowReport}, Screen::Report, false);
-    if (state.debug)
-        button_row({kMargin, top + 5 * row, w, row}, "Debug view", "Live knock decisions and tuning", "Open",
-            std::nullopt, Screen::Debug, false);
-    button_row({kMargin, top + (rows - 1) * row, w, row}, "Factory reset", "Delete settings and calibration",
-        "Reset", std::nullopt, Screen::Reset, true);
+    button_row({kMargin, top + 5 * row, w, row}, "Advanced", "Live knock decisions and tuning", "Open",
+        std::nullopt, state.advanced_warning_off ? Screen::Debug : Screen::AdvancedWarning, false);
+    button_row({kMargin, top + 6 * row, w, row}, "Factory reset", "Delete settings and calibration", "Reset",
+        std::nullopt, Screen::Reset, true);
     if (state.message_is_error) message(state, top + card + 40);
 }
 

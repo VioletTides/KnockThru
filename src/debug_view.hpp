@@ -17,7 +17,7 @@ struct Tunable {
     std::string label; // "Surface strength (m/s²)"
     double value, saved; // live and saved
     int decimals;
-    std::string detail; // "From calibration", "From config.json", "Saved value 40", or empty for defaults
+    std::string detail; // "From calibration", "Saved", "Saved value 40", or empty for defaults
 
     bool changed() const { return std::abs(value - saved) > 1e-9; }
 };

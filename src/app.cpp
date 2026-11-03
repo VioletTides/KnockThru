@@ -62,11 +62,11 @@ struct Handled {
     KnockAction action = KnockAction::None; // the one that ran
 };
 
-// The debug view and what feeds it. It exists only while config.json has "debug": true.
+// Advanced and what feeds it. The model takes poses only while Advanced is open.
 struct DebugParts {
     DebugModel model;
     DebugView view;
-    bool open = false; // the debug view was open at the last update
+    bool open = false; // Advanced was open at the last update
     CpuUsage cpu;
     std::string cpu_text, battery_text; // read once a second, since both cost a file read
     double next_usage = 0, next_fill = 0;
@@ -130,7 +130,6 @@ private:
     void collect_jobs(double t);
     void draw_panel(double t);
     void feed_debug(const Handled& handled);
-    void sync_debug();
     void tune_detector(const PanelClick& click);
     void fill_debug_view(double t);
     void update_debug(double t);
@@ -165,7 +164,7 @@ private:
     std::optional<std::string> updated_from_;
     Haptics haptics_;
     std::unique_ptr<DashboardPanel> panel_;
-    std::unique_ptr<DebugParts> debug_;
+    DebugParts debug_;
 
     const std::array<fs::path, 3> config_files_{install_directory() / "config.json",
         user_directory() / "config.json", user_directory() / "calibration.json"};
@@ -258,7 +257,6 @@ App::App() {
         state_.update_notice =
             UpdateNotice{false, std::string("You now have version ") + kVersion + "." + had};
     }
-    sync_debug();
 }
 
 // Logs each SteamVR update, the usual cause when Room View control breaks. A newer KnockThru
@@ -333,7 +331,7 @@ void App::run() {
         for (const auto& sample : samples_) {
             controllers |= sample.device != Device::Hmd;
             detector_.push(sample.device, sample.t, sample.position, sample.velocity);
-            if (debug_) debug_->model.push({sample.device, sample.t, sample.position, sample.velocity});
+            if (debug_.open) debug_.model.push({sample.device, sample.t, sample.position, sample.velocity});
             if (recording_) recording_->samples.push_back(sample);
         }
         auto knock_event = detector_.poll(t);
@@ -464,7 +462,9 @@ void App::handle_click(const PanelClick& click, double t) {
     case PanelCommand::TuneDown:
     case PanelCommand::TuneUp:
     case PanelCommand::UndoTuning:
-    case PanelCommand::KeepTuning: tune_detector(click); break;
+    case PanelCommand::KeepTuning:
+    case PanelCommand::RestoreDefaults: tune_detector(click); break;
+    case PanelCommand::HideAdvancedWarning: save([] { save_advanced_warning_off(true); }); break;
     case PanelCommand::TestBuzz: haptics_.buzz(1, t); break;
     case PanelCommand::TestClick: break; // handle_click already played it
     }
@@ -877,46 +877,31 @@ void App::draw_panel(double t) {
     panel_->set_bar_icon(config_.classic_bar_icon);
     state_.enabled = config_.detector.enabled;
     state_.app_blocked = config_.blocked_apps.count(state_.app_key) > 0;
-    state_.debug = debug_ ? &debug_->view : nullptr;
+    state_.debug = &debug_.view;
+    state_.advanced_warning_off = config_.advanced_warning_off;
     state_.calibration = calibration_;
     panel_->draw(state_, t);
 }
 
-// Hands the detector's candidates and finished sequences to the debug model. Without the model, they are
-// only drained, so they never pile up.
+// Hands the detector's candidates and finished sequences to the debug model. While Advanced is closed, they
+// are only drained, so they never pile up.
 void App::feed_debug(const Handled& handled) {
     const auto candidates = detector_.take_candidates();
     const auto sequences = detector_.take_sequences();
-    if (!debug_) return;
+    if (!debug_.open) return;
     for (const auto& candidate : candidates) {
-        debug_->model.add_candidate(candidate);
+        debug_.model.add_candidate(candidate);
         if (candidate.verdict == Verdict::BelowPeak)
-            debug_->too_light = std::make_pair(candidate.knock.t, candidate.threshold);
+            debug_.too_light = std::make_pair(candidate.knock.t, candidate.threshold);
     }
     // Only an Action sequence reaches handle_knocks, so only it has an outcome.
     for (const auto& sequence : sequences)
-        debug_->model.add_set(sequence,
+        debug_.model.add_set(sequence,
             sequence.verdict == SequenceVerdict::Action ? handled.outcome : SetOutcome::NoAction,
             handled.action);
 }
 
-// Creates or destroys the debug parts to match config.json.
-void App::sync_debug() {
-    if (config_.debug == (debug_ != nullptr)) return;
-    if (!config_.debug) {
-        debug_.reset();
-        log("Debug view off");
-        return;
-    }
-    try {
-        debug_ = std::make_unique<DebugParts>();
-        log("Debug view on");
-    } catch (const std::exception& error) {
-        log(std::string("Debug view unavailable: ") + error.what());
-    }
-}
-
-// Steps, undoes, or saves the detector numbers the debug view tunes.
+// Steps, undoes, saves, or restores the detector numbers Advanced tunes.
 void App::tune_detector(const PanelClick& click) {
     if (calibrator_) {
         show("Tuning waits until the calibration ends");
@@ -933,12 +918,15 @@ void App::tune_detector(const PanelClick& click) {
     case PanelCommand::KeepTuning:
         if (save([&] { save_detector(live, config_); })) show("Detector settings saved");
         break;
+    case PanelCommand::RestoreDefaults:
+        if (save(restore_detector_defaults)) show("Knock numbers restored to the defaults");
+        break;
     default: break;
     }
 }
 
 void App::fill_debug_view(double t) {
-    auto& d = *debug_;
+    auto& d = debug_;
     auto& view = d.view;
     for (std::size_t i = 0; i < view.accel.size(); ++i)
         view.accel[i] = d.model.accel(static_cast<Device>(i), t, 5);
@@ -984,13 +972,16 @@ void App::fill_debug_view(double t) {
     view.status_right = {{"CPU", d.cpu_text, "", false}, {"Battery", d.battery_text, "", false}};
 }
 
-// While the debug view is open, fills it at most 30 times a second. The dashboard tab draws it.
+// Starts the model fresh when Advanced opens. While it is open, fills it at most 30 times a second. The
+// dashboard tab draws the view.
 void App::update_debug(double t) {
-    if (!debug_ || !panel_) return;
-    auto& d = *debug_;
+    if (!panel_) return;
+    auto& d = debug_;
     const bool open = panel_->debug_open();
     if (open != d.open) {
         d.open = open;
+        d.model = DebugModel();
+        d.too_light.reset();
         if (open) read_room_view();
     }
     if (open && t >= d.next_fill) {
@@ -1008,10 +999,10 @@ void App::update_debug(double t) {
 //   knock KIND PEAK APPROACH one knock, with its spike in m/s^2 and approach speed in m/s
 //   action KIND COUNT        a double (2) or triple (3) knock
 //   snapshot PATH            saves the panel as a PNG
-// With "debug": true in config.json, `click 460 68` opens Settings and `click 1050 560` opens the debug
-// view. `click X 160` then picks a tab, with X 227 (Live), 600 (Tuning), or 973 (Status).
-// Reopens the file for each read, because glibc keeps a stream at end of file
-// once it got there, so an open stream never sees lines added later.
+// `click 460 68` opens Settings and `click 1050 560` presses Advanced. On its warning, `click 900 441` flips
+// "Don't remind me" and `click 812 551` opens. `click X 160` then picks a tab, with X 227 (Live), 600
+// (Tuning), or 973 (Status). Reopens the file for each read, because glibc keeps a stream at end of file once
+// it got there, so an open stream never sees lines added later.
 void App::run_test_commands(double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event) {
     std::error_code error;
     const auto size = fs::file_size(test_commands_, error);
@@ -1128,7 +1119,6 @@ void App::reload() {
     config_ = load_config(install_directory());
     stamp_ = config_stamp();
     if (!calibrator_) detector_ = KnockDetector(config_.detector);
-    sync_debug();
 }
 
 // SteamVR's dashboard click. Steam already clicks when the Room View button

@@ -108,10 +108,17 @@ int main() {
         check(load_state().steamvr_version.empty(), "a damaged state file gives defaults");
     }
 
-    // Debug flag and detector sources.
-    check(!load_config(install).debug, "debug starts false");
-    std::ofstream(user / "config.json") << R"({"debug": true})";
-    check(load_config(install).debug, "debug: true loads");
+    // The Advanced warning flag, Restore defaults, and detector sources.
+    check(!load_config(install).advanced_warning_off, "the Advanced warning starts on");
+    save_advanced_warning_off(true);
+    check(load_config(install).advanced_warning_off, "Don't remind me saves");
+    std::ofstream(user / "config.json") << R"({"sounds": false, "detector": {"merge_s": 0.06}})";
+    std::ofstream(user / "calibration.json") << R"({"surface": {"peak": 30, "approach": 0.4}})";
+    restore_detector_defaults();
+    const auto restored = load_config(install);
+    check(restored.detector.merge_s == DetectorConfig{}.merge_s && !restored.sounds
+            && !fs::exists(user / "calibration.json"),
+        "Restore defaults drops tuned and calibrated numbers and keeps other settings");
     fs::remove(user / "config.json");
 
     fs::create_directories(install);

@@ -127,7 +127,7 @@ void Panel::report_card(const PanelState& state) {
 
 // A confirm card over the screen below it. Only its two buttons respond.
 void Panel::confirm_card(const std::string& title, const std::string& text, const std::string& cancel,
-    Screen cancel_to, const std::string& confirm, PanelClick confirm_click, bool danger,
+    Screen cancel_to, const std::string& confirm, PanelClick confirm_click, Screen confirm_to, bool danger,
     bool cancel_primary) {
     scrim();
     const Rect card{220, 190, kWidth - 440, 390};
@@ -136,8 +136,30 @@ void Panel::confirm_card(const std::string& title, const std::string& text, cons
     paragraph(regular_, text, card.x + 48, card.y + 140, 28, 40, card.w - 96, 3, kText);
     const float by = card.y + card.h - 48 - 72;
     button({card.x + 48, by, 240, 72}, cancel, std::nullopt, cancel_to, cancel_primary);
-    button({card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, Screen::Main, !cancel_primary,
+    button({card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, confirm_to, !cancel_primary,
         true, danger);
+}
+
+// The warning before Advanced opens. Its switch stops it from showing again once Open is pressed.
+void Panel::advanced_warning() {
+    scrim();
+    const Rect card{220, 135, kWidth - 440, 500};
+    canvas_.rounded_rect(card, kRadius, kSurface);
+    canvas_.text(bold_, "Advanced settings", card.x + 48, card.y + 72, 38, kText);
+    paragraph(regular_,
+        "These change how KnockThru hears knocks. Wrong values can stop knocks from working. Restore "
+        "defaults in Tuning puts them back. Use them at your own risk.",
+        card.x + 48, card.y + 140, 28, 40, card.w - 96, 4, kText);
+    const Rect remind{card.x + 24, card.y + 270, card.w - 48, 72};
+    switch_row(remind, std::nullopt, dont_remind_, "Don't remind me", "", true, false);
+    targets_.push_back({remind});
+    targets_.back().dont_remind = !dont_remind_;
+    const float by = card.y + card.h - 48 - 72;
+    button({card.x + 48, by, 240, 72}, "Cancel", std::nullopt, Screen::Settings, true);
+    button({card.x + card.w - 48 - 240, by, 240, 72}, "Open",
+        dont_remind_ ? std::optional<PanelClick>(PanelClick{PanelCommand::HideAdvancedWarning})
+                     : std::nullopt,
+        Screen::Debug);
 }
 
 // The update result over the screen below it. Only OK responds.

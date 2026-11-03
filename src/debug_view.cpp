@@ -54,7 +54,7 @@ std::vector<Tunable> tunables(const DetectorConfig& live, const AppConfig& saved
             if (source->second == Source::Calibration)
                 tunable.detail = "From calibration";
             else if (source->second != Source::Default)
-                tunable.detail = "From config.json";
+                tunable.detail = "Saved";
         }
         out.push_back(std::move(tunable));
     }

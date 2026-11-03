@@ -69,7 +69,8 @@ void merge(AppConfig& config, const json& file, const fs::path& path, Source sou
     const auto fail = [&](const std::string& what) { throw std::runtime_error(path.string() + ": " + what); };
     const std::map<std::string, bool*> flags{{"paused", &config.paused},
         {"classic_bar_icon", &config.classic_bar_icon}, {"sounds", &config.sounds},
-        {"tour_done", &config.tour_done}, {"check_updates", &config.check_updates}, {"debug", &config.debug}};
+        {"tour_done", &config.tour_done}, {"check_updates", &config.check_updates},
+        {"advanced_warning_off", &config.advanced_warning_off}};
     for (const auto& [key, value] : file.items()) {
         if (key == "knock_types") {
             if (!value.is_array()) fail("knock_types must be a list");
@@ -229,6 +230,8 @@ void save_knock_actions(const KnockActions& actions) {
 
 void save_tour_done(bool done) { update_user_config("tour_done", done); }
 
+void save_advanced_warning_off(bool off) { update_user_config("advanced_warning_off", off); }
+
 void save_detector(const DetectorConfig& tuned, const AppConfig& loaded) {
     auto tuned_copy = tuned;
     auto loaded_copy = loaded.detector;
@@ -254,13 +257,25 @@ void save_detector(const DetectorConfig& tuned, const AppConfig& loaded) {
     if (detector_changed) update_user_config("detector", detector);
 }
 
+namespace {
+
+void remove_user_file(const char* name) {
+    const auto path = user_directory() / name;
+    std::error_code error;
+    fs::remove(path, error); // a missing file is not an error
+    if (error) throw std::runtime_error("Cannot delete " + path.string() + ": " + error.message());
+}
+
+} // namespace
+
+void restore_detector_defaults() {
+    update_user_config("detector", nullptr);
+    remove_user_file("calibration.json");
+}
+
 void reset_user_settings() {
-    for (const auto* name : {"config.json", "calibration.json"}) {
-        const auto path = user_directory() / name;
-        std::error_code error;
-        fs::remove(path, error); // a missing file is not an error
-        if (error) throw std::runtime_error("Cannot delete " + path.string() + ": " + error.message());
-    }
+    remove_user_file("config.json");
+    remove_user_file("calibration.json");
 }
 
 AppState load_state() {

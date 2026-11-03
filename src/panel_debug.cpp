@@ -32,7 +32,7 @@ Color verdict_color(const FeedEntry& entry) { return entry.good ? kAccent : kErr
 
 // The debug view: a header like Settings', three tabs, and the tab's content.
 void Panel::debug_screen(const DebugView& view) {
-    back_header("Knock debug", Screen::Settings);
+    back_header("Advanced", Screen::Settings);
     const auto tabs = segments({kMargin, 124, kWidth - 2 * kMargin, 72}, {"Live", "Tuning", "Status"},
         static_cast<int>(debug_tab_), kButton, kRaised);
     for (std::size_t i = 0; i < tabs.size(); ++i)
@@ -71,14 +71,18 @@ void Panel::value_row(
     canvas_.text(bold_, value, rect.x + rect.w - 28, rect.y + rect.h / 2, kLabel, color, Align::Right);
 }
 
-// Fills a card with one row per entry: title, detail, and the verdict.
+// Fills a card under an "Earlier" heading with one row per entry: title, detail, and the verdict.
 void Panel::feed_rows(Rect rect, const std::vector<FeedEntry>& entries) {
     const int rows = std::min<int>(entries.size(), kMaxRows);
     if (rows == 0) return;
-    list_card(rect, rows);
+    constexpr float kHeading = 32;
+    canvas_.rounded_rect({rect.x, rect.y, rect.w, kHeading + card_height(rows)}, kRadius, kSurface);
+    const Rect body{rect.x, rect.y + kHeading, rect.w, 0};
+    list_card(body, rows);
+    canvas_.text(bold_, "Earlier", rect.x + 28, rect.y + 38, kLabel, kText);
     for (int i = 0; i < rows; ++i) {
         const auto& entry = entries[i];
-        const Rect r = row_at(rect, i);
+        const Rect r = row_at(body, i);
         value_row(r, entry.title, entry.detail, entry.verdict, verdict_color(entry));
     }
 }
@@ -164,22 +168,22 @@ void Panel::debug_live(const DebugView& view, Rect area) {
     }
     const float set_cy = bottom - 17;
     debug_graph({x, top + 44, w, set_cy - 17 - 14 - (top + 44)}, view, 500);
-    canvas_.text(regular_, "Set", x, set_cy, kLabel, kText);
-    set_dots(x + canvas_.measure(regular_, "Set", kLabel) + 14, set_cy, 11, view.set_knocks);
+    canvas_.text(regular_, "Knocks", x, set_cy, kLabel, kText);
+    set_dots(x + canvas_.measure(regular_, "Knocks", kLabel) + 14, set_cy, 11, view.set_knocks);
 
     // The last knock and the rows under it.
     const float sx = tile.x + tile.w + gap;
-    const Rect last{sx, area.y, side_w, 208};
+    const Rect last{sx, area.y, side_w, 190};
     canvas_.rounded_rect(last, kRadius, kRaised);
-    canvas_.text(bold_, "Last knock", sx + 30, last.y + 40, kLabel, kText);
+    canvas_.text(bold_, "Last knock", sx + 30, last.y + 38, kLabel, kText);
     const float text_w = side_w - 60;
     if (view.last) {
-        canvas_.text(bold_, canvas_.fit(bold_, view.last->verdict, 56, text_w), sx + 30, last.y + 101, 56,
+        canvas_.text(bold_, canvas_.fit(bold_, view.last->verdict, 56, text_w), sx + 30, last.y + 94, 56,
             verdict_color(*view.last));
         canvas_.text(
-            bold_, canvas_.fit(bold_, view.last->detail, 30, text_w), sx + 30, last.y + 162, 30, kDim);
+            bold_, canvas_.fit(bold_, view.last->detail, 30, text_w), sx + 30, last.y + 150, 30, kDim);
     } else {
-        canvas_.text(bold_, "No knocks yet", sx + 30, last.y + 101, 56, kDim);
+        canvas_.text(bold_, "No knocks yet", sx + 30, last.y + 94, 56, kDim);
     }
     feed_rows({sx, last.y + last.h + gap, side_w, 0}, view.recent);
 }
@@ -207,15 +211,23 @@ void Panel::debug_footer(const DebugView& view, Rect rect) {
     const bool dirty =
         std::any_of(view.tunables.begin(), view.tunables.end(), [](const Tunable& t) { return t.changed(); });
     const float h = 64, y = rect.y + 14, right = rect.x + rect.w - 14;
-    const float keep_w = pill_width("Keep after restart", 36), undo_w = pill_width("Undo changes", 36);
-    const Rect keep{right - keep_w, y, keep_w, h}, undo{keep.x - 16 - undo_w, y, undo_w, h};
-    button(undo, "Undo changes", PanelClick{PanelCommand::UndoTuning}, std::nullopt, false, dirty, false,
-        kButton);
-    button(keep, "Keep after restart", PanelClick{PanelCommand::KeepTuning}, std::nullopt, true, dirty, false,
-        kButton);
+    // Unsaved changes get Undo and Keep. Saved settings get Restore defaults, for tuning that broke knocks.
+    float limit = right;
+    if (dirty) {
+        const float keep_w = pill_width("Keep after restart", 36), undo_w = pill_width("Undo changes", 36);
+        const Rect keep{right - keep_w, y, keep_w, h}, undo{keep.x - 16 - undo_w, y, undo_w, h};
+        button(undo, "Undo changes", PanelClick{PanelCommand::UndoTuning}, std::nullopt, false, true, false,
+            kButton);
+        button(keep, "Keep after restart", PanelClick{PanelCommand::KeepTuning}, std::nullopt, true, true,
+            false, kButton);
+        limit = undo.x - 16;
+    } else {
+        const float restore_w = pill_width("Restore defaults", 36);
+        button({right - restore_w, y, restore_w, h}, "Restore defaults", std::nullopt,
+            Screen::RestoreDefaults, false, true, false, kButton);
+    }
 
     float x = rect.x + 28;
-    const float limit = undo.x - 16;
     if (debug_all_) {
         const float fewer_w = pill_width("Fewer settings", 28);
         button({x - 14, y, fewer_w, h}, "Fewer settings", std::nullopt, std::nullopt, false, true, false,

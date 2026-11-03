@@ -15,7 +15,7 @@ namespace {
 // The Live tab's graph tile, in canvas pixels.
 constexpr int kTileLeft = 40, kTileRight = 616, kTileTop = 220, kTileBottom = 734;
 
-// A panel on the debug view's Live tab, reached by clicking Settings and then the Debug view row.
+// A panel on Advanced's Live tab, reached by clicking Settings, the Advanced row, and Open on its warning.
 struct DebugScreen {
     DebugView view;
     PanelState state;
@@ -27,6 +27,8 @@ struct DebugScreen {
         panel.click(460, 60);
         panel.render(state);
         panel.click(1050, 560);
+        panel.render(state);
+        panel.click(812, 551);
     }
 
     // The screen with the left controller steady at 30 m/s² except for `middle` halfway along.

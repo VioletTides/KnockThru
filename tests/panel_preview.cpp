@@ -91,7 +91,11 @@ void debug_view(const std::filesystem::path& out, const PanelState& idle) {
         panel.click(x, y);
     };
     click(460, 60); // Settings
-    click(1050, 560); // the Debug view row
+    click(1050, 560); // the Advanced row
+    panel.render(state).write_png(out / "debug-warning.png");
+    click(900, 441); // Don't remind me
+    panel.render(state).write_png(out / "debug-warning-remind.png");
+    click(812, 551); // Open
     const std::array<std::pair<float, const char*>, 3> tabs{
         {{227, "live"}, {600, "tuning"}, {973, "status"}}};
     for (const auto& [x, name] : tabs) {
@@ -103,6 +107,9 @@ void debug_view(const std::filesystem::path& out, const PanelState& idle) {
     panel.render(state).write_png(out / "debug-tuning-all.png");
     view.tunables = tunables(saved.detector, saved);
     panel.render(state).write_png(out / "debug-tuning-saved.png");
+    click(1000, 680); // Restore defaults
+    panel.render(state).write_png(out / "debug-restore.png");
+    click(388, 496); // Cancel
 
     // A fast swing: the right controller passes the 100 m/s² full scale for 0.5 s, and one bucket is not a
     // number. The left trace has a run of off-scale buckets and an infinite one.
@@ -232,11 +239,11 @@ struct Recorder {
     std::filesystem::path dir;
     double t = 100;
     int index = 0;
-    std::optional<Point> pointer;   // starts and ends the loop at kRest
+    std::optional<Point> pointer; // starts and ends the loop at kRest
     std::optional<Point> from, bend, to; // a pointer move in progress, along a curve through bend
     double move_t = 0, move_s = 0;
-    std::vector<int> cuts;          // frames where the clock jumps, to cross-fade
-    std::vector<int> clicks;        // frames where the pointer clicks
+    std::vector<int> cuts; // frames where the clock jumps, to cross-fade
+    std::vector<int> clicks; // frames where the pointer clicks
     std::ofstream log{(std::filesystem::create_directories(dir), dir / "pointer.txt")};
 
     void play(const PanelState& state, double seconds) { until(state, t + seconds); }
@@ -629,11 +636,6 @@ int main(int argc, char** argv) {
     settings_panel.render(idle);
     settings_panel.click(460, 60);
     settings_panel.render(idle, std::make_pair(600.0f, 200.0f)).write_png(out / "panel-settings.png");
-    const DebugView debug_data;
-    PanelState debugging = idle;
-    debugging.debug = &debug_data;
-    settings_panel.render(debugging, std::make_pair(600.0f, 200.0f))
-        .write_png(out / "panel-settings-debug.png");
     PanelState update = idle;
     update.version = "0.1.0";
     settings_panel.render(update).write_png(out / "panel-settings-update-idle.png");

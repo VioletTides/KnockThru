@@ -26,7 +26,7 @@ struct AppConfig {
     bool sounds = true;
     bool tour_done = false;
     bool check_updates = true;
-    bool debug = false; // shows the debug view
+    bool advanced_warning_off = false; // Advanced in Settings opens without its warning
     KnockActions knock_actions;
 };
 
@@ -82,12 +82,17 @@ void save_sounds(bool sounds);
 // Writes the table, or removes the key when every action is the default.
 void save_knock_actions(const KnockActions& actions);
 void save_tour_done(bool done);
+void save_advanced_warning_off(bool off);
 
 // Writes each detector number in `tuned` that differs from `loaded.detector`. A calibrated number goes
 // to its kind's `peak` in calibration.json, which would override config.json. The rest go to config.json.
 // Loading raises a calibrated peak to Calibrator::floor() and lowers partner_peak to two thirds of the
 // together peak, so those two may not load back unchanged.
 void save_detector(const DetectorConfig& tuned, const AppConfig& loaded);
+
+// Removes `detector` from the user config.json and deletes calibration.json, so every detector number
+// goes back to its default. The other settings stay.
+void restore_detector_defaults();
 
 // Deletes only the user config.json and calibration.json.
 void reset_user_settings();
