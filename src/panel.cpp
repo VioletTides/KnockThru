@@ -167,14 +167,11 @@ void Panel::switch_row(Rect rect, std::optional<PanelClick> click, bool on, cons
     if (enabled && click) targets_.push_back({rect, click, std::nullopt});
 }
 
-// A settings row with a title, a detail line, and a button at the right.
-void Panel::button_row(Rect rect, const std::string& title, const std::string& detail,
-    const std::string& label, std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger,
-    bool divider) {
+// A settings row with a title and a button at the right.
+void Panel::button_row(Rect rect, const std::string& title, const std::string& label,
+    std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger, bool divider) {
     if (divider) canvas_.rounded_rect({rect.x + 24, rect.y, rect.w - 48, 1.5f}, 0, kHairline);
-    canvas_.text(bold_, title, rect.x + 24, detail.empty() ? rect.y + rect.h / 2 : rect.y + rect.h / 2 - 17,
-        30, kText);
-    if (!detail.empty()) canvas_.text(regular_, detail, rect.x + 24, rect.y + rect.h / 2 + 21, 26, kDim);
+    canvas_.text(bold_, title, rect.x + 24, rect.y + rect.h / 2, 30, kText);
     button({rect.x + rect.w - 24 - 170, rect.y + rect.h / 2 - 30, 170, 60}, label, click, go_to, false, true,
         danger);
 }

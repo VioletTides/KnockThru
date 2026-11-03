@@ -268,7 +268,7 @@ private:
     void style_control(Rect rect, const PanelState& state);
     void switch_row(Rect rect, std::optional<PanelClick> click, bool on, const std::string& title,
         const std::string& detail, bool enabled, bool divider);
-    void button_row(Rect rect, const std::string& title, const std::string& detail, const std::string& label,
+    void button_row(Rect rect, const std::string& title, const std::string& label,
         std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger, bool divider = true);
     void button(Rect rect, const std::string& label, std::optional<PanelClick> click,
         std::optional<Screen> go_to, bool primary = false, bool enabled = true, bool danger = false,
