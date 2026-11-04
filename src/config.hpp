@@ -51,7 +51,6 @@ struct KindCalibration {
     std::vector<double> peaks, speeds; // the recorded knocks
 };
 
-// Older files hold a bare spike threshold per kind, which loads as `peak` alone.
 struct Calibration {
     std::optional<KindCalibration> surface, together, headset;
     std::optional<KindCalibration>& operator[](KnockKind kind) {
