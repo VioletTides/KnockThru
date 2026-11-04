@@ -65,10 +65,6 @@ To use the approach threshold, a set of knocks needs at least one knock that rea
 - Dropping slow knocks before grouping them let leftover spikes form false doubles in `play` and `noise`. Slow knocks still join their set, so clapping runs stay rejected.
 - Making every knock in a set reach the threshold lost most together doubles, because the second knock of a quick double starts from the rebound and comes in slow.
 
-### The slider that got cut
-
-An earlier version had a sensitivity slider from 30 to 80 percent, in place of the fixed 55. In the replays, anything stricter than 55 percent only lost real doubles. 30 percent matched 55 on surface and headset knocks and did a little better on together knocks, but it leaves less room for movement the recordings don't have. The slider didn't earn its place, so the walkthrough uses 55 percent.
-
 ## How well it works
 
 The tests calibrate each kind on its own recording, apply the result, and replay every recording. These are the results today:
