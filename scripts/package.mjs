@@ -128,10 +128,8 @@ function packageRelease(options) {
     JSON.parse(fs.readFileSync(path.join(root, 'assets', filename), 'utf8'));
   }
   collectFiles(path.join(root, 'assets'), '', entries);
-  for (const filename of ['README.md', 'LICENSE', 'third_party/openvr/LICENSE', 'third_party/json/LICENSE.MIT', 'third_party/vulkan/MIT.txt']) {
-    entries.push({ name: filename, data: fs.readFileSync(path.join(root, filename)), mode: 0o644 });
-  }
-  for (const filename of ['THIRD_PARTY_NOTICES.md', 'images/framedrop-button.svg']) {
+  for (const filename of ['README.md', 'LICENSE', 'third_party/openvr/LICENSE', 'third_party/json/LICENSE.MIT', 'third_party/vulkan/MIT.txt',
+    'THIRD_PARTY_NOTICES.md', 'images/framedrop-button.svg']) {
     entries.push({ name: filename, data: fs.readFileSync(path.join(root, filename)), mode: 0o644 });
   }
   collectFiles(path.join(root, 'third_party/toolchain-licenses'), 'third_party/toolchain-licenses', entries);
