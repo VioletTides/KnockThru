@@ -144,7 +144,8 @@ private:
     void save_app_state();
     std::string config_stamp() const;
     void show(const std::string& message, bool error = false);
-    // Reads the settings again. With `keep`, unsaved Tuning numbers stay in the detector.
+    // Reads the settings again. With `keep`, unsaved Tuning numbers stay in the detector. A bad file is
+    // skipped, and its error is thrown after the rest load.
     void reload(bool keep = true);
     void play_click();
     void prepare_click();
@@ -251,7 +252,7 @@ App::App() {
         }
     }
 
-    if (!startup_error_.empty()) show("Settings not loaded: " + startup_error_, true);
+    if (!startup_error_.empty()) show("A settings file did not load: " + startup_error_, true);
 
     state_.version = kVersion;
     if (updated_from_) {
@@ -397,7 +398,7 @@ bool App::slow_check(double t) {
             reload();
             log("Settings reloaded");
         } catch (const std::exception& error) {
-            show(std::string("Settings not reloaded: ") + error.what(), true);
+            show(std::string("A settings file did not load: ") + error.what(), true);
         }
     }
     // Room View can also change from the bar or the side button
@@ -640,8 +641,7 @@ void App::save_calibration(double t) {
         show(std::string("Calibration not saved: ") + error.what(), true);
         return;
     }
-    // The file is written, so the calibration ends even when the settings do not reload. The next reload that
-    // works picks it up.
+    // The file is written, so the calibration ends even when another settings file does not load.
     std::string reload_error;
     try {
         reload(false);
@@ -650,7 +650,7 @@ void App::save_calibration(double t) {
     }
     end_calibration();
     if (!reload_error.empty()) {
-        show("Calibration saved, but the settings did not reload: " + reload_error, true);
+        show("Calibration saved, but a settings file did not load: " + reload_error, true);
         return;
     }
     show("Calibration saved");
@@ -1146,12 +1146,16 @@ void App::show(const std::string& message, bool error) {
 
 void App::reload(bool keep) {
     const auto saved = config_.detector;
-    config_ = load_config(install_directory());
+    // The files that load count even when one fails, so the next toggle starts from what was saved.
+    std::string error;
+    config_ = load_config_or_defaults(install_directory(), error);
     stamp_ = config_stamp();
-    if (calibrator_) return;
-    auto next = config_.detector;
-    if (keep) keep_tuning(next, detector_.config(), saved);
-    detector_ = KnockDetector(next);
+    if (!calibrator_) {
+        auto next = config_.detector;
+        if (keep) keep_tuning(next, detector_.config(), saved);
+        detector_ = KnockDetector(next);
+    }
+    if (!error.empty()) throw std::runtime_error(error);
 }
 
 // SteamVR's dashboard click. Steam already clicks when the Room View button
@@ -1273,7 +1277,7 @@ bool App::save(const std::function<void()>& write, bool keep) {
         reload(keep);
         return true;
     } catch (const std::exception& error) {
-        show(std::string("Settings saved, but they did not reload: ") + error.what(), true);
+        show(std::string("Settings saved, but a settings file did not load: ") + error.what(), true);
         return false;
     }
 }

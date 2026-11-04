@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <stdexcept>
 
@@ -177,28 +178,36 @@ AppConfig default_config() {
 
 } // namespace
 
-AppConfig load_config(const fs::path& install_directory) {
+AppConfig load_config_or_defaults(const fs::path& install_directory, std::string& error) {
     auto config = default_config();
-    merge(config, read_json(install_directory / "config.json"), install_directory / "config.json",
-        Source::Install);
-    merge(
-        config, read_json(user_directory() / "config.json"), user_directory() / "config.json", Source::User);
-    apply_calibration(load_calibration(), config.detector, &config.detector_sources);
+    // Each file loads into a copy, so a file that fails halfway leaves nothing behind.
+    const auto load = [&](const std::function<void(AppConfig&)>& apply) {
+        auto next = config;
+        try {
+            apply(next);
+            config = std::move(next);
+        } catch (const std::exception& failure) {
+            if (error.empty()) error = failure.what();
+        }
+    };
+    load([&](AppConfig& next) {
+        merge(next, read_json(install_directory / "config.json"), install_directory / "config.json",
+            Source::Install);
+    });
+    load([](AppConfig& next) {
+        merge(next, read_json(user_directory() / "config.json"), user_directory() / "config.json",
+            Source::User);
+    });
+    load([](AppConfig& next) {
+        apply_calibration(load_calibration(), next.detector, &next.detector_sources);
+    });
     return config;
 }
 
-AppConfig load_config_or_defaults(const fs::path& install_directory, std::string& error) {
-    try {
-        return load_config(install_directory);
-    } catch (const std::exception& failure) {
-        error = failure.what();
-    }
-    auto config = default_config();
-    try {
-        apply_calibration(load_calibration(), config.detector, &config.detector_sources);
-    } catch (const std::exception&) {
-        // The calibration file is bad too. The defaults stand.
-    }
+AppConfig load_config(const fs::path& install_directory) {
+    std::string error;
+    auto config = load_config_or_defaults(install_directory, error);
+    if (!error.empty()) throw std::runtime_error(error);
     return config;
 }
 

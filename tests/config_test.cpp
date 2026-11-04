@@ -181,6 +181,26 @@ int main() {
             "a calibrated peak under the floor loads back at the floor");
     }
 
+    {
+        // A bad file is skipped, and the files that load still count.
+        std::ofstream(user / "config.json", std::ios::trunc) << R"({"sounds": false})";
+        std::ofstream(user / "calibration.json", std::ios::trunc) << R"({"surface": {)";
+        std::string error;
+        const auto loaded = load_config_or_defaults(install, error);
+        check(!loaded.sounds && error.find("calibration.json") != std::string::npos,
+            "a bad calibration.json keeps the config.json settings");
+        check(expect_throw([&] { load_config(install); }), "load_config throws on a bad file");
+        std::ofstream(user / "calibration.json", std::ios::trunc) << R"({"surface": {"peak": 90}})";
+        std::ofstream(user / "config.json", std::ios::trunc) << "{";
+        error.clear();
+        const auto calibrated = load_config_or_defaults(install, error);
+        check(calibrated.detector_sources.at("controller_peak") == Source::Calibration
+                && error.find("config.json") != std::string::npos,
+            "a bad config.json keeps the calibration");
+        fs::remove(user / "calibration.json");
+        fs::remove(user / "config.json");
+    }
+
     if (fs::exists("/dev/full")) {
         // A temp file that is a symlink to /dev/full fails every flush, like a full disk.
         save_paused(false);
