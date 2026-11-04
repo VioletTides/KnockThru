@@ -92,7 +92,7 @@ Open the SteamVR dashboard and pick the **KnockThru** tab to do everything by ha
 - **KnockThru On**: turns knocking off for a while without quitting the app
 - **Controllers together**, **Controller on a surface**, **Knock on the headset**: pick which knock kinds count
 - **Knocks in** your game: turns knocks off only in the game you're playing, for games where you knock things on purpose
-- **Settings**: updates, Calibrate, Knock actions, Sounds, Guided tour, Report, and Factory reset
+- **Settings**: updates, Calibrate, Knock actions, Sounds, Guided tour, Report, Advanced, and Factory reset
 
 ## Calibrate
 
