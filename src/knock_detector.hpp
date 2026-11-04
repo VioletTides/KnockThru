@@ -99,7 +99,7 @@ enum class SequenceVerdict {
     WrongCount, // not 2 or 3 knocks
     NotQuiet, // started within quiet_before_s of the previous sequence
     MixedKinds,
-    MixedSources, // different devices, or a together knock among single ones
+    MixedSources, // surface knocks from different hands
     MixedSpots, // surface knocks further apart than same_spot
     TooSlow, // no knock approached at min_approach
     KindOff,

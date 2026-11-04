@@ -9,6 +9,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace knockthru {
@@ -32,6 +33,8 @@ struct AppConfig {
 
 // Every detector number a config.json can set, by key.
 std::map<std::string, double*> detector_fields(DetectorConfig& d);
+// The detector number a key names, or nullptr for an unknown key.
+double DetectorConfig::* detector_member(std::string_view key);
 
 // state.json, for what is not a setting. A missing or bad file gives defaults.
 struct AppState {

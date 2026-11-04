@@ -56,6 +56,12 @@ void check_app(vr::EVRApplicationError error, const char* what) {
             std::string(what) + ": " + vr::VRApplications()->GetApplicationsErrorNameFromEnum(error));
 }
 
+void check_setting(vr::EVRSettingsError error, const char* name) {
+    if (error != vr::VRSettingsError_None)
+        throw std::runtime_error(
+            std::string(name) + ": " + vr::VRSettings()->GetSettingsErrorNameFromEnum(error));
+}
+
 std::string scene_app_key() {
     const auto pid = vr::VRCompositor() ? vr::VRCompositor()->GetCurrentSceneFocusProcess() : 0;
     if (!pid) return "";

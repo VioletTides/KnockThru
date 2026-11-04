@@ -28,6 +28,7 @@ class DebugModel {
 public:
     static constexpr double kKeepSeconds = 6; // pose history, the graph's 5 s with slack
     static constexpr double kBucketSeconds = 0.01; // graph resolution
+    static constexpr double kGraphSeconds = 5; // the Live graph's span
     static constexpr std::size_t kFeedSize = 4; // the last knock and the three rows under it
 
     // Samples whose velocity equals the device's last one are repeats and are dropped. So are samples

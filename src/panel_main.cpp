@@ -110,7 +110,7 @@ void Panel::main_screen(const PanelState& state) {
     if (state.app_key.empty()) {
         switch_row({x, y, w, 128}, std::nullopt, false, "No game running", "", false, true);
     } else {
-        const auto name = state.app_name.empty() ? state.app_key : state.app_name;
+        const auto name = state.game_name();
         switch_row({x, y, w, 128}, PanelClick{PanelCommand::BlockApp}, !state.app_blocked,
             "Knocks in " + name, state.app_blocked ? "Off for this game only" : "", true, true);
     }

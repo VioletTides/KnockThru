@@ -76,6 +76,8 @@ struct PanelState {
     std::array<bool, 3> enabled{true, true, true}; // per KnockKind
     KnockActions knock_actions;
     std::string app_key, app_name; // the running game, empty when none
+    // The name of the app in front, or its key when SteamVR gives no name.
+    std::string game_name() const { return app_name.empty() ? app_key : app_name; }
     bool app_blocked = false;
     const DebugView* debug = nullptr; // what Advanced in Settings shows
     bool advanced_warning_off = false; // Advanced opens without its warning
@@ -245,9 +247,9 @@ private:
     void tour_screen(const PanelState& state, const TourView& tour);
     void tour_knock_step(const PanelState& state, const TourView& tour);
     void tour_buttons(bool first, bool last, bool complete);
-    void confirm_card(const std::string& title, const std::string& text, const std::string& cancel,
-        Screen cancel_to, const std::string& confirm, PanelClick confirm_click, Screen confirm_to,
-        bool danger, bool cancel_primary = false);
+    Rect confirm_card(const std::string& title, const std::string& text, const std::string& cancel,
+        Screen cancel_to, const std::string& confirm, std::optional<PanelClick> confirm_click,
+        Screen confirm_to, bool danger, bool cancel_primary = false, float height = 390, int max_lines = 3);
     void steps(int current, int total);
     void check_mark(float cx, float cy, float radius, float pop, std::optional<Color> fill = std::nullopt);
     void knock_scene(KnockKind kind, Rect box, float t, int knocks);
@@ -282,9 +284,9 @@ private:
     void debug_stepper(Rect rect, const Tunable& tunable, int index);
     void debug_footer(const DebugView& view, Rect rect);
     void debug_status(const DebugView& view, Rect area);
-    void debug_graph(Rect rect, const DebugView& view, int points);
+    void debug_graph(Rect rect, const DebugView& view);
     void set_dots(float x, float cy, float radius, int filled);
-    void list_card(Rect rect, int rows, float row_height = 80);
+    void list_card(Rect rect, int rows, float row_height = 80, float heading = 0);
     void list_row(
         Rect rect, const std::string& label, const std::string& detail, float reserve, bool hover_fill);
     void value_row(Rect rect, const std::string& label, const std::string& detail, const std::string& value,

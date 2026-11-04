@@ -50,6 +50,9 @@ public:
 
 // Throws with SteamVR's name for `error`, unless it is VRApplicationError_None.
 void check_app(vr::EVRApplicationError error, const char* what);
+// Throws with SteamVR's name for `error`, unless it is VRSettingsError_None. `name` is the setting as
+// "section.key".
+void check_setting(vr::EVRSettingsError error, const char* name);
 
 // Writes `target` with `write(target, &error)`, then reads it back with `read()`. Throws if SteamVR
 // reports an error or did not keep the value. `name` is the setting as "section.key".
@@ -57,9 +60,7 @@ template <typename T, typename Read, typename Write>
 void set_setting(const char* name, T target, Read read, Write write) {
     vr::EVRSettingsError error = vr::VRSettingsError_None;
     write(target, &error);
-    if (error != vr::VRSettingsError_None)
-        throw std::runtime_error(
-            std::string(name) + ": " + vr::VRSettings()->GetSettingsErrorNameFromEnum(error));
+    check_setting(error, name);
     if (read() != target)
         throw std::runtime_error(
             std::string("SteamVR did not keep ") + name + ". The runtime may have rejected it.");

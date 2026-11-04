@@ -114,7 +114,6 @@ private:
     void set_knock_action(int count, KnockAction action);
     void toggle_kind(KnockKind kind);
     void toggle_blocked_app();
-    std::string game_name() const;
     void factory_reset();
     void end_tour();
     void check_for_update();
@@ -402,8 +401,10 @@ bool App::slow_check(double t) {
         }
     }
     // Room View can also change from the bar or the side button
-    if (panel_ && panel_->visible()) read_room_view();
-    if (panel_ && panel_->visible()) read_opaque();
+    if (panel_ && panel_->visible()) {
+        read_room_view();
+        read_opaque();
+    }
     // FrameDrop updates delete the install directory, then copy the new
     // one. A binary gone for 15 s means the app was removed.
     if (fs::exists(binary_)) {
@@ -493,14 +494,11 @@ void App::toggle_kind(KnockKind kind) {
         show(std::string(to_string(kind)) + " knocks " + (config_.detector.enabled[i] ? "on" : "off"));
 }
 
-// The name of the app in front, or its key when SteamVR gives no name.
-std::string App::game_name() const { return state_.app_name.empty() ? state_.app_key : state_.app_name; }
-
 void App::toggle_blocked_app() {
     if (state_.app_key.empty()) return;
     auto blocked = config_.blocked_apps;
     if (!blocked.erase(state_.app_key)) blocked.insert(state_.app_key);
-    const auto name = game_name();
+    const auto name = state_.game_name();
     if (!save([&] { save_blocked_apps(blocked); })) return;
     const bool off = config_.blocked_apps.count(state_.app_key) > 0;
     show(std::string("Knocks ") + (off ? "off" : "on") + " in " + name);
@@ -959,7 +957,7 @@ void App::fill_debug_view(double t) {
     auto& d = debug_;
     auto& view = d.view;
     for (std::size_t i = 0; i < view.accel.size(); ++i)
-        view.accel[i] = d.model.accel(static_cast<Device>(i), t, 5);
+        view.accel[i] = d.model.accel(static_cast<Device>(i), t, DebugModel::kGraphSeconds);
 
     const auto& feed = d.model.feed();
     view.last.reset();
@@ -983,7 +981,7 @@ void App::fill_debug_view(double t) {
         const auto power = battery_mw();
         d.battery_text = power ? std::to_string(std::lround(*power)) + " mW" : "Plugged in";
     }
-    StatusRow game{"Game", game_name(), "", false};
+    StatusRow game{"Game", state_.game_name(), "", false};
     if (game.value.empty()) game.value = "None";
     StatusRow passthrough{"Passthrough", "Checking", "", false};
     if (!state_.room_view_error.empty()) {

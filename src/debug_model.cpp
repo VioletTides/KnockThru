@@ -38,7 +38,7 @@ const char* action_word(KnockAction action) {
     switch (action) {
     case KnockAction::Passthrough: return "Passthrough";
     case KnockAction::Style: return "Style";
-    case KnockAction::PerfGraph: return "Perf graph";
+    case KnockAction::PerfGraph: return "Performance graph";
     case KnockAction::None: break;
     }
     return "No action";

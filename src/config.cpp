@@ -43,16 +43,34 @@ void write_json(const fs::path& path, const json& value) {
     fs::rename(temporary, path);
 }
 
+using Member = double DetectorConfig::*;
+
+const std::pair<const char*, Member> kDetectorMembers[] = {
+    {"controller_peak", &DetectorConfig::controller_peak},
+    {"confirmed_peak", &DetectorConfig::confirmed_peak}, {"partner_peak", &DetectorConfig::partner_peak},
+    {"headset_peak", &DetectorConfig::headset_peak},
+    {"headset_knock_peak", &DetectorConfig::headset_knock_peak},
+    {"max_speed_after", &DetectorConfig::max_speed_after},
+    {"surface_speed_after", &DetectorConfig::surface_speed_after},
+    {"max_speed_before", &DetectorConfig::max_speed_before},
+    {"surface_speed_before", &DetectorConfig::surface_speed_before},
+    {"together_distance", &DetectorConfig::together_distance}, {"same_spot", &DetectorConfig::same_spot},
+    {"merge_s", &DetectorConfig::merge_s}, {"min_gap_s", &DetectorConfig::min_gap_s},
+    {"fast_gap_s", &DetectorConfig::fast_gap_s}, {"max_gap_s", &DetectorConfig::max_gap_s},
+    {"quiet_before_s", &DetectorConfig::quiet_before_s}};
+
 } // namespace
 
 std::map<std::string, double*> detector_fields(DetectorConfig& d) {
-    return {{"controller_peak", &d.controller_peak}, {"confirmed_peak", &d.confirmed_peak},
-        {"partner_peak", &d.partner_peak}, {"headset_peak", &d.headset_peak},
-        {"headset_knock_peak", &d.headset_knock_peak}, {"max_speed_after", &d.max_speed_after},
-        {"surface_speed_after", &d.surface_speed_after}, {"max_speed_before", &d.max_speed_before},
-        {"surface_speed_before", &d.surface_speed_before}, {"together_distance", &d.together_distance},
-        {"same_spot", &d.same_spot}, {"merge_s", &d.merge_s}, {"min_gap_s", &d.min_gap_s},
-        {"fast_gap_s", &d.fast_gap_s}, {"max_gap_s", &d.max_gap_s}, {"quiet_before_s", &d.quiet_before_s}};
+    std::map<std::string, double*> fields;
+    for (const auto& [key, member] : kDetectorMembers) fields[key] = &(d.*member);
+    return fields;
+}
+
+double DetectorConfig::* detector_member(std::string_view key) {
+    for (const auto& [name, member] : kDetectorMembers)
+        if (key == name) return member;
+    return nullptr;
 }
 
 namespace {
