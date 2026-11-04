@@ -22,9 +22,8 @@ using namespace knockthru;
 
 namespace {
 
-std::vector<KnockEvent> drain(KnockDetector& detector, double now, std::vector<KnockEvent> events = {}) {
+void drain(KnockDetector& detector, double now, std::vector<KnockEvent>& events) {
     if (auto event = detector.poll(now)) events.push_back(*event);
-    return events;
 }
 
 // Simulates one controller resting at `position`, with knocks at the given
@@ -45,7 +44,7 @@ std::vector<KnockEvent> synthetic(const std::vector<double>& knock_times, Detect
         const double jitter = 0.001 * ((static_cast<int>(t / dt) % 2) ? 1 : -1);
         detector.push(device, t, position, {jitter, -speed, 0});
         detector.push(Device::Hmd, t, {0, 1.6, 0}, {0, jitter, 0});
-        events = drain(detector, t, events);
+        drain(detector, t, events);
         if (sequences)
             for (auto& sequence : detector.take_sequences()) sequences->push_back(std::move(sequence));
     }
@@ -111,7 +110,7 @@ void moving_after_test() {
         const double jitter = 0.001 * ((static_cast<int>(t / dt) % 2) ? 1 : -1);
         detector.push(Device::Right, t, {0.2, 0.8, -0.3}, {jitter, -speed, 0});
         detector.push(Device::Hmd, t, {0, 1.6, 0}, {0, jitter, 0});
-        events = drain(detector, t, events);
+        drain(detector, t, events);
         for (const auto& candidate : detector.take_candidates()) verdicts.push_back(candidate.verdict);
     }
     check(
@@ -248,9 +247,9 @@ void pose_rate_tests() {
     std::vector<KnockEvent> events;
     for (const auto& row : read) {
         detector.push(row.device, row.t, row.position, row.velocity);
-        events = drain(detector, row.t, events);
+        drain(detector, row.t, events);
     }
-    events = drain(detector, 4, events);
+    drain(detector, 4, events);
     check(events.size() == 1 && events[0].count == 2, "a double after the controller turns on counts");
     if (std::getenv("KNOCKTHRU_TEST_RATE")) return;
     const auto reads_between = [&](double from, double to) {
