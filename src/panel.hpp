@@ -145,7 +145,7 @@ enum class PanelCommand {
 
 struct PanelClick {
     PanelCommand command;
-    KnockKind kind = KnockKind::Together; // for Kind and Calibrate
+    KnockKind kind = KnockKind::Together; // for Kind, Calibrate, and TurnOnKind
     int count = 0; // for SetKnockAction
     KnockAction action = KnockAction::None;
     int tunable = 0; // for TuneDown and TuneUp
