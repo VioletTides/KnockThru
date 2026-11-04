@@ -152,6 +152,8 @@ std::vector<float> DebugModel::accel(Device device, double now, double seconds) 
         if (it->device != device) continue;
         const long bucket = static_cast<long>(std::floor(it->t / kBucketSeconds));
         if (bucket > last) continue;
+        // floor() can put a sample at exactly `first * kBucketSeconds` one bucket early.
+        if (bucket < first) break;
         auto& slot = out[static_cast<std::size_t>(bucket - first)];
         slot = std::max(slot, it->accel);
     }

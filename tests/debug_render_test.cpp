@@ -68,9 +68,22 @@ void off_scale_tests() {
     check(screen.live(100).hash() != spike, "a value at the full scale is not a spike");
 }
 
+// A reload keeps a tuned number unless that number's saved value changed.
+void keep_tuning_tests() {
+    std::cout << "keep tuning\n";
+    DetectorConfig saved, live, next;
+    live.controller_peak = saved.controller_peak + 5;
+    live.confirmed_peak = saved.confirmed_peak + 5;
+    next.confirmed_peak = saved.confirmed_peak + 10;
+    keep_tuning(next, live, saved);
+    check(next.controller_peak == live.controller_peak, "an unsaved tuned number survives a reload");
+    check(next.confirmed_peak == saved.confirmed_peak + 10, "a newly saved number replaces the tuned one");
+}
+
 } // namespace
 
 int main() {
     off_scale_tests();
+    keep_tuning_tests();
     return finish();
 }

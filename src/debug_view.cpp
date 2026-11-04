@@ -69,4 +69,10 @@ void step_tunable(DetectorConfig& live, int index, int direction) {
     live.*row.field = std::max(0.0, std::round((live.*row.field + direction * row.step) * scale) / scale);
 }
 
+void keep_tuning(DetectorConfig& next, const DetectorConfig& live, const DetectorConfig& saved) {
+    for (const auto& row : kRows)
+        if (live.*row.field != saved.*row.field && next.*row.field == saved.*row.field)
+            next.*row.field = live.*row.field;
+}
+
 } // namespace knockthru

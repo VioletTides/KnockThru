@@ -34,6 +34,7 @@ std::vector<KnockEvent> synthetic(const std::vector<double>& knock_times, Detect
     Device device = Device::Right, Vec3 position = {0.2, 0.8, -0.3}, double duration = 3.0,
     std::deque<Sequence>* sequences = nullptr) {
     KnockDetector detector(config);
+    detector.set_explain(sequences != nullptr);
     std::vector<KnockEvent> events;
     const double dt = 1.0 / 233;
     for (double t = 0; t < duration; t += dt) {
@@ -99,6 +100,7 @@ void synthetic_tests() {
 // A spike after which the controller keeps moving is not a knock.
 void moving_after_test() {
     KnockDetector detector;
+    detector.set_explain(true);
     std::vector<Verdict> verdicts;
     std::vector<KnockEvent> events;
     const double dt = 1.0 / 233;
@@ -297,6 +299,7 @@ std::vector<Row> read_recording(const std::string& name, int* reads = nullptr) {
 std::vector<KnockEvent> replay_rows(
     const std::vector<Row>& rows, const DetectorConfig& config, bool verbose = false) {
     KnockDetector detector(config);
+    detector.set_explain(verbose);
     std::vector<KnockEvent> events;
     for (const auto& row : rows) {
         detector.push(row.device, row.t, row.position, row.velocity);

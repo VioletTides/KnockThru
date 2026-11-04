@@ -144,7 +144,8 @@ private:
     void save_app_state();
     std::string config_stamp() const;
     void show(const std::string& message, bool error = false);
-    void reload();
+    // Reads the settings again. With `keep`, unsaved Tuning numbers stay in the detector.
+    void reload(bool keep = true);
     void play_click();
     void prepare_click();
     void start_tour();
@@ -153,7 +154,7 @@ private:
     bool toggle_room_view(const std::string& why);
     bool toggle_setting(KnockAction action, const std::string& why);
     void run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t);
-    bool save(const std::function<void()>& write);
+    bool save(const std::function<void()>& write, bool keep = true);
     void start_check();
     void restart_failed(const std::string& version);
     void end_calibration();
@@ -334,6 +335,7 @@ void App::run() {
             if (debug_.open) debug_.model.push({sample.device, sample.t, sample.position, sample.velocity});
             if (recording_) recording_->samples.push_back(sample);
         }
+        detector_.set_explain(debug_.open);
         auto knock_event = detector_.poll(t);
         auto knocks = detector_.take_knocks();
 #ifdef KNOCKTHRU_TEST_HOOK
@@ -397,7 +399,7 @@ bool App::slow_check(double t) {
         }
     }
     // Room View can also change from the bar or the side button
-    if (panel_ && (panel_->visible() || panel_->debug_open())) read_room_view();
+    if (panel_ && panel_->visible()) read_room_view();
     if (panel_ && panel_->visible()) read_opaque();
     // FrameDrop updates delete the install directory, then copy the new
     // one. A binary gone for 15 s means the app was removed.
@@ -466,7 +468,10 @@ void App::handle_click(const PanelClick& click, double t) {
     case PanelCommand::RestoreDefaults: tune_detector(click); break;
     case PanelCommand::HideAdvancedWarning: save([] { save_advanced_warning_off(true); }); break;
     case PanelCommand::TestBuzz: haptics_.buzz(1, t); break;
-    case PanelCommand::TestClick: break; // handle_click already played it
+    case PanelCommand::TestClick:
+        // With Sounds on, handle_click already played it. The test plays it with Sounds off too.
+        if (!config_.sounds) knockthru::play_click();
+        break;
     }
 }
 
@@ -503,7 +508,7 @@ void App::factory_reset() {
     calibration_.reset();
     try {
         reset_user_settings();
-        reload();
+        reload(false);
         log("Factory reset: settings and calibration deleted");
         state_.message.clear();
         state_.message_is_error = false;
@@ -630,7 +635,7 @@ void App::save_calibration(double t) {
         log(std::string("Calibrated ") + to_string(kind) + " knocks: " + thresholds_text(saved));
         calibrator_.reset();
         calibration_.reset();
-        reload();
+        reload(false);
         show("Calibration saved");
         // The tour's Calibrate step marks its card, so the Saved banner is only for Settings.
         if (tour_)
@@ -883,12 +888,12 @@ void App::draw_panel(double t) {
     panel_->draw(state_, t);
 }
 
-// Hands the detector's candidates and finished sequences to the debug model. While Advanced is closed, they
-// are only drained, so they never pile up.
+// Hands the detector's candidates and finished sequences to the debug model. The detector keeps them only
+// while Advanced is open.
 void App::feed_debug(const Handled& handled) {
+    if (!debug_.open) return;
     const auto candidates = detector_.take_candidates();
     const auto sequences = detector_.take_sequences();
-    if (!debug_.open) return;
     for (const auto& candidate : candidates) {
         debug_.model.add_candidate(candidate);
         if (candidate.verdict == Verdict::BelowPeak)
@@ -919,7 +924,7 @@ void App::tune_detector(const PanelClick& click) {
         if (save([&] { save_detector(live, config_); })) show("Detector settings saved");
         break;
     case PanelCommand::RestoreDefaults:
-        if (save(restore_detector_defaults)) show("Knock numbers restored to the defaults");
+        if (save(restore_detector_defaults, false)) show("Knock numbers restored to the defaults");
         break;
     default: break;
     }
@@ -972,12 +977,12 @@ void App::fill_debug_view(double t) {
     view.status_right = {{"CPU", d.cpu_text, "", false}, {"Battery", d.battery_text, "", false}};
 }
 
-// Starts the model fresh when Advanced opens. While it is open, fills it at most 30 times a second. The
-// dashboard tab draws the view.
+// Advanced counts as open while the dashboard shows it. It starts the model fresh when it opens. While open,
+// it fills the view at most 30 times a second, and the dashboard tab draws it.
 void App::update_debug(double t) {
     if (!panel_) return;
     auto& d = debug_;
-    const bool open = panel_->debug_open();
+    const bool open = panel_->visible() && panel_->debug_open();
     if (open != d.open) {
         d.open = open;
         d.model = DebugModel();
@@ -1115,10 +1120,14 @@ void App::show(const std::string& message, bool error) {
     if (panel_) panel_->invalidate();
 }
 
-void App::reload() {
+void App::reload(bool keep) {
+    const auto saved = config_.detector;
     config_ = load_config(install_directory());
     stamp_ = config_stamp();
-    if (!calibrator_) detector_ = KnockDetector(config_.detector);
+    if (calibrator_) return;
+    auto next = config_.detector;
+    if (keep) keep_tuning(next, detector_.config(), saved);
+    detector_ = KnockDetector(next);
 }
 
 // SteamVR's dashboard click. Steam already clicks when the Room View button
@@ -1227,10 +1236,10 @@ bool App::toggle_setting(KnockAction action, const std::string& why) {
 }
 
 // Runs `write`, then reloads the settings. Shows the error if `write` throws.
-bool App::save(const std::function<void()>& write) {
+bool App::save(const std::function<void()>& write, bool keep) {
     try {
         write();
-        reload();
+        reload(keep);
         return true;
     } catch (const std::exception& error) {
         show(std::string("Settings not saved: ") + error.what(), true);

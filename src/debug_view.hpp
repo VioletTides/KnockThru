@@ -26,6 +26,9 @@ struct Tunable {
 std::vector<Tunable> tunables(const DetectorConfig& live, const AppConfig& saved);
 // Moves the number of tunable `index` one step down (-1) or up (+1), not below zero.
 void step_tunable(DetectorConfig& live, int index, int direction);
+// Copies each unsaved tuned number from `live` into `next`, the config after a reload, unless the reload
+// changed that number's saved value. `saved` is the config before the reload.
+void keep_tuning(DetectorConfig& next, const DetectorConfig& live, const DetectorConfig& saved);
 
 // A line of the Status tab. `detail` is the dim line under the label.
 struct StatusRow {

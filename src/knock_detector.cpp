@@ -127,7 +127,7 @@ std::optional<Candidate> KnockDetector::judge(Device device, std::size_t i) cons
     const auto& sample = history[i];
     const double lowest =
         std::min({config_.controller_peak, config_.confirmed_peak, config_.headset_knock_peak});
-    if (sample.accel < lowest / 2) return std::nullopt;
+    if (sample.accel < (explain_ ? lowest / 2 : lowest)) return std::nullopt;
     for (std::size_t k = i > 3 ? i - 3 : 0; k < std::min(history.size(), i + 4); ++k)
         if (history[k].accel > sample.accel) return std::nullopt;
 
@@ -224,7 +224,7 @@ std::optional<KnockEvent> KnockDetector::finish_sequence() {
         verdict = SequenceVerdict::TooSlow;
     else if (!config_.enabled[index(last.kind)])
         verdict = SequenceVerdict::KindOff;
-    sequences_.push_back({std::move(sequence_), verdict, fastest, needed});
+    if (explain_) sequences_.push_back({std::move(sequence_), verdict, fastest, needed});
     sequence_.clear();
     mixed_ = SequenceVerdict::Action;
     if (verdict != SequenceVerdict::Action) return std::nullopt;
@@ -250,7 +250,7 @@ std::optional<KnockEvent> KnockDetector::poll(double now) {
         [](const Candidate& a, const Candidate& b) { return a.knock.t < b.knock.t; });
     for (auto& candidate : found) {
         if (candidate.verdict == Verdict::Counted) candidate.verdict = add(candidate.knock);
-        candidates_.push_back(candidate);
+        if (explain_) candidates_.push_back(candidate);
     }
 
     if (!sequence_.empty() && horizon - sequence_.back().t > config_.max_gap_s) return finish_sequence();
