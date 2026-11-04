@@ -61,10 +61,6 @@ public:
         }
     }
 
-    static void write_csv(std::ostream& out, double t, Device device, const vr::TrackedDevicePose_t& pose) {
-        write_csv_row(out, t, device, position_of(pose), velocity_of(pose), pose.vAngularVelocity.v);
-    }
-
 private:
     std::array<vr::TrackedDeviceIndex_t, 3> indices_{};
     std::array<vr::TrackedDevicePose_t, vr::k_unMaxTrackedDeviceCount> poses_{};
