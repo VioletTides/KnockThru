@@ -62,11 +62,12 @@ struct Handled {
     KnockAction action = KnockAction::None; // the one that ran
 };
 
-// Advanced and what feeds it. The model takes poses only while Advanced is open.
+// Advanced and what feeds it. Everything starts fresh each time Advanced opens, and the model takes poses
+// only while it is open.
 struct DebugParts {
     DebugModel model;
     DebugView view;
-    bool open = false; // Advanced was open at the last update
+    bool open = false; // Advanced showed at the last update
     CpuUsage cpu;
     std::string cpu_text, battery_text; // read once a second, since both cost a file read
     double next_usage = 0, next_fill = 0;
@@ -174,6 +175,8 @@ private:
     std::string stamp_ = config_stamp();
     KnockDetector detector_{config_.detector};
     std::optional<Calibrator> calibrator_;
+    // The detector's numbers and the saved ones when calibration started, so unsaved tuning outlasts it.
+    DetectorConfig live_before_calibration_, saved_before_calibration_;
     std::optional<CalibrationView> calibration_;
     std::optional<TourView> tour_;
 
@@ -610,6 +613,8 @@ void App::save_report() {
 }
 
 void App::start_calibration(KnockKind kind, double t) {
+    live_before_calibration_ = detector_.config();
+    saved_before_calibration_ = config_.detector;
     calibrator_.emplace(kind, config_.detector, t);
     detector_ = KnockDetector(calibrator_->detector_config());
     calibration_.emplace();
@@ -631,21 +636,32 @@ void App::save_calibration(double t) {
     if (!calibrator_ || !calibration_ || !calibration_->trial_passed.value_or(false)) return;
     const auto kind = calibrator_->kind();
     try {
-        const auto saved = calibrator_->save();
-        log(std::string("Calibrated ") + to_string(kind) + " knocks: " + thresholds_text(saved));
-        calibrator_.reset();
-        calibration_.reset();
-        reload(false);
-        show("Calibration saved");
-        // The tour's Calibrate step marks its card, so the Saved banner is only for Settings.
-        if (tour_)
-            tour_->calibrated[static_cast<int>(kind)] = true;
-        else
-            state_.calibration_saved = kind;
-        haptics_.buzz(2, t);
+        log(std::string("Calibrated ") + to_string(kind)
+            + " knocks: " + thresholds_text(calibrator_->save()));
     } catch (const std::exception& error) {
         show(std::string("Calibration not saved: ") + error.what(), true);
+        return;
     }
+    // The file is written, so the calibration ends even when the settings do not reload. The next reload that
+    // works picks it up.
+    std::string reload_error;
+    try {
+        reload(false);
+    } catch (const std::exception& error) {
+        reload_error = error.what();
+    }
+    end_calibration();
+    if (!reload_error.empty()) {
+        show("Calibration saved, but the settings did not reload: " + reload_error, true);
+        return;
+    }
+    show("Calibration saved");
+    // The tour's Calibrate step marks its card, so the Saved banner is only for Settings.
+    if (tour_)
+        tour_->calibrated[static_cast<int>(kind)] = true;
+    else
+        state_.calibration_saved = kind;
+    haptics_.buzz(2, t);
 }
 
 // Saves the recording when its 20 s are up.
@@ -920,9 +936,17 @@ void App::tune_detector(const PanelClick& click) {
         detector_.set_config(live);
         break;
     case PanelCommand::UndoTuning: detector_.set_config(config_.detector); break;
-    case PanelCommand::KeepTuning:
-        if (save([&] { save_detector(live, config_); })) show("Detector settings saved");
+    case PanelCommand::KeepTuning: {
+        // Loading puts calibrated peaks back inside their limits, so the saved numbers can differ from the
+        // tuned ones. The detector takes what was saved, and the message says when that differs.
+        if (!save([&] { save_detector(live, config_); }, false)) break;
+        const auto rows = tunables(live, config_);
+        const bool moved =
+            std::any_of(rows.begin(), rows.end(), [](const Tunable& row) { return row.changed(); });
+        show(moved ? "Detector settings saved. Some numbers changed to fit their limits"
+                   : "Detector settings saved");
         break;
+    }
     case PanelCommand::RestoreDefaults:
         if (save(restore_detector_defaults, false)) show("Knock numbers restored to the defaults");
         break;
@@ -977,20 +1001,18 @@ void App::fill_debug_view(double t) {
     view.status_right = {{"CPU", d.cpu_text, "", false}, {"Battery", d.battery_text, "", false}};
 }
 
-// Advanced counts as open while the dashboard shows it. It starts the model fresh when it opens. While open,
-// it fills the view at most 30 times a second, and the dashboard tab draws it.
+// Advanced counts as open while the dashboard shows it. While open, it fills the view at most 30 times a
+// second, and the dashboard tab draws it.
 void App::update_debug(double t) {
     if (!panel_) return;
-    auto& d = debug_;
     const bool open = panel_->visible() && panel_->debug_open();
-    if (open != d.open) {
-        d.open = open;
-        d.model = DebugModel();
-        d.too_light.reset();
+    if (open != debug_.open) {
+        debug_ = DebugParts();
+        debug_.open = open;
         if (open) read_room_view();
     }
-    if (open && t >= d.next_fill) {
-        d.next_fill = t + 1.0 / 30;
+    if (open && t >= debug_.next_fill) {
+        debug_.next_fill = t + 1.0 / 30;
         fill_debug_view(t);
     }
 }
@@ -1261,10 +1283,13 @@ void App::restart_failed(const std::string& version) {
               "restart SteamVR."};
 }
 
+// Keeps each unsaved tuned number whose saved value the calibration left alone.
 void App::end_calibration() {
     calibrator_.reset();
     calibration_.reset();
-    detector_ = KnockDetector(config_.detector);
+    auto next = config_.detector;
+    keep_tuning(next, live_before_calibration_, saved_before_calibration_);
+    detector_ = KnockDetector(next);
 }
 
 std::string App::room_view_text() const {

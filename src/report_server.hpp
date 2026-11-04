@@ -10,10 +10,6 @@
 
 namespace knockthru {
 
-// The headset's IPv4 address on the network its default route uses, such as
-// 192.168.2.222. Empty without a network.
-std::string local_address();
-
 // A ZIP archive of named files, stored without compression.
 std::string make_zip(const std::vector<std::pair<std::string, std::string>>& files);
 

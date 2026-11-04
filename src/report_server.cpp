@@ -1,5 +1,6 @@
 #include "report_server.hpp"
 
+#include "http.hpp"
 #include "report.hpp"
 
 #include <arpa/inet.h>
@@ -16,6 +17,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <random>
 #include <sstream>
 #include <stdexcept>
@@ -23,20 +25,6 @@
 
 namespace knockthru {
 namespace {
-
-std::string html_escape(const std::string& text) {
-    std::string out;
-    for (const char c : text) {
-        switch (c) {
-        case '&': out += "&amp;"; break;
-        case '<': out += "&lt;"; break;
-        case '>': out += "&gt;"; break;
-        case '"': out += "&quot;"; break;
-        default: out += c;
-        }
-    }
-    return out;
-}
 
 // The interface that carries the default route, from /proc/net/route.
 std::string default_interface() {
@@ -51,30 +39,8 @@ std::string default_interface() {
     return "";
 }
 
-// Sends in waits of at most 200 ms, so a phone that stops reading never holds the
-// server past `stop`, which Done sets, or past 30 s in all.
-void send_all(int fd, const std::atomic<bool>& stop, const std::string& data) {
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
-    for (std::size_t sent = 0; sent < data.size();) {
-        if (stop || std::chrono::steady_clock::now() > deadline) return;
-        pollfd ready{fd, POLLOUT, 0};
-        if (::poll(&ready, 1, 200) <= 0) continue;
-        const auto n = ::send(fd, data.data() + sent, data.size() - sent, MSG_NOSIGNAL | MSG_DONTWAIT);
-        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
-        if (n <= 0) return;
-        sent += static_cast<std::size_t>(n);
-    }
-}
-
-std::string response(const std::string& status, const std::string& type, const std::string& body,
-    const std::string& extra = "") {
-    return "HTTP/1.1 " + status + "\r\nContent-Type: " + type
-        + "\r\nContent-Length: " + std::to_string(body.size())
-        + "\r\nCache-Control: no-store\r\nConnection: close\r\n" + extra + "\r\n" + body;
-}
-
-} // namespace
-
+// The headset's IPv4 address on the network its default route uses, such as 192.168.2.222. Empty without a
+// network.
 std::string local_address() {
     const auto preferred = default_interface();
     ifaddrs* list = nullptr;
@@ -94,6 +60,128 @@ std::string local_address() {
     ::freeifaddrs(list);
     return !found.empty() ? found : preferred.empty() ? fallback : "";
 }
+
+// 16 random hex digits, the secret in the server's paths.
+std::string random_token() {
+    std::random_device random;
+    static const char* digits = "0123456789abcdef";
+    std::string token;
+    for (int i = 0; i < 16; ++i) token += digits[random() % 16];
+    return token;
+}
+
+// A listening TCP socket on every interface. The kernel picks the port, which `port` returns. SteamOS's
+// firewall opens TCP ports 1024 to 65535. Throws if the socket cannot listen.
+int listen_any_port(int& port) {
+    const int listener = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (listener < 0) throw std::runtime_error("Cannot create a socket");
+    sockaddr_in bind_address{};
+    bind_address.sin_family = AF_INET;
+    bind_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    bind_address.sin_port = 0; // the kernel picks a free port, above 1024
+    socklen_t size = sizeof bind_address;
+    if (::bind(listener, reinterpret_cast<sockaddr*>(&bind_address), sizeof bind_address) < 0
+        || ::listen(listener, 8) < 0
+        || ::getsockname(listener, reinterpret_cast<sockaddr*>(&bind_address), &size) < 0) {
+        ::close(listener);
+        throw std::runtime_error("Cannot listen for phones");
+    }
+    port = ntohs(bind_address.sin_port);
+    return listener;
+}
+
+// The next client on `listener`, or -1 after 200 ms without one or once the listener shuts down.
+int accept_client(int listener) {
+    pollfd waiting{listener, POLLIN, 0};
+    if (::poll(&waiting, 1, 200) <= 0) return -1;
+    return ::accept4(listener, nullptr, nullptr, SOCK_CLOEXEC);
+}
+
+// A complete HTTP/1.1 response that closes the connection. `extra` is more header lines, each ending in CRLF.
+std::string response(const std::string& status, const std::string& type, const std::string& body,
+    const std::string& extra = "") {
+    return "HTTP/1.1 " + status + "\r\nContent-Type: " + type
+        + "\r\nContent-Length: " + std::to_string(body.size())
+        + "\r\nCache-Control: no-store\r\nConnection: close\r\n" + extra + "\r\n" + body;
+}
+
+// Sends in waits of at most 200 ms, so a client that stops reading never holds the server past `stop`, or
+// past 30 s in all.
+void send_all(int fd, const std::atomic<bool>& stop, const std::string& data) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    for (std::size_t sent = 0; sent < data.size();) {
+        if (stop || std::chrono::steady_clock::now() > deadline) return;
+        pollfd ready{fd, POLLOUT, 0};
+        if (::poll(&ready, 1, 200) <= 0) continue;
+        const auto n = ::send(fd, data.data() + sent, data.size() - sent, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (n <= 0) return;
+        sent += static_cast<std::size_t>(n);
+    }
+}
+
+struct Request {
+    std::string method, path, body;
+};
+
+// Reads one request from `client` and checks `stop` every 200 ms. Answers 413 itself and returns nothing when
+// the body is longer than `max_body`. Also returns nothing when the client leaves, stalls, or sends an
+// oversized head.
+std::optional<Request> read_request(int client, const std::atomic<bool>& stop, std::size_t max_body) {
+    constexpr std::size_t kMaxHead = 8192;
+    // Short receive waits, so the stop check runs at least every 200 ms.
+    timeval timeout{0, 200000};
+    ::setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+    std::string request;
+    char buffer[1024];
+    // One deadline for the whole request, so a client that sends a byte at a time cannot hold the server. A
+    // browser may open a spare connection and send nothing, so the first byte has to come within 300 ms.
+    const auto start = std::chrono::steady_clock::now();
+    std::size_t head_end = std::string::npos, body_size = 0;
+    while (head_end == std::string::npos || request.size() < head_end + 4 + body_size) {
+        if (head_end == std::string::npos) {
+            head_end = request.find("\r\n\r\n");
+            if (head_end != std::string::npos) {
+                body_size = content_length(request.substr(0, head_end)).value_or(0);
+                if (body_size > max_body) {
+                    send_all(client, stop, response("413 Payload Too Large", "text/plain", "Too large\n"));
+                    return std::nullopt;
+                }
+                continue;
+            }
+            if (request.size() > kMaxHead) return std::nullopt;
+        }
+        const auto waited = std::chrono::steady_clock::now() - start;
+        if (stop || waited > std::chrono::seconds(3)
+            || (request.empty() && waited > std::chrono::milliseconds(300)))
+            return std::nullopt;
+        const auto n = ::recv(client, buffer, sizeof buffer, 0);
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (n <= 0) return std::nullopt;
+        request.append(buffer, static_cast<std::size_t>(n));
+    }
+    Request parsed;
+    std::istringstream line(request.substr(0, request.find("\r\n")));
+    line >> parsed.method >> parsed.path;
+    parsed.body = request.substr(head_end + 4);
+    return parsed;
+}
+
+std::string html_escape(const std::string& text) {
+    std::string out;
+    for (const char c : text) {
+        switch (c) {
+        case '&': out += "&amp;"; break;
+        case '<': out += "&lt;"; break;
+        case '>': out += "&gt;"; break;
+        case '"': out += "&quot;"; break;
+        default: out += c;
+        }
+    }
+    return out;
+}
+
+} // namespace
 
 std::string make_zip(const std::vector<std::pair<std::string, std::string>>& files) {
     // Stored entries, without compression: the recording is already gzipped, and the report is small.
@@ -259,24 +347,10 @@ ReportServer::ReportServer(std::string report, std::string issue_link)
     : report_(std::move(report)), issue_link_(std::move(issue_link)) {
     const auto address = local_address();
     if (address.empty()) throw std::runtime_error("The Frame is not on a network");
-    std::random_device random;
-    static const char* digits = "0123456789abcdef";
-    for (int i = 0; i < 16; ++i) token_ += digits[random() % 16];
-
-    listener_ = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
-    if (listener_ < 0) throw std::runtime_error("Cannot create a socket");
-    sockaddr_in bind_address{};
-    bind_address.sin_family = AF_INET;
-    bind_address.sin_addr.s_addr = htonl(INADDR_ANY);
-    bind_address.sin_port = 0; // the kernel picks a free port, above 1024
-    socklen_t size = sizeof bind_address;
-    if (::bind(listener_, reinterpret_cast<sockaddr*>(&bind_address), sizeof bind_address) < 0
-        || ::listen(listener_, 8) < 0
-        || ::getsockname(listener_, reinterpret_cast<sockaddr*>(&bind_address), &size) < 0) {
-        ::close(listener_);
-        throw std::runtime_error("Cannot listen for phones");
-    }
-    url_ = "http://" + address + ":" + std::to_string(ntohs(bind_address.sin_port)) + "/" + token_;
+    token_ = random_token();
+    int port = 0;
+    listener_ = listen_any_port(port);
+    url_ = "http://" + address + ":" + std::to_string(port) + "/" + token_;
     thread_ = std::thread([this] { loop(); });
 }
 
@@ -292,6 +366,8 @@ void ReportServer::set_recording(std::filesystem::path recording) {
 
 ReportServer::~ReportServer() {
     stop_ = true;
+    // Wakes the accept wait at once, so closing the report card never stalls the app loop.
+    ::shutdown(listener_, SHUT_RDWR);
     thread_.join();
     ::close(listener_);
 }
@@ -299,9 +375,7 @@ ReportServer::~ReportServer() {
 void ReportServer::loop() {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::minutes(15);
     while (!stop_ && std::chrono::steady_clock::now() < deadline) {
-        pollfd waiting{listener_, POLLIN, 0};
-        if (::poll(&waiting, 1, 200) <= 0) continue;
-        const int client = ::accept4(listener_, nullptr, nullptr, SOCK_CLOEXEC);
+        const int client = accept_client(listener_);
         if (client < 0) continue;
         answer(client);
         ::close(client);
@@ -309,23 +383,10 @@ void ReportServer::loop() {
 }
 
 void ReportServer::answer(int client) {
-    // Short receive waits, so the stop check above runs at least every 200 ms.
-    timeval timeout{0, 200000};
-    ::setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
-    std::string request;
-    char buffer[1024];
-    int waits = 0;
-    while (request.find("\r\n") == std::string::npos && request.size() < 4096) {
-        if (stop_) return;
-        const auto n = ::recv(client, buffer, sizeof buffer, 0);
-        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && ++waits < 15)
-            continue; // 3 s for the request line
-        if (n <= 0) return;
-        request.append(buffer, static_cast<std::size_t>(n));
-    }
-    std::istringstream line(request.substr(0, request.find("\r\n")));
-    std::string method, path;
-    line >> method >> path;
+    const auto request = read_request(client, stop_, 0); // a GET has no body
+    if (!request) return;
+    const auto& method = request->method;
+    const auto& path = request->path;
     std::string report;
     std::filesystem::path recording;
     {
