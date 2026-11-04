@@ -429,6 +429,7 @@ void replay_tests() {
     check(total(replay("noise")) == 0, "noise: no actions");
     // The controllers bumping while the wearer fit the strap on each one, in Into the Radius 2.
     check(total(replay("straps")) == 0, "straps: no actions");
+    replay("mixed"); // mixed_score judges its actions. This runs its explain mode check.
     mixed_test();
 }
 

@@ -991,6 +991,8 @@ void App::fill_debug_view(double t) {
     StatusRow passthrough{"Passthrough", "Checking", "", false};
     if (!state_.room_view_error.empty()) {
         passthrough = {"Passthrough", "Error", state_.room_view_error, true};
+    } else if (state_.busy) {
+        passthrough.value = "Switching";
     } else if (state_.room_view) {
         passthrough.value = *state_.room_view ? "On" : "Off";
     }
