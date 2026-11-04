@@ -539,15 +539,11 @@ void App::end_tour() {
 }
 
 void App::check_for_update() {
-    // A daily check already running answers this press too.
-    if (check_job_.valid() && check_is_automatic_) {
-        check_is_automatic_ = false;
-        state_.update = {UpdateStatus::Checking, "", ""};
-    }
-    if (check_job_.valid() || install_job_.valid()) return;
+    if (install_job_.valid() || (check_job_.valid() && !check_is_automatic_)) return;
     check_is_automatic_ = false;
     state_.update = {UpdateStatus::Checking, "", ""};
-    start_check();
+    // A daily check already running answers this press too.
+    if (!check_job_.valid()) start_check();
 }
 
 void App::install_update() {
