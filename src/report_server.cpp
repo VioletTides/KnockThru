@@ -239,7 +239,7 @@ button,a.button{display:block;width:100%;box-sizing:border-box;padding:18px;bord
  background:var(--accent);color:#f5f7fa;font:600 20px system-ui,sans-serif;text-align:center;text-decoration:none;cursor:pointer}
 button:hover,a.button:hover{filter:brightness(1.15)}
 button:active,a.button:active{transform:scale(0.98)}
-button:focus-visible,a:focus-visible{outline:3px solid var(--link);outline-offset:3px}
+button:focus-visible,a:focus-visible,summary:focus-visible,textarea:focus-visible{outline:3px solid var(--link);outline-offset:3px}
 ol{padding-left:24px;margin:20px 0}
 li{margin:0 0 8px}
 label{display:block;margin-top:8px;color:var(--dim)}
@@ -250,8 +250,6 @@ textarea{width:100%;box-sizing:border-box;height:220px;margin-top:8px;background
  border:1px solid var(--dim);border-radius:16px;padding:12px;font:16px/1.4 ui-monospace,monospace}
 details{margin-top:24px;color:var(--dim)}
 summary{cursor:pointer;display:flex;align-items:center;min-height:44px}
-summary:focus-visible{outline:3px solid var(--link);outline-offset:3px}
-textarea:focus-visible{outline:3px solid var(--link);outline-offset:3px}
 @media (prefers-reduced-motion: reduce){button:active,a.button:active{transform:none}}
 </style></head><body><main>
 <h1>KnockThru bug report</h1>
