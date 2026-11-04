@@ -5,7 +5,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 build="${1:-$root/build-arm64}"
-version="${KNOCKTHRU_VERSION:-1.2.0}"
+version="${KNOCKTHRU_VERSION:-$(sed -n 's/^project(KnockThru VERSION \([0-9.]*\).*/\1/p' "$root/CMakeLists.txt")}"
 # KNOCKTHRU_TEST_HOOK=1 builds in the test hook from src/app.cpp. Releases never set it.
 test_hook="${KNOCKTHRU_TEST_HOOK:-}"
 mkdir -p "$build/bin"
@@ -30,6 +30,7 @@ sources=(
     src/calibrator.cpp
     src/update.cpp
     src/report.cpp
+    src/http.cpp
     src/report_server.cpp
     src/debug_model.cpp
     src/usage.cpp

@@ -91,7 +91,8 @@ void Panel::knocks_row(Rect rect, const PanelState& state) {
 }
 
 void Panel::main_screen(const PanelState& state) {
-    header("KnockThru");
+    canvas_.draw(icon(56), static_cast<int>(kMargin), 40);
+    canvas_.text(bold_, "KnockThru", kMargin + 76, 68, 38, kText);
     const Rect settings{kMargin + 500 - 160, 36, 160, 64};
     button(settings, "Settings", std::nullopt, Screen::Settings);
     // A dot on Settings while an update waits for its install or its restart, ringed in the background color
@@ -131,8 +132,7 @@ void Panel::main_screen(const PanelState& state) {
 }
 
 void Panel::settings_screen(const PanelState& state) {
-    button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Main);
-    canvas_.text(bold_, "Settings", kMargin + 172, 68, 38, kText);
+    back_header("Settings", Screen::Main);
     update_control(state);
     // The debug row is a seventh, so the rows shrink to keep the card's height.
     const int rows = state.debug ? 7 : 6;
@@ -158,8 +158,7 @@ void Panel::settings_screen(const PanelState& state) {
 
 // Knock twice and Knock thrice side by side, each a list of actions where one press picks.
 void Panel::actions_screen(const PanelState& state) {
-    button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Settings);
-    canvas_.text(bold_, "Knock actions", kMargin + 172, 68, 38, kText);
+    back_header("Knock actions", Screen::Settings);
     const float gap = 20, w = (kWidth - 2 * kMargin - gap) / kKnockCounts.size();
     bool differ = false;
     for (std::size_t i = 0; i < kKnockCounts.size(); ++i) {

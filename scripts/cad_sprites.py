@@ -231,7 +231,7 @@ def drop_specks(mask, area=400):
     return np.isin(labels, [i for i in range(1, n) if stats[i, 4] >= area])
 
 
-def headset_turn(cad, angles=None, mesh=None, folder=OUT / "headset-turn"):
+def headset_turn(cad):
     """Renders the headset turning from the front (0 degrees) to the face side (180), one
     frame every TURN_STEP degrees, into images/cad/headset-turn/.
 
@@ -239,12 +239,9 @@ def headset_turn(cad, angles=None, mesh=None, folder=OUT / "headset-turn"):
     traced once on the front view and the lens outlines once on the face side. Both are lifted
     into 3D, onto a surface fitted to the visor and a plane fitted to each lens, then projected
     at every angle. A lens shows only where no part of the shell is in front of its plane.
-
-    To test a fix, pass a few angles, the (triangles, face ids) from tessellate() as mesh so
-    the STEP file is read once, and a scratch folder. The crop then fits only those angles.
     """
     size = TURN_SIZE
-    tris, fid = mesh if mesh is not None else tessellate(cad / HEADSET)
+    tris, fid = tessellate(cad / HEADSET)
     points = tris.reshape(-1, 3)
     center = points.mean(0)
     scale = size * 0.92 / (2 * np.linalg.norm(points - center, axis=1).max())  # fits at every angle
@@ -319,7 +316,7 @@ def headset_turn(cad, angles=None, mesh=None, folder=OUT / "headset-turn"):
 
     yy, xx = np.mgrid[0:size, 0:size]
     frames = []
-    angles = list(angles if angles is not None else range(0, 181, TURN_STEP))
+    angles = list(range(0, 181, TURN_STEP))
     for degrees in angles:
         depth, ids = view(degrees)
         sil = smooth(depth > -1e8)
@@ -344,6 +341,7 @@ def headset_turn(cad, angles=None, mesh=None, folder=OUT / "headset-turn"):
     # One crop for every frame, so the headset stays put while it turns.
     ys, xs = np.nonzero(np.any([b | g for b, g in frames], axis=0))
     box = (slice(ys.min(), ys.max() + 1), slice(xs.min(), xs.max() + 1))
+    folder = OUT / "headset-turn"
     folder.mkdir(parents=True, exist_ok=True)
     for degrees, (body, glass) in zip(angles, frames):
         rgba = np.zeros(body.shape + (4,), np.uint8)

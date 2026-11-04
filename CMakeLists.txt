@@ -14,7 +14,7 @@ endif()
 include(cmake/OpenVRLoader.cmake)
 find_package(Threads REQUIRED)
 
-add_library(knockthru_core STATIC src/knock_detector.cpp src/knock_actions.cpp src/config.cpp src/calibrator.cpp src/update.cpp src/report.cpp src/report_server.cpp src/room_view.cpp src/debug_model.cpp src/usage.cpp)
+add_library(knockthru_core STATIC src/knock_detector.cpp src/knock_actions.cpp src/config.cpp src/calibrator.cpp src/update.cpp src/report.cpp src/http.cpp src/report_server.cpp src/room_view.cpp src/debug_model.cpp src/usage.cpp)
 target_include_directories(knockthru_core PUBLIC src third_party/json)
 target_compile_options(knockthru_core PRIVATE -Wall -Wextra -Wpedantic)
 

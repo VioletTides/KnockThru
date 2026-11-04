@@ -30,6 +30,9 @@ struct AppConfig {
     KnockActions knock_actions;
 };
 
+// Every detector number a config.json can set, by key.
+std::map<std::string, double*> detector_fields(DetectorConfig& d);
+
 // state.json, for what is not a setting. A missing or bad file gives defaults.
 struct AppState {
     std::string steamvr_version; // at the last start
@@ -61,6 +64,8 @@ struct Calibration {
 // $XDG_CONFIG_HOME/knockthru or ~/.config/knockthru. FrameDrop updates replace
 // the install folder, so user files live here.
 std::filesystem::path user_directory();
+// The home folder, or an empty path when HOME is not set.
+std::filesystem::path home_directory();
 
 // Defaults, then <install>/config.json, then the user config.json, then
 // calibration.json. Missing files are skipped. A bad file throws.

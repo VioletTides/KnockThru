@@ -30,27 +30,6 @@ namespace {
 
 void stop(int) { stopping = 1; }
 
-// Logs raw headset and controller poses to CSV, so knock signals can be
-// inspected and replayed in detector tests.
-int record(const std::string& path, double seconds) {
-    VrSession session(vr::VRApplication_Background);
-    std::ofstream out(path, std::ios::trunc);
-    if (!out) throw std::runtime_error("Cannot write " + path);
-    out << kCsvHeader;
-    PoseSampler sampler;
-    Clock clock;
-    std::cerr << "Recording to " << path << ". Press Ctrl+C to stop.\n";
-    while (!stopping && (seconds <= 0 || clock.now() < seconds)) {
-        const double t = clock.now();
-        sampler.sample([&](Device device, const vr::TrackedDevicePose_t& pose) {
-            PoseSampler::write_csv(out, t, device, pose);
-        });
-        clock.tick();
-    }
-    std::cerr << "Recorded " << clock.now() << " s\n";
-    return 0;
-}
-
 // Runs the detector live and prints every knock and action, without acting.
 int detect(double seconds, const std::string& save_path) {
     VrSession session(vr::VRApplication_Background);
@@ -68,7 +47,7 @@ int detect(double seconds, const std::string& save_path) {
         const double t = clock.now();
         sampler.sample([&](Device device, const vr::TrackedDevicePose_t& pose) {
             if (out.is_open()) PoseSampler::write_csv(out, t, device, pose);
-            PoseSampler::feed(detector, t, device, pose);
+            detector.push(device, t, position_of(pose), velocity_of(pose));
         });
         const auto event = detector.poll(t);
         for (const auto& knock : detector.take_knocks())
@@ -99,7 +78,7 @@ int calibrate(const std::string& kind_name) {
     while (!stopping && !calibrator.done() && calibrator.seconds_left(clock.now()) > 0) {
         const double t = clock.now();
         sampler.sample([&](Device device, const vr::TrackedDevicePose_t& pose) {
-            PoseSampler::feed(detector, t, device, pose);
+            detector.push(device, t, position_of(pose), velocity_of(pose));
         });
         detector.poll(t);
         for (const auto& knock : detector.take_knocks()) calibrator.hear(knock);
@@ -144,15 +123,7 @@ int report(int port) {
 
 int status(int port) {
     VrSession session(vr::VRApplication_Utility);
-    auto* apps = vr::VRApplications();
-    const bool installed = apps->IsApplicationInstalled(kAppKey);
-    std::cout << "Registered with SteamVR: " << (installed ? "yes" : "no") << "\n";
-    if (installed) {
-        std::cout << "Starts with SteamVR: " << (apps->GetApplicationAutoLaunch(kAppKey) ? "yes" : "no")
-                  << "\n";
-        const auto pid = apps->GetApplicationProcessId(kAppKey);
-        std::cout << "Running: " << (pid ? "yes, pid " + std::to_string(pid) : std::string("no")) << "\n";
-    }
+    std::cout << registration_text(true);
     const bool on = RoomView(port).active();
     std::cout << "Room View: " << (on ? "on" : "off") << "\n";
     return 0;
@@ -173,8 +144,7 @@ void usage() {
                  "  --calibrate KIND     Set the threshold for together, surface, or headset knocks\n"
                  "  --current-app        Print the running app's key, for blocked_apps\n"
                  "  --detect [--save F]  Print knocks live without acting. --save also writes raw poses\n"
-                 "  --record FILE        Write raw poses to CSV\n"
-                 "  --seconds N          Stop --detect or --record after N seconds\n"
+                 "  --seconds N          Stop --detect after N seconds\n"
                  "  --run                The resident app. SteamVR starts this\n";
 }
 
@@ -203,10 +173,7 @@ int main(int argc, char** argv) {
                 path = value();
             else if (arg == "--purge")
                 purge = true;
-            else if (arg == "--record") {
-                command = arg;
-                path = value();
-            } else if (arg == "--calibrate") {
+            else if (arg == "--calibrate") {
                 command = arg;
                 kind = value();
             } else if (arg == "--install" || arg == "--uninstall" || arg == "--status" || arg == "--toggle"
@@ -242,7 +209,6 @@ int main(int argc, char** argv) {
         if (purge && command != "--uninstall")
             throw std::runtime_error("--purge only works with --uninstall");
         if (command == "--uninstall") return uninstall(purge);
-        if (command == "--record") return record(path, seconds);
         if (command == "--detect") return detect(seconds, path);
         if (command == "--calibrate") return calibrate(kind);
         if (command == "--update") return update();

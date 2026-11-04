@@ -1,5 +1,7 @@
 #include "style.hpp"
 
+#include "steamvr.hpp"
+
 #include <openvr.h>
 
 #include <stdexcept>
@@ -30,12 +32,10 @@ RoomViewStyle read_style() {
 RoomViewStyle toggle_style() {
     const auto target =
         read_style() == RoomViewStyle::Opaque ? RoomViewStyle::Translucent : RoomViewStyle::Opaque;
-    vr::EVRSettingsError error = vr::VRSettingsError_None;
-    vr::VRSettings()->SetInt32(kSection, kKey, static_cast<int>(target), &error);
-    check(error);
-    if (read_style() != target)
-        throw std::runtime_error(
-            "SteamVR did not keep camera.roomViewStyle. The runtime may have rejected it.");
+    set_setting(
+        "camera.roomViewStyle", target, read_style, [](RoomViewStyle style, vr::EVRSettingsError* error) {
+            vr::VRSettings()->SetInt32(kSection, kKey, static_cast<int>(style), error);
+        });
     return target;
 }
 

@@ -83,10 +83,10 @@ The report includes the reporter's `calibration.json`. To replay with their thre
 On the Frame, in Konsole or over SSH:
 
 ```sh
-<install folder>/knockthru --record my-knocks.csv --seconds 45
+<install folder>/knockthru --detect --save my-knocks.csv --seconds 45
 gzip my-knocks.csv
 ```
 
-`knockthru --detect` prints knocks live without acting on them. Add `--save FILE` to keep the poses from that session too.
+`--detect` prints each knock it hears without acting on it. `--save` writes the poses to the file.
 
 Each row of a recording is one device at one moment: the time in seconds, the device (`hmd`, `left`, or `right`), whether the pose was valid, then position, velocity, and angular velocity, each as x, y, and z.

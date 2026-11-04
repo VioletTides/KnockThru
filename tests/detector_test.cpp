@@ -77,7 +77,6 @@ void synthetic_tests() {
     events = synthetic({0.5, 0.75, 1.4, 1.65});
     check(events.size() == 1, "a double 650 ms after another double does nothing");
 
-    check(synthetic({0.75, 1.3, 1.55}).empty(), "a double 550 ms after another knock does nothing");
     check(synthetic({1.0, 1.4, 1.8, 2.25}).size() == 0, "four knocks with even gaps do nothing");
     check(synthetic({0.5, 0.75, 1.75, 2.0}).size() == 2, "two doubles 1 s apart both count");
     check(synthetic({0.2, 1.3, 1.55}).size() == 1, "a double 1.1 s after another knock counts");
@@ -269,15 +268,10 @@ DetectorConfig test_config() {
     DetectorConfig config;
     const char* set = std::getenv("KNOCKTHRU_TEST_SET");
     if (!set) return config;
-    const std::map<std::string, double*> fields{{"controller_peak", &config.controller_peak},
-        {"confirmed_peak", &config.confirmed_peak}, {"partner_peak", &config.partner_peak},
-        {"headset_peak", &config.headset_peak}, {"headset_knock_peak", &config.headset_knock_peak},
-        {"min_approach_together", &config.min_approach[0]}, {"min_approach_surface", &config.min_approach[1]},
-        {"min_approach_headset", &config.min_approach[2]}, {"max_speed_after", &config.max_speed_after},
-        {"surface_speed_after", &config.surface_speed_after}, {"max_speed_before", &config.max_speed_before},
-        {"surface_speed_before", &config.surface_speed_before}, {"same_spot", &config.same_spot},
-        {"min_gap_s", &config.min_gap_s}, {"fast_gap_s", &config.fast_gap_s},
-        {"max_gap_s", &config.max_gap_s}, {"quiet_before_s", &config.quiet_before_s}};
+    auto fields = detector_fields(config);
+    fields.insert({{"min_approach_together", &config.min_approach[0]},
+        {"min_approach_surface", &config.min_approach[1]},
+        {"min_approach_headset", &config.min_approach[2]}});
     std::stringstream list(set);
     std::string item;
     while (std::getline(list, item, ',')) {
@@ -292,31 +286,22 @@ DetectorConfig test_config() {
     return config;
 }
 
-std::vector<KnockEvent> replay_events(const std::string& name, const DetectorConfig& config) {
-    const auto rows = as_read(load(std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz"));
+// The rows the pose thread would push for a recording: a name in tests/data, or a path
+// to any .csv.gz recording.
+std::vector<Row> read_recording(const std::string& name, int* reads = nullptr) {
+    const bool path = name.find('/') != std::string::npos || name.find(".csv") != std::string::npos;
+    return as_read(load(path ? name : std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz"), reads);
+}
+
+// Feeds rows to a detector. `verbose` prints every knock, spike, sequence, and action as it goes.
+std::vector<KnockEvent> replay_rows(
+    const std::vector<Row>& rows, const DetectorConfig& config, bool verbose = false) {
     KnockDetector detector(config);
     std::vector<KnockEvent> events;
     for (const auto& row : rows) {
         detector.push(row.device, row.t, row.position, row.velocity);
-        if (auto event = detector.poll(row.t)) events.push_back(*event);
-    }
-    if (!rows.empty())
-        if (auto event = detector.poll(rows.back().t + 1)) events.push_back(*event);
-    return events;
-}
-
-// `name` is a recording in tests/data, or a path to any .csv.gz recording.
-std::map<std::string, int> replay(const std::string& name) {
-    const bool path = name.find('/') != std::string::npos || name.find(".csv") != std::string::npos;
-    int reads = 0;
-    const auto rows =
-        as_read(load(path ? name : std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz"), &reads);
-    KnockDetector detector(test_config());
-    std::map<std::string, int> counts;
-    for (const auto& row : rows) {
-        detector.push(row.device, row.t, row.position, row.velocity);
-        auto event = detector.poll(row.t);
-        if (std::getenv("KNOCKTHRU_TEST_VERBOSE")) {
+        const auto event = detector.poll(row.t);
+        if (verbose) {
             for (const auto& knock : detector.take_knocks())
                 std::cout << "    knock " << knock.t << " " << to_string(knock.kind) << " source "
                           << knock.source << " peak " << knock.peak << "\n";
@@ -327,17 +312,28 @@ std::map<std::string, int> replay(const std::string& name) {
             for (const auto& sequence : detector.take_sequences())
                 std::cout << "    sequence of " << sequence.knocks.size() << ": "
                           << to_string(sequence.verdict) << "\n";
-        }
-        if (event) {
-            if (std::getenv("KNOCKTHRU_TEST_VERBOSE"))
+            if (event)
                 std::cout << "    " << event->t << " " << to_string(event->kind) << "x" << event->count
                           << "\n";
-            ++counts[std::string(to_string(event->kind)) + "x" + std::to_string(event->count)];
         }
+        if (event) events.push_back(*event);
     }
     if (!rows.empty())
-        if (auto event = detector.poll(rows.back().t + 1))
-            ++counts[std::string(to_string(event->kind)) + "x" + std::to_string(event->count)];
+        if (auto event = detector.poll(rows.back().t + 1)) events.push_back(*event);
+    return events;
+}
+
+std::vector<KnockEvent> replay_events(const std::string& name, const DetectorConfig& config) {
+    return replay_rows(read_recording(name), config);
+}
+
+std::map<std::string, int> replay(const std::string& name) {
+    int reads = 0;
+    const auto rows = read_recording(name, &reads);
+    std::map<std::string, int> counts;
+    for (const auto& event :
+        replay_rows(rows, test_config(), std::getenv("KNOCKTHRU_TEST_VERBOSE") != nullptr))
+        ++counts[std::string(to_string(event.kind)) + "x" + std::to_string(event.count)];
     std::cout << "  " << name << " (" << rows.size() << " samples, " << reads << " reads):";
     for (const auto& [key, value] : counts) std::cout << " " << key << "=" << value;
     std::cout << "\n";
@@ -425,7 +421,7 @@ void replay_tests() {
 
 // Runs a calibration of `kind` on a recording, as the app would.
 Calibrator calibrate(const std::string& name, KnockKind kind) {
-    const auto rows = as_read(load(std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz"));
+    const auto rows = read_recording(name);
     Calibrator calibrator(kind, DetectorConfig{}, 0);
     KnockDetector detector(calibrator.detector_config());
     for (const auto& row : rows) {

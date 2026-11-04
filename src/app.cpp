@@ -73,13 +73,6 @@ struct DebugParts {
     std::optional<std::pair<double, double>> too_light; // detector time and peak of the last Too light spike
 };
 
-std::string today() {
-    const auto now = std::time(nullptr);
-    char date[16];
-    std::strftime(date, sizeof date, "%F", std::localtime(&now));
-    return date;
-}
-
 const char* sequence_name(const KnockEvent& event) { return event.count == 3 ? "triple" : "double"; }
 
 template <typename T> bool ready(const std::future<T>& job) {
@@ -119,8 +112,8 @@ private:
     void handle_click(const PanelClick& click, double t);
     void set_knock_action(int count, KnockAction action);
     void toggle_kind(KnockKind kind);
-    void turn_on_kind(KnockKind kind);
     void toggle_blocked_app();
+    std::string game_name() const;
     void factory_reset();
     void end_tour();
     void check_for_update();
@@ -154,12 +147,12 @@ private:
     void show(const std::string& message, bool error = false);
     void reload();
     void play_click();
+    void prepare_click();
     void start_tour();
     void read_room_view();
     void read_opaque();
     bool toggle_room_view(const std::string& why);
-    bool toggle_style(const std::string& why);
-    bool toggle_perf_overlay(const std::string& why);
+    bool toggle_setting(KnockAction action, const std::string& why);
     void run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t);
     bool save(const std::function<void()>& write);
     void start_check();
@@ -186,7 +179,7 @@ private:
 
     Clock clock_;
     PoseThread poses_{clock_};
-    std::vector<PoseThread::Sample> samples_; // kept, so take() never allocates
+    std::vector<PoseSample> samples_; // kept, so take() never allocates
     PanelState state_;
     std::string last_error_; // for the report link
 
@@ -274,7 +267,7 @@ void App::note_versions() {
     // A state file without knockthru_version comes from an older KnockThru.
     const bool ran_before = !app_state_.steamvr_version.empty();
     const auto before = app_state_.steamvr_version;
-    const auto previous = note_steamvr_version(app_state_, steamvr_version(), today());
+    const auto previous = note_steamvr_version(app_state_, steamvr_version(), time_text("%F"));
     if (!previous.empty()) log("SteamVR changed from " + previous + " to " + app_state_.steamvr_version);
     if (app_state_.steamvr_version != before) save_app_state();
     if (app_state_.knockthru_version == kVersion) return;
@@ -329,7 +322,7 @@ void App::run() {
                     log("Starting the first-run tour");
                     start_tour();
                 }
-                if (config_.sounds) prepare_click();
+                prepare_click();
                 read_room_view();
                 read_opaque();
             }
@@ -372,7 +365,7 @@ void App::run() {
 bool App::slow_check(double t) {
     next_slow_check_ = t + 2;
     // Keeps the click stream open while the panel shows, so a press clicks at once.
-    if (config_.sounds && panel_ && panel_->visible()) prepare_click();
+    if (panel_ && panel_->visible()) prepare_click();
     // Restyles the bar icon while the dashboard is open, in case the bar page
     // reloaded. If this fails, the icon stays undimmed. The classic icon has no tint.
     if (vr::VROverlay()->IsDashboardVisible() && (!tint_job_.valid() || ready(tint_job_))) {
@@ -426,7 +419,7 @@ void App::handle_click(const PanelClick& click, double t) {
     if (click.command != PanelCommand::RoomView) play_click();
     switch (click.command) {
     case PanelCommand::RoomView: toggle_room_view(""); break;
-    case PanelCommand::Style: toggle_style(""); break;
+    case PanelCommand::Style: toggle_setting(KnockAction::Style, ""); break;
     case PanelCommand::Navigate: break;
     case PanelCommand::Pause:
         if (save([&] { save_paused(!config_.paused); }))
@@ -437,7 +430,9 @@ void App::handle_click(const PanelClick& click, double t) {
         break;
     case PanelCommand::SetKnockAction: set_knock_action(click.count, click.action); break;
     case PanelCommand::Kind: toggle_kind(click.kind); break;
-    case PanelCommand::TurnOnKind: turn_on_kind(click.kind); break;
+    case PanelCommand::TurnOnKind:
+        if (!config_.detector.enabled[static_cast<int>(click.kind)]) toggle_kind(click.kind);
+        break;
     case PanelCommand::BlockApp: toggle_blocked_app(); break;
     case PanelCommand::FactoryReset: factory_reset(); break;
 
@@ -490,21 +485,14 @@ void App::toggle_kind(KnockKind kind) {
         show(std::string(to_string(kind)) + " knocks " + (config_.detector.enabled[i] ? "on" : "off"));
 }
 
-// Turns knocks of `kind` on, for the Saved banner after a calibration.
-void App::turn_on_kind(KnockKind kind) {
-    const auto i = static_cast<int>(kind);
-    if (config_.detector.enabled[i]) return;
-    auto enabled = config_.detector.enabled;
-    enabled[i] = true;
-    if (!save([&] { save_knock_types(enabled); })) return;
-    show(std::string(to_string(kind)) + " knocks on");
-}
+// The name of the app in front, or its key when SteamVR gives no name.
+std::string App::game_name() const { return state_.app_name.empty() ? state_.app_key : state_.app_name; }
 
 void App::toggle_blocked_app() {
     if (state_.app_key.empty()) return;
     auto blocked = config_.blocked_apps;
     if (!blocked.erase(state_.app_key)) blocked.insert(state_.app_key);
-    const auto name = state_.app_name.empty() ? state_.app_key : state_.app_name;
+    const auto name = game_name();
     if (!save([&] { save_blocked_apps(blocked); })) return;
     const bool off = config_.blocked_apps.count(state_.app_key) > 0;
     show(std::string("Knocks ") + (off ? "off" : "on") + " in " + name);
@@ -685,7 +673,7 @@ void App::record_knocks(double t, const std::deque<Knock>& knocks, const std::op
 Handled App::handle_knocks(
     double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event) {
     // Opens the click stream on the first knock, so it is ready if a triple knock follows.
-    if (config_.sounds && !config_.paused && !knocks.empty()) prepare_click();
+    if (!config_.paused && !knocks.empty()) prepare_click();
 
     if (calibrator_ && calibration_ && calibration_->phase == Phase::Recording) {
         for (const auto& knock : knocks) calibrator_->hear(knock);
@@ -733,7 +721,7 @@ Handled App::handle_knocks(
         const bool passed = event->kind == calibrator_->kind() && event->count == 2;
         calibration_->trial_passed = passed;
         calibration_->trial_heard =
-            std::string("a ") + to_string(event->kind) + " knock " + (event->count == 3 ? "thrice" : "twice");
+            std::string("a ") + to_string(event->kind) + " knock " + count_word(event->count);
         calibration_->trial_t = t;
         log("Try step heard " + calibration_->trial_heard + (passed ? ": passed" : ": missed"));
         haptics_.buzz(passed ? 1 : 3, t);
@@ -977,7 +965,7 @@ void App::fill_debug_view(double t) {
         const auto power = battery_mw();
         d.battery_text = power ? std::to_string(std::lround(*power)) + " mW" : "Plugged in";
     }
-    StatusRow game{"Game", state_.app_name.empty() ? state_.app_key : state_.app_name, "", false};
+    StatusRow game{"Game", game_name(), "", false};
     if (game.value.empty()) game.value = "None";
     StatusRow passthrough{"Passthrough", "Checking", "", false};
     if (!state_.room_view_error.empty()) {
@@ -1149,6 +1137,10 @@ void App::play_click() {
     if (config_.sounds) knockthru::play_click();
 }
 
+void App::prepare_click() {
+    if (config_.sounds) knockthru::prepare_click();
+}
+
 // A new tour counts kinds calibrated earlier as done, so a replay only asks for the rest.
 void App::start_tour() {
     tour_.emplace();
@@ -1213,7 +1205,7 @@ void App::run_action(KnockAction action, const KnockEvent& event, const std::str
     case KnockAction::Style:
     case KnockAction::PerfGraph: {
         // Steam clicks when passthrough switches, so KnockThru clicks only for these.
-        const bool changed = action == KnockAction::Style ? toggle_style(why) : toggle_perf_overlay(why);
+        const bool changed = toggle_setting(action, why);
         if (changed) play_click();
         haptics_.buzz(changed ? buzzes : 3, t);
         if (changed) tick_tour();
@@ -1223,24 +1215,23 @@ void App::run_action(KnockAction action, const KnockEvent& event, const std::str
     }
 }
 
-bool App::toggle_perf_overlay(const std::string& why) {
+// Toggles the room view style for Style, or the performance graph for PerfGraph.
+bool App::toggle_setting(KnockAction action, const std::string& why) {
+    const bool style = action == KnockAction::Style;
+    const std::string label = style ? "Style" : "Performance graph";
     try {
-        show(std::string("Performance graph ") + (knockthru::toggle_perf_overlay() ? "on" : "off") + why);
+        std::string now;
+        if (style) {
+            const auto next = toggle_style();
+            state_.opaque = next == RoomViewStyle::Opaque;
+            now = to_string(next);
+        } else {
+            now = toggle_perf_overlay() ? "on" : "off";
+        }
+        show(label + " " + now + why);
         return true;
     } catch (const std::exception& error) {
-        show(std::string("Performance graph not changed: ") + error.what(), true);
-        return false;
-    }
-}
-
-bool App::toggle_style(const std::string& why) {
-    try {
-        const auto style = knockthru::toggle_style();
-        state_.opaque = style == RoomViewStyle::Opaque;
-        show(std::string("Style ") + to_string(style) + why);
-        return true;
-    } catch (const std::exception& error) {
-        show(std::string("Style not changed: ") + error.what(), true);
+        show(label + " not changed: " + error.what(), true);
         return false;
     }
 }

@@ -6,6 +6,9 @@
 
 namespace knockthru {
 
+namespace {
+
+// Percent-encodes everything except letters, digits, and -._~.
 std::string url_encode(const std::string& text) {
     std::string out;
     for (const char c : text) {
@@ -21,6 +24,8 @@ std::string url_encode(const std::string& text) {
     return out;
 }
 
+} // namespace
+
 std::string issue_url(const IssueFields& fields) {
     const auto field = [](const char* id, const std::string& value) {
         // Cuts on a character boundary, so UTF-8 stays valid.
@@ -35,7 +40,8 @@ std::string issue_url(const IssueFields& fields) {
         + (fields.error.empty() ? "" : field("last-error", fields.error));
 }
 
-std::string fit_report(const std::string& report, std::size_t limit) {
+std::string fit_report(const std::string& report) {
+    constexpr std::size_t limit = 60000;
     if (report.size() <= limit) return report;
     const std::size_t head = limit / 8;
     const std::string mark =

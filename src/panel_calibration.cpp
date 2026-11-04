@@ -43,10 +43,26 @@ void Panel::knock_scene(KnockKind kind, Rect box, float t, int knocks) {
     }
 }
 
+// A card with the knock kind's scene above its name.
+void Panel::knock_card(KnockKind kind, Rect box, float t, int knocks) {
+    canvas_.rounded_rect(box, kRadius, kSurface);
+    knock_scene(kind, {box.x + 20, box.y + 40, box.w - 40, 340}, t, knocks);
+    canvas_.text(
+        bold_, kKindTitles[static_cast<int>(kind)], box.x + box.w / 2, box.y + 440, 28, kText, Align::Center);
+}
+
+// The status card while a knock is awaited: a pulsing dot and "Listening".
+void Panel::listening(Rect status) {
+    canvas_.rounded_rect(status, kRadius, kSurface);
+    const float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(now_) * 2 * anim::kPi / 1.4f);
+    const float cy = status.y + status.h / 2;
+    canvas_.circle(status.x + 56, cy, 14 + 6 * pulse, faded(kAccent, 0.5f + 0.5f * pulse));
+    canvas_.text(bold_, "Listening", status.x + 96, cy, 34, kText);
+}
+
 // Step 1: three cards, each knocking twice on a loop, as knocks work outside calibration.
 void Panel::pick_screen(const PanelState& state) {
-    button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Settings);
-    canvas_.text(bold_, "Calibrate", kMargin + 172, 68, 38, kText);
+    back_header("Calibrate", Screen::Settings);
     steps(1, 4);
     const float t = static_cast<float>(std::fmod(now_, 2.6));
     // The cards fill the panel, and make room when the Saved banner shows.
@@ -88,8 +104,7 @@ void Panel::pick_screen(const PanelState& state) {
 // Step 2: how to knock for calibration, one knock at a time.
 void Panel::learn_screen(const PanelState& state) {
     const int k = static_cast<int>(learn_kind_);
-    button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Pick);
-    canvas_.text(bold_, kKindTitles[k], kMargin + 172, 68, 38, kText);
+    back_header(kKindTitles[k], Screen::Pick);
     steps(2, 4);
     const Rect box{kMargin, 128, 540, 560};
     canvas_.rounded_rect(box, kRadius, kSurface);
@@ -112,16 +127,12 @@ void Panel::learn_screen(const PanelState& state) {
 
 // Step 3: counts single knocks, with each one's strength.
 void Panel::record_screen(const PanelState& state, const CalibrationView& view) {
-    const int k = static_cast<int>(view.kind);
     button({kMargin, 36, 160, 64}, "Cancel", PanelClick{PanelCommand::CancelCalibration, view.kind},
         std::nullopt);
     canvas_.text(bold_, "Recording", kMargin + 192, 68, 38, kText);
     steps(3, 4);
     const Rect box{kMargin, 128, 420, 560};
-    canvas_.rounded_rect(box, kRadius, kSurface);
-    knock_scene(
-        view.kind, {box.x + 20, box.y + 40, box.w - 40, 340}, static_cast<float>(std::fmod(now_, 2.0)), 1);
-    canvas_.text(bold_, kKindTitles[k], box.x + box.w / 2, box.y + 440, 28, kText, Align::Center);
+    knock_card(view.kind, box, static_cast<float>(std::fmod(now_, 2.0)), 1);
     canvas_.text(regular_, "Wait for the ring, then knock once", box.x + box.w / 2, box.y + 486, 26, kDim,
         Align::Center);
 
@@ -189,16 +200,12 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
 
 // Step 4: a double knock at the new thresholds, without switching passthrough.
 void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
-    const int k = static_cast<int>(view.kind);
     button({kMargin, 36, 160, 64}, "Cancel", PanelClick{PanelCommand::CancelCalibration, view.kind},
         std::nullopt);
     canvas_.text(bold_, "Try it", kMargin + 192, 68, 38, kText);
     steps(4, 4);
     const Rect box{kMargin, 128, 420, 500};
-    canvas_.rounded_rect(box, kRadius, kSurface);
-    knock_scene(
-        view.kind, {box.x + 20, box.y + 40, box.w - 40, 340}, static_cast<float>(std::fmod(now_, 2.6)), 2);
-    canvas_.text(bold_, kKindTitles[k], box.x + box.w / 2, box.y + 440, 28, kText, Align::Center);
+    knock_card(view.kind, box, static_cast<float>(std::fmod(now_, 2.6)), 2);
 
     const float x = box.x + box.w + 48, w = kWidth - kMargin - x;
     canvas_.text(bold_, "Knock twice", x, 190, 36, kText);
@@ -209,11 +216,7 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
     const Rect status{x, 368, w, 240};
     const float since = static_cast<float>(now_ - view.trial_t);
     if (!view.trial_passed) {
-        canvas_.rounded_rect(status, kRadius, kSurface);
-        const float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(now_) * 2 * anim::kPi / 1.4f);
-        canvas_.circle(
-            status.x + 56, status.y + status.h / 2, 14 + 6 * pulse, faded(kAccent, 0.5f + 0.5f * pulse));
-        canvas_.text(bold_, "Listening", status.x + 96, status.y + status.h / 2, 34, kText);
+        listening(status);
     } else if (*view.trial_passed) {
         canvas_.rounded_rect(status, kRadius, kActive);
         const float cx = status.x + 64, cy = status.y + status.h / 2;

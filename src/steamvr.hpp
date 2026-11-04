@@ -21,6 +21,8 @@ extern volatile std::sig_atomic_t stopping;
 // Prints a line, and appends it with a timestamp to application.log once open_log() ran.
 void log(const std::string& message);
 void open_log();
+// The local time formatted with strftime `format`, such as "%F %T".
+std::string time_text(const char* format);
 
 // This program's file, and the folder it runs from.
 std::filesystem::path executable();
@@ -48,6 +50,20 @@ public:
 
 // Throws with SteamVR's name for `error`, unless it is VRApplicationError_None.
 void check_app(vr::EVRApplicationError error, const char* what);
+
+// Writes `target` with `write(target, &error)`, then reads it back with `read()`. Throws if SteamVR
+// reports an error or did not keep the value. `name` is the setting as "section.key".
+template <typename T, typename Read, typename Write>
+void set_setting(const char* name, T target, Read read, Write write) {
+    vr::EVRSettingsError error = vr::VRSettingsError_None;
+    write(target, &error);
+    if (error != vr::VRSettingsError_None)
+        throw std::runtime_error(
+            std::string(name) + ": " + vr::VRSettings()->GetSettingsErrorNameFromEnum(error));
+    if (read() != target)
+        throw std::runtime_error(
+            std::string("SteamVR did not keep ") + name + ". The runtime may have rejected it.");
+}
 
 // The app key of the app in front, or "" for none.
 std::string scene_app_key();

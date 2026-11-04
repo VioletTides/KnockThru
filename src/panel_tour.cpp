@@ -33,7 +33,6 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
     const bool triple = tour.step == TourView::Step::Triple;
     canvas_.text(bold_, triple ? "Knock thrice" : "Knock twice", kMargin, 68, 38, kText);
     const Rect box{kMargin, 128, 420, 500};
-    canvas_.rounded_rect(box, kRadius, kSurface);
     // The scene shows each knock kind left on in turn, one per loop.
     std::vector<KnockKind> shown;
     for (int k = 0; k < 3; ++k)
@@ -41,10 +40,7 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
     if (shown.empty()) shown = {KnockKind::Together, KnockKind::Surface, KnockKind::Headset};
     const double loop = 2.6;
     const auto kind = shown[static_cast<std::size_t>(now_ / loop) % shown.size()];
-    knock_scene(kind, {box.x + 20, box.y + 40, box.w - 40, 340}, static_cast<float>(std::fmod(now_, loop)),
-        triple ? 3 : 2);
-    canvas_.text(
-        bold_, kKindTitles[static_cast<int>(kind)], box.x + box.w / 2, box.y + 440, 28, kText, Align::Center);
+    knock_card(kind, box, static_cast<float>(std::fmod(now_, loop)), triple ? 3 : 2);
 
     const float x = box.x + box.w + 48, w = kWidth - kMargin - x;
     float y = 190;
@@ -78,10 +74,7 @@ void Panel::tour_knock_step(const PanelState& state, const TourView& tour) {
         paragraph(
             regular_, state.room_view_error, status.x + 40, status.y + 118, 26, 36, status.w - 80, 2, kDim);
     } else if (heard_t < 0) {
-        canvas_.rounded_rect(status, kRadius, kSurface);
-        const float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(now_) * 2 * anim::kPi / 1.4f);
-        canvas_.circle(status.x + 56, cy, 14 + 6 * pulse, faded(kAccent, 0.5f + 0.5f * pulse));
-        canvas_.text(bold_, "Listening", status.x + 96, cy, 34, kText);
+        listening(status);
     } else {
         canvas_.rounded_rect(status, kRadius, kActive);
         const float cx = status.x + 64;
@@ -112,7 +105,7 @@ void Panel::tour_screen(const PanelState& state, const TourView& tour) {
     const float cx = kWidth / 2.0f;
     switch (tour.step) {
     case Step::Welcome: {
-        canvas_.draw(icon(152, IconStyle::Tile), (kWidth - 152) / 2, 150);
+        canvas_.draw(icon(152), (kWidth - 152) / 2, 150);
         canvas_.text(bold_, "Welcome to KnockThru", cx, 370, 48, kText, Align::Center);
         canvas_.text(regular_, "Knock to switch passthrough, without the side button", cx, 440, 30, kDim,
             Align::Center);

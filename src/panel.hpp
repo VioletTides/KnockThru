@@ -199,13 +199,13 @@ private:
     std::optional<View> view_;
     std::optional<TourView::Step> tour_step_;
     double view_t_ = 0;
-    std::map<std::pair<int, IconStyle>, Canvas> icons_;
+    std::map<int, Canvas> icons_;
 
-    const Canvas& icon(int size, IconStyle style);
+    const Canvas& icon(int size);
     bool hovered(Rect rect) const;
     float paragraph(Font& font, const std::string& text, float x, float y, float size, float leading,
         float width, int max_lines, Color color);
-    void header(const std::string& title);
+    void back_header(const std::string& title, Screen back_to);
     void main_screen(const PanelState& state);
     void pick_screen(const PanelState& state);
     void learn_screen(const PanelState& state);
@@ -220,6 +220,9 @@ private:
     void steps(int current, int total);
     void check_mark(float cx, float cy, float radius, float pop, std::optional<Color> fill = std::nullopt);
     void knock_scene(KnockKind kind, Rect box, float t, int knocks);
+    void knock_card(KnockKind kind, Rect box, float t, int knocks);
+    void listening(Rect status);
+    void scrim();
     void settings_screen(const PanelState& state);
     void actions_screen(const PanelState& state);
     void action_list(Rect rect, const PanelState& state, int count);
@@ -252,6 +255,8 @@ private:
     void list_card(Rect rect, int rows, float row_height = 80);
     void list_row(
         Rect rect, const std::string& label, const std::string& detail, float reserve, bool hover_fill);
+    void value_row(Rect rect, const std::string& label, const std::string& detail, const std::string& value,
+        Color color);
     void feed_rows(Rect rect, const std::vector<FeedEntry>& entries);
     void switch_control(float right, float cy, bool on, bool enabled, float scale);
     void message(const PanelState& state, float y);

@@ -1,10 +1,11 @@
 #include "update.hpp"
 
+#include "http.hpp"
+
 #include <json.hpp>
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cerrno>
 #include <csignal>
 #include <cstdlib>
@@ -130,39 +131,28 @@ std::vector<char*> argv_of(const std::vector<std::string>& args) {
     return argv;
 }
 
-// The status code of the last response in a curl header dump, after redirects, or 0.
-int last_status(const fs::path& headers) {
-    std::ifstream stream(headers);
+struct Response {
     int status = 0;
-    for (std::string line; std::getline(stream, line);) {
-        if (line.rfind("HTTP/", 0) != 0) continue;
-        std::istringstream fields(line);
-        std::string version;
-        fields >> version >> status;
-    }
-    return status;
-}
-
-// The Content-Length of the last response in a curl header dump, after redirects, or 0.
-// curl writes one for file:// URLs too.
-std::uintmax_t last_length(const fs::path& headers) {
-    std::ifstream stream(headers);
     std::uintmax_t length = 0;
+};
+
+// The status code and Content-Length of the last response in a curl header dump, after
+// redirects, or 0 for each. curl writes a Content-Length for file:// URLs too.
+Response last_response(const fs::path& headers) {
+    std::ifstream stream(headers);
+    Response response;
+    std::string block;
     for (std::string line; std::getline(stream, line);) {
-        if (line.rfind("HTTP/", 0) == 0) length = 0;
-        const auto colon = line.find(':');
-        if (colon == std::string::npos) continue;
-        std::string name = line.substr(0, colon);
-        std::transform(
-            name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
-        if (name != "content-length") continue;
-        try {
-            length = std::stoull(line.substr(colon + 1));
-        } catch (const std::exception&) {
-            length = 0;
+        if (line.rfind("HTTP/", 0) == 0) {
+            std::istringstream fields(line);
+            std::string version;
+            fields >> version >> response.status;
+            block.clear();
         }
+        block += line + "\n";
     }
-    return length;
+    response.length = content_length(block).value_or(0);
+    return response;
 }
 
 // Downloads `url` to `path` with curl, and turns failures into readable messages.
@@ -176,7 +166,7 @@ void download(const std::string& url, const fs::path& path, int seconds, const s
     const auto follow = [&] {
         if (!progress) return;
         std::error_code error;
-        const auto length = last_length(headers);
+        const auto length = last_response(headers).length;
         const auto size = fs::file_size(path, error);
         if (length > 0 && !error)
             *progress = scale
@@ -189,7 +179,7 @@ void download(const std::string& url, const fs::path& path, int seconds, const s
             std::to_string(seconds), "--dump-header", headers, "--output", path.string(), url},
         cancel, follow);
     if (code == -2) throw Canceled("Download canceled");
-    const int status = last_status(headers);
+    const int status = last_response(headers).status;
     std::error_code ignored;
     fs::remove(headers, ignored);
     if (status == 404) throw std::runtime_error(missing);
@@ -250,8 +240,6 @@ std::string sha256(const std::string& data) {
     hash.add(reinterpret_cast<const unsigned char*>(data.data()), data.size());
     return hash.hex();
 }
-
-std::string sha256_file(const fs::path& path) { return sha256(read_file(path)); }
 
 int run_program(const std::vector<std::string>& args, const std::atomic<bool>* cancel,
     const std::function<void()>& on_poll) {
@@ -340,7 +328,7 @@ void install_release(const Release& release, const fs::path& install_directory, 
         const auto zip = work / "release.zip";
         download(release.url, zip, 180, "The release ZIP is missing on GitHub", cancel, progress, 0.9f);
         reach(0.9f);
-        if (sha256_file(zip) != release.sha256)
+        if (sha256(read_file(zip)) != release.sha256)
             throw std::runtime_error("The download did not match its checksum. Nothing changed");
         const auto staging = work / "files";
         fs::create_directories(staging);

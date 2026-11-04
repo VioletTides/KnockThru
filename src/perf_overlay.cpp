@@ -1,5 +1,7 @@
 #include "perf_overlay.hpp"
 
+#include "steamvr.hpp"
+
 #include <openvr.h>
 
 #include <stdexcept>
@@ -26,12 +28,11 @@ bool read_perf_overlay() {
 
 bool toggle_perf_overlay() {
     const bool target = !read_perf_overlay();
-    vr::EVRSettingsError error = vr::VRSettingsError_None;
-    vr::VRSettings()->SetBool(vr::k_pch_Perf_Section, vr::k_pch_Perf_PerfGraphInHMD_Bool, target, &error);
-    check(error);
-    if (read_perf_overlay() != target)
-        throw std::runtime_error(
-            "SteamVR did not keep perfcheck.perfGraphInHMD. The runtime may have rejected it.");
+    set_setting(
+        "perfcheck.perfGraphInHMD", target, read_perf_overlay, [](bool shown, vr::EVRSettingsError* error) {
+            vr::VRSettings()->SetBool(
+                vr::k_pch_Perf_Section, vr::k_pch_Perf_PerfGraphInHMD_Bool, shown, error);
+        });
     return target;
 }
 

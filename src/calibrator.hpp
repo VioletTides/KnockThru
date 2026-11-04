@@ -48,13 +48,10 @@ public:
     bool done() const { return count() >= kWanted; }
     double seconds_left(double now) const;
     int heard(Heard heard) const { return heard_[static_cast<int>(heard)]; }
-    double weakest() const;
     const std::vector<double>& peaks() const { return peaks_; }
     const std::vector<double>& speeds() const { return speeds_; } // approach speeds, m/s
 
-    static double peak_threshold(KnockKind kind, const std::vector<double>& peaks); // m/s^2
     static double floor(KnockKind kind); // the lowest spike threshold calibration sets
-    static double approach_threshold(const std::vector<double>& speeds); // m/s
 
     KindCalibration result() const; // call after done()
 
@@ -64,6 +61,9 @@ public:
     KindCalibration save() const; // writes calibration.json
 
 private:
+    static double peak_threshold(KnockKind kind, const std::vector<double>& peaks); // m/s^2
+    static double approach_threshold(const std::vector<double>& speeds); // m/s
+
     KnockKind kind_;
     DetectorConfig config_;
     double start_;

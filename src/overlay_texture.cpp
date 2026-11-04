@@ -15,6 +15,44 @@
 namespace knockthru {
 namespace {
 
+// Vulkan functions loaded at run time. The instance list loads through vkGetInstanceProcAddr and
+// the device list through vkGetDeviceProcAddr.
+#define KT_VK_INSTANCE_FUNCTIONS(X)                                                                          \
+    X(DestroyInstance)                                                                                       \
+    X(EnumeratePhysicalDevices)                                                                              \
+    X(GetPhysicalDeviceQueueFamilyProperties)                                                                \
+    X(GetPhysicalDeviceMemoryProperties)                                                                     \
+    X(CreateDevice)                                                                                          \
+    X(GetDeviceProcAddr)
+#define KT_VK_DEVICE_FUNCTIONS(X)                                                                            \
+    X(DestroyDevice)                                                                                         \
+    X(GetDeviceQueue)                                                                                        \
+    X(CreateBuffer)                                                                                          \
+    X(DestroyBuffer)                                                                                         \
+    X(GetBufferMemoryRequirements)                                                                           \
+    X(BindBufferMemory)                                                                                      \
+    X(CreateImage)                                                                                           \
+    X(DestroyImage)                                                                                          \
+    X(GetImageMemoryRequirements)                                                                            \
+    X(BindImageMemory)                                                                                       \
+    X(AllocateMemory)                                                                                        \
+    X(FreeMemory)                                                                                            \
+    X(MapMemory)                                                                                             \
+    X(CreateCommandPool)                                                                                     \
+    X(DestroyCommandPool)                                                                                    \
+    X(AllocateCommandBuffers)                                                                                \
+    X(BeginCommandBuffer)                                                                                    \
+    X(EndCommandBuffer)                                                                                      \
+    X(ResetCommandBuffer)                                                                                    \
+    X(CmdPipelineBarrier)                                                                                    \
+    X(CmdCopyBufferToImage)                                                                                  \
+    X(CreateFence)                                                                                           \
+    X(DestroyFence)                                                                                          \
+    X(ResetFences)                                                                                           \
+    X(WaitForFences)                                                                                         \
+    X(QueueSubmit)                                                                                           \
+    X(DeviceWaitIdle)
+
 void check(VkResult result, const char* what) {
     if (result != VK_SUCCESS)
         throw std::runtime_error(std::string("Vulkan ") + what + " failed: " + std::to_string(result));
@@ -26,6 +64,13 @@ std::vector<std::string> split(const std::string& text) {
     std::istringstream stream(text);
     for (std::string word; stream >> word;) out.push_back(word);
     return out;
+}
+
+// Asks SteamVR for a required extension list through `fill(buffer, size)`.
+template <typename Fill> std::vector<std::string> required_extensions(Fill fill) {
+    std::array<char, 4096> buffer{};
+    fill(buffer.data(), static_cast<uint32_t>(buffer.size()));
+    return split(buffer.data());
 }
 
 std::vector<const char*> c_strings(const std::vector<std::string>& strings) {
@@ -56,41 +101,10 @@ struct OverlayTexture::Impl {
     VkFence fence = VK_NULL_HANDLE;
     int next = 0;
 
-#define KT_VK(name) PFN_vk##name name = nullptr
-    KT_VK(CreateInstance);
-    KT_VK(DestroyInstance);
-    KT_VK(EnumeratePhysicalDevices);
-    KT_VK(GetPhysicalDeviceQueueFamilyProperties);
-    KT_VK(GetPhysicalDeviceMemoryProperties);
-    KT_VK(CreateDevice);
-    KT_VK(DestroyDevice);
-    KT_VK(GetDeviceQueue);
-    KT_VK(GetDeviceProcAddr);
-    KT_VK(CreateBuffer);
-    KT_VK(DestroyBuffer);
-    KT_VK(GetBufferMemoryRequirements);
-    KT_VK(BindBufferMemory);
-    KT_VK(CreateImage);
-    KT_VK(DestroyImage);
-    KT_VK(GetImageMemoryRequirements);
-    KT_VK(BindImageMemory);
-    KT_VK(AllocateMemory);
-    KT_VK(FreeMemory);
-    KT_VK(MapMemory);
-    KT_VK(CreateCommandPool);
-    KT_VK(DestroyCommandPool);
-    KT_VK(AllocateCommandBuffers);
-    KT_VK(BeginCommandBuffer);
-    KT_VK(EndCommandBuffer);
-    KT_VK(ResetCommandBuffer);
-    KT_VK(CmdPipelineBarrier);
-    KT_VK(CmdCopyBufferToImage);
-    KT_VK(CreateFence);
-    KT_VK(DestroyFence);
-    KT_VK(ResetFences);
-    KT_VK(WaitForFences);
-    KT_VK(QueueSubmit);
-    KT_VK(DeviceWaitIdle);
+    PFN_vkCreateInstance CreateInstance = nullptr;
+#define KT_VK(name) PFN_vk##name name = nullptr;
+    KT_VK_INSTANCE_FUNCTIONS(KT_VK)
+    KT_VK_DEVICE_FUNCTIONS(KT_VK)
 #undef KT_VK
 
     template <typename T> void load(T& fn, const char* name, bool device_level) {
@@ -115,10 +129,9 @@ struct OverlayTexture::Impl {
         if (!get_instance_proc) throw std::runtime_error("vkGetInstanceProcAddr not found");
         load(CreateInstance, "vkCreateInstance", false);
 
-        std::array<char, 4096> buffer{};
-        vr::VRCompositor()->GetVulkanInstanceExtensionsRequired(
-            buffer.data(), static_cast<uint32_t>(buffer.size()));
-        const auto extensions = split(buffer.data());
+        const auto extensions = required_extensions([](char* buffer, uint32_t size) {
+            vr::VRCompositor()->GetVulkanInstanceExtensionsRequired(buffer, size);
+        });
         const auto names = c_strings(extensions);
         VkApplicationInfo app{};
         app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -131,12 +144,9 @@ struct OverlayTexture::Impl {
         info.ppEnabledExtensionNames = names.data();
         check(CreateInstance(&info, nullptr, &instance), "instance");
 
-        load(DestroyInstance, "vkDestroyInstance", false);
-        load(EnumeratePhysicalDevices, "vkEnumeratePhysicalDevices", false);
-        load(GetPhysicalDeviceQueueFamilyProperties, "vkGetPhysicalDeviceQueueFamilyProperties", false);
-        load(GetPhysicalDeviceMemoryProperties, "vkGetPhysicalDeviceMemoryProperties", false);
-        load(CreateDevice, "vkCreateDevice", false);
-        load(GetDeviceProcAddr, "vkGetDeviceProcAddr", false);
+#define KT_LOAD(name) load(name, "vk" #name, false);
+        KT_VK_INSTANCE_FUNCTIONS(KT_LOAD)
+#undef KT_LOAD
     }
 
     void create_device() {
@@ -163,10 +173,10 @@ struct OverlayTexture::Impl {
             }
         if (family == count) throw std::runtime_error("No Vulkan graphics queue");
 
-        std::array<char, 4096> buffer{};
-        vr::VRCompositor()->GetVulkanDeviceExtensionsRequired(reinterpret_cast<VkPhysicalDevice_T*>(physical),
-            buffer.data(), static_cast<uint32_t>(buffer.size()));
-        const auto extensions = split(buffer.data());
+        const auto extensions = required_extensions([&](char* buffer, uint32_t size) {
+            vr::VRCompositor()->GetVulkanDeviceExtensionsRequired(
+                reinterpret_cast<VkPhysicalDevice_T*>(physical), buffer, size);
+        });
         const auto names = c_strings(extensions);
         const float priority = 1.0f;
         VkDeviceQueueCreateInfo queue_info{};
@@ -182,33 +192,9 @@ struct OverlayTexture::Impl {
         info.ppEnabledExtensionNames = names.data();
         check(CreateDevice(physical, &info, nullptr, &device), "device");
 
-        load(DestroyDevice, "vkDestroyDevice", true);
-        load(GetDeviceQueue, "vkGetDeviceQueue", true);
-        load(CreateBuffer, "vkCreateBuffer", true);
-        load(DestroyBuffer, "vkDestroyBuffer", true);
-        load(GetBufferMemoryRequirements, "vkGetBufferMemoryRequirements", true);
-        load(BindBufferMemory, "vkBindBufferMemory", true);
-        load(CreateImage, "vkCreateImage", true);
-        load(DestroyImage, "vkDestroyImage", true);
-        load(GetImageMemoryRequirements, "vkGetImageMemoryRequirements", true);
-        load(BindImageMemory, "vkBindImageMemory", true);
-        load(AllocateMemory, "vkAllocateMemory", true);
-        load(FreeMemory, "vkFreeMemory", true);
-        load(MapMemory, "vkMapMemory", true);
-        load(CreateCommandPool, "vkCreateCommandPool", true);
-        load(DestroyCommandPool, "vkDestroyCommandPool", true);
-        load(AllocateCommandBuffers, "vkAllocateCommandBuffers", true);
-        load(BeginCommandBuffer, "vkBeginCommandBuffer", true);
-        load(EndCommandBuffer, "vkEndCommandBuffer", true);
-        load(ResetCommandBuffer, "vkResetCommandBuffer", true);
-        load(CmdPipelineBarrier, "vkCmdPipelineBarrier", true);
-        load(CmdCopyBufferToImage, "vkCmdCopyBufferToImage", true);
-        load(CreateFence, "vkCreateFence", true);
-        load(DestroyFence, "vkDestroyFence", true);
-        load(ResetFences, "vkResetFences", true);
-        load(WaitForFences, "vkWaitForFences", true);
-        load(QueueSubmit, "vkQueueSubmit", true);
-        load(DeviceWaitIdle, "vkDeviceWaitIdle", true);
+#define KT_LOAD(name) load(name, "vk" #name, true);
+        KT_VK_DEVICE_FUNCTIONS(KT_LOAD)
+#undef KT_LOAD
         GetDeviceQueue(device, family, 0, &queue);
     }
 

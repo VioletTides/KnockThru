@@ -16,13 +16,17 @@ std::filesystem::path recording_path();
 struct KnockRecording {
     static constexpr double kSeconds = 20;
     double start = 0;
-    std::vector<PoseThread::Sample> samples;
+    std::vector<PoseSample> samples;
     std::vector<std::string> heard; // one line per knock and action, for the report
 };
 
 // Writes the recording as ~/knockthru-knocks.csv.gz and its summary as knocks.txt.
 // The angular velocity columns are zero, because the detector does not read them.
 void write_recording(const KnockRecording& recording);
+
+// The "Registered with SteamVR", "Starts with SteamVR", and "Running" lines. With
+// `only_if_installed`, the last two appear only for a registered app. Needs an active OpenVR session.
+std::string registration_text(bool only_if_installed);
 
 // A bug report for a GitHub issue: versions, SteamVR state, settings, and the
 // end of the logs. `vr` is false when SteamVR is not running, and `room_view`

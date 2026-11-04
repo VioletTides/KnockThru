@@ -5,9 +5,15 @@
 #include <iterator>
 
 namespace knockthru {
-namespace {
 
 double norm(const Vec3& v) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
+
+double acceleration(const Vec3& from, const Vec3& to, double seconds) {
+    return norm({to[0] - from[0], to[1] - from[1], to[2] - from[2]}) / seconds;
+}
+
+namespace {
+
 double distance(const Vec3& a, const Vec3& b) { return norm({a[0] - b[0], a[1] - b[1], a[2] - b[2]}); }
 int index(Device device) { return static_cast<int>(device); }
 int index(KnockKind kind) { return static_cast<int>(kind); }
@@ -67,9 +73,7 @@ void KnockDetector::push(Device device, double t, const Vec3& position, const Ve
     double accel = 0;
     if (!history.empty()) {
         const auto& last = history.back();
-        accel = norm({velocity[0] - last.velocity[0], velocity[1] - last.velocity[1],
-                    velocity[2] - last.velocity[2]})
-            / (t - last.t);
+        accel = acceleration(last.velocity, velocity, t - last.t);
     }
     history.push_back({t, position, velocity, accel});
     while (!history.empty() && history.front().t < t - kKeep) history.pop_front();

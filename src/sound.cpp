@@ -1,11 +1,12 @@
 #include "sound.hpp"
 
+#include "config.hpp"
+
 #include <dlfcn.h>
 
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -27,9 +28,9 @@ constexpr float kGain = 0.25f;
 // SteamVR's copy of the click, or Steam's copy of the same file.
 fs::path click_file() {
     std::vector<fs::path> candidates = {"/opt/steamvr/resources/webinterface/dashboard/sounds"};
-    if (const char* home = std::getenv("HOME"))
+    if (const auto home = home_directory(); !home.empty())
         for (const char* steam : {".local/share/Steam", ".steam/steam"})
-            candidates.push_back(fs::path(home) / steam / "steamui" / "sounds");
+            candidates.push_back(home / steam / "steamui" / "sounds");
     for (const auto& directory : candidates) {
         std::error_code error;
         if (fs::is_regular_file(directory / kClick, error)) return directory / kClick;

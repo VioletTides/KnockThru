@@ -14,7 +14,6 @@
 #include <memory>
 #include <fstream>
 #include <iostream>
-#include <iterator>
 #include <sstream>
 #include <string>
 
@@ -29,25 +28,6 @@ using namespace knockthru;
 namespace fs = std::filesystem;
 
 namespace {
-
-void write(const fs::path& path, const std::string& text) {
-    fs::create_directories(path.parent_path());
-    std::ofstream(path, std::ios::trunc | std::ios::binary) << text;
-}
-
-std::string read(const fs::path& path) {
-    std::ifstream stream(path, std::ios::binary);
-    return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
-}
-
-template <typename F> bool throws(F f) {
-    try {
-        f();
-    } catch (const std::exception&) {
-        return true;
-    }
-    return false;
-}
 
 std::string manifest(const std::string& url, const std::string& hash) {
     return R"({"schema": "framedrop.install/v1", "name": "KnockThru", "files": [{"url": ")" + url
@@ -72,16 +52,16 @@ int main() {
     const auto release = parse_manifest(manifest(url, hash));
     check(release.version == "0.2.0" && release.url == url && release.sha256 == hash,
         "manifest gives version, URL, and hash");
-    check(
-        throws([&] { parse_manifest(manifest("http://example.com/knockthru-0.2.0-linux-arm64.zip", hash)); }),
+    check(expect_throw(
+              [&] { parse_manifest(manifest("http://example.com/knockthru-0.2.0-linux-arm64.zip", hash)); }),
         "manifest rejects a plain HTTP URL");
-    check(throws([&] { parse_manifest(manifest(url, "ABC")); }), "manifest rejects a malformed hash");
+    check(expect_throw([&] { parse_manifest(manifest(url, "ABC")); }), "manifest rejects a malformed hash");
     const auto local_zip = "file:///tmp/knockthru-0.2.0-linux-arm64.zip";
-    check(throws([&] { parse_manifest(manifest(local_zip, hash)); }),
+    check(expect_throw([&] { parse_manifest(manifest(local_zip, hash)); }),
         "manifest rejects a file:// ZIP by default");
     check(parse_manifest(manifest(local_zip, hash), true).version == "0.2.0",
         "manifest accepts a file:// ZIP for tests");
-    check(throws([] { parse_manifest("not json"); }), "manifest rejects invalid JSON");
+    check(expect_throw([] { parse_manifest("not json"); }), "manifest rejects invalid JSON");
 
     check(sha256("") == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "SHA-256 of nothing");
@@ -91,7 +71,6 @@ int main() {
             == "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
         "SHA-256 across a block boundary");
 
-    check(url_encode("a b/é") == "a%20b%2F%C3%A9", "url_encode escapes spaces, slashes, and UTF-8");
     check(issue_url({"0.1.0", "2.18.2", "on", ""})
             == "https://github.com/VioletTides/KnockThru/issues/"
                "new?template=bug.yml&version=0.1.0&steamvr=2.18.2&passthrough=on",
@@ -103,9 +82,9 @@ int main() {
         std::string big = "KnockThru: 0.1.0\n";
         for (int i = 0; i < 2000; ++i)
             big += "2026-10-15 21:50:36  log line " + std::to_string(i) + " with some padding text\n";
-        const auto fitted = fit_report(big, 20000);
+        const auto fitted = fit_report(big);
         check(fit_report("short\n") == "short\n", "fit_report keeps a short report");
-        check(fitted.size() <= 20000, "fit_report stays under the limit: " + std::to_string(fitted.size()));
+        check(fitted.size() <= 60000, "fit_report stays under the limit: " + std::to_string(fitted.size()));
         check(fitted.rfind("KnockThru: 0.1.0\n", 0) == 0
                 && fitted.find("log line 1999 with") != std::string::npos
                 && fitted.find("characters of older log lines cut") != std::string::npos,
@@ -302,12 +281,11 @@ int main() {
     check(!fs::exists(install / ".knockthru.new"), "replace_files leaves no temporary files");
 
     write(staging / "knockthru-ctl", "different");
-    check(throws([&] { replace_files(staging, install); }),
+    check(expect_throw([&] { replace_files(staging, install); }),
         "replace_files rejects a knockthru-ctl that differs");
     check(read(install / "knockthru") == "new binary", "a rejected release changes nothing");
 
     // A full install from a local ZIP. python3 builds the ZIP, the way a release has it.
-    write(staging / "knockthru-ctl", "new binary");
     write(staging / "knockthru", "newer binary");
     write(staging / "knockthru-ctl", "newer binary");
     const auto zip = root / "knockthru-0.3.0-linux-arm64.zip";
@@ -324,7 +302,7 @@ int main() {
         Release local{"0.3.0", "file://" + zip.string(), sha256(read(zip))};
         Release bad = local;
         bad.sha256 = std::string(64, '0');
-        check(throws([&] { install_release(bad, install, root / "work"); }),
+        check(expect_throw([&] { install_release(bad, install, root / "work"); }),
             "install_release rejects a SHA-256 mismatch");
         check(read(install / "knockthru") == "new binary", "a mismatched ZIP changes nothing");
         check(!fs::exists(root / "work"), "install_release deletes its download after a failure");

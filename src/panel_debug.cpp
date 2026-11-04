@@ -32,8 +32,7 @@ Color verdict_color(const FeedEntry& entry) { return entry.good ? kAccent : kErr
 
 // The debug view: a header like Settings', three tabs, and the tab's content.
 void Panel::debug_screen(const DebugView& view) {
-    button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Settings);
-    canvas_.text(bold_, "Knock debug", kMargin + 172, 68, 38, kText);
+    back_header("Knock debug", Screen::Settings);
     const auto tabs = segments({kMargin, 124, kWidth - 2 * kMargin, 72}, {"Live", "Tuning", "Status"},
         static_cast<int>(debug_tab_), kButton, kRaised);
     for (std::size_t i = 0; i < tabs.size(); ++i)
@@ -65,6 +64,13 @@ void Panel::list_row(
             regular_, canvas_.fit(regular_, detail, kDetail, width), rect.x + 28, cy + 17, kDetail, kDim);
 }
 
+// A list row with a value at its right end.
+void Panel::value_row(
+    Rect rect, const std::string& label, const std::string& detail, const std::string& value, Color color) {
+    list_row(rect, label, detail, canvas_.measure(bold_, value, kLabel) + 16, false);
+    canvas_.text(bold_, value, rect.x + rect.w - 28, rect.y + rect.h / 2, kLabel, color, Align::Right);
+}
+
 // Fills a card with one row per entry: title, detail, and the verdict.
 void Panel::feed_rows(Rect rect, const std::vector<FeedEntry>& entries) {
     const int rows = std::min<int>(entries.size(), kMaxRows);
@@ -73,9 +79,7 @@ void Panel::feed_rows(Rect rect, const std::vector<FeedEntry>& entries) {
     for (int i = 0; i < rows; ++i) {
         const auto& entry = entries[i];
         const Rect r = row_at(rect, i);
-        list_row(r, entry.title, entry.detail, canvas_.measure(bold_, entry.verdict, kLabel) + 16, false);
-        canvas_.text(
-            bold_, entry.verdict, r.x + r.w - 28, r.y + r.h / 2, kLabel, verdict_color(entry), Align::Right);
+        value_row(r, entry.title, entry.detail, entry.verdict, verdict_color(entry));
     }
 }
 
@@ -269,10 +273,7 @@ void Panel::debug_status(const DebugView& view, Rect area) {
     const auto rows_of = [&](Rect rect, const std::vector<StatusRow>& rows) {
         for (std::size_t i = 0; i < rows.size(); ++i) {
             const Rect r = row_at(rect, i);
-            list_row(
-                r, rows[i].label, rows[i].detail, canvas_.measure(bold_, rows[i].value, kLabel) + 16, false);
-            canvas_.text(bold_, rows[i].value, r.x + r.w - 28, r.y + r.h / 2, kLabel,
-                rows[i].bad ? kError : kDim, Align::Right);
+            value_row(r, rows[i].label, rows[i].detail, rows[i].value, rows[i].bad ? kError : kDim);
         }
     };
     const Rect left{area.x, area.y, col_w, 0}, right{area.x + col_w + gap, area.y, col_w, 0};

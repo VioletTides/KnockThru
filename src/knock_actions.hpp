@@ -20,13 +20,14 @@ constexpr std::array<int, 2> kKnockCounts{2, 3};
 const char* to_string(KnockAction action);
 std::optional<KnockAction> parse_knock_action(const std::string& name);
 
-// "twice" or "thrice", for the panel.
+// "twice" for 2 and "thrice" for 3, for the panel. The detector reports no other count.
 const char* count_word(int count);
 
 // The action for each knock kind and count. Defaults: twice switches
 // passthrough, thrice switches the style.
 class KnockActions {
 public:
+    // `count` is one of kKnockCounts.
     static KnockAction default_for(int count);
 
     // A count outside kKnockCounts gives None.
