@@ -137,6 +137,7 @@ private:
     void run_test_commands(double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event);
     void run_test_command(
         const std::string& line, double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event);
+    void replay_poses(double t);
 #endif
 
     void note_versions();
@@ -213,6 +214,7 @@ private:
 #ifdef KNOCKTHRU_TEST_HOOK
     fs::path test_commands_;
     std::uintmax_t test_read_ = 0; // bytes already run
+    std::deque<PoseSample> replay_; // recorded poses still to come, stamped in app time
 #endif
 };
 
@@ -331,6 +333,9 @@ void App::run() {
         }
 
         poses_.take(samples_);
+#ifdef KNOCKTHRU_TEST_HOOK
+        replay_poses(t);
+#endif
         bool controllers = false;
         for (const auto& sample : samples_) {
             controllers |= sample.device != Device::Hmd;
@@ -1020,6 +1025,16 @@ void App::update_debug(double t) {
 }
 
 #ifdef KNOCKTHRU_TEST_HOOK
+// While a replay runs, its poses due by `t` replace the live ones.
+void App::replay_poses(double t) {
+    if (replay_.empty()) return;
+    samples_.clear();
+    while (!replay_.empty() && replay_.front().t <= t) {
+        samples_.push_back(replay_.front());
+        replay_.pop_front();
+    }
+}
+
 // Development builds only (KNOCKTHRU_TEST_HOOK). Runs each line appended to
 // ~/.config/knockthru/test-commands, so a script can drive the app over SSH:
 //   open | close             the dashboard opens or closes the panel
@@ -1028,6 +1043,7 @@ void App::update_debug(double t) {
 //   knock KIND PEAK APPROACH one knock, with its spike in m/s^2 and approach speed in m/s
 //   action KIND COUNT        a double (2) or triple (3) knock
 //   snapshot PATH            saves the panel as a PNG
+//   replay PATH FROM TO      plays seconds FROM to TO of a .csv.gz knock recording in place of the live poses
 // `click 460 68` opens Settings and `click 1050 560` presses Advanced. On its warning, `click 900 441` flips
 // "Don't remind me" and `click 812 551` opens. `click X 160` then picks a tab, with X 227 (Live), 600
 // (Tuning), or 973 (Status). Reopens the file for each read, because glibc keeps a stream at end of file once
@@ -1102,6 +1118,29 @@ void App::run_test_command(
             if (!(in >> name >> count) || (count != 2 && count != 3))
                 throw std::runtime_error("action needs KIND 2 or 3");
             event = KnockEvent{t, kind_of(name), count};
+        } else if (verb == "replay") {
+            std::string path;
+            double from = 0, to = 0;
+            if (!(in >> path >> from >> to)) throw std::runtime_error("replay needs PATH FROM TO");
+            FILE* pipe = popen(("gzip -dc '" + path + "'").c_str(), "r");
+            if (!pipe) throw std::runtime_error("cannot read " + path);
+            replay_.clear();
+            char buffer[512];
+            while (std::fgets(buffer, sizeof buffer, pipe)) {
+                std::stringstream row(buffer);
+                std::vector<std::string> f;
+                for (std::string field; std::getline(row, field, ',');) f.push_back(field);
+                if (f.size() < 9 || f[2] != "1") continue; // the header, or an untracked pose
+                const double at = std::stod(f[0]);
+                if (at < from || at > to) continue;
+                const Device device = f[1] == "hmd" ? Device::Hmd
+                    : f[1] == "left"                ? Device::Left
+                                                    : Device::Right;
+                replay_.push_back({device, at - from + t, {std::stod(f[3]), std::stod(f[4]), std::stod(f[5])},
+                    {std::stod(f[6]), std::stod(f[7]), std::stod(f[8])}});
+            }
+            pclose(pipe);
+            log("Replaying " + std::to_string(replay_.size()) + " poses");
         } else if (verb == "snapshot") {
             std::string path;
             std::getline(in >> std::ws, path);
