@@ -125,12 +125,11 @@ void merge(AppConfig& config, const json& file, const fs::path& path, Source sou
                     const auto action = action_name.is_string()
                         ? parse_knock_action(action_name.get<std::string>())
                         : std::nullopt;
+                    const int count = std::atoi(count_name.c_str());
                     const bool known =
-                        std::find(kKnockCounts.begin(), kKnockCounts.end(), std::atoi(count_name.c_str()))
-                        != kKnockCounts.end();
-                    if (!action || !known || count_name != std::to_string(std::atoi(count_name.c_str())))
-                        bad();
-                    config.knock_actions.set(*kind, std::atoi(count_name.c_str()), *action);
+                        std::find(kKnockCounts.begin(), kKnockCounts.end(), count) != kKnockCounts.end();
+                    if (!action || !known || count_name != std::to_string(count)) bad();
+                    config.knock_actions.set(*kind, count, *action);
                 }
             }
         } else if (key == "debug_port") {
