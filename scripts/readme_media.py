@@ -36,7 +36,6 @@ LOOP = sum(length for _, length in PASSES)
 # Colors from src/panel.cpp.
 BACKGROUND = (18, 20, 24)
 SURFACE = (28, 31, 37)
-RAISED = (44, 48, 57)
 HAIRLINE = (46, 50, 58)
 TEXT = (236, 238, 241)
 DIM = (150, 156, 168)
@@ -688,7 +687,6 @@ def issue_form(report, title, what, pasted, pressed):
 
 def report_phone(panel_dir):
     """Returns phone(t): the phone at t seconds into its story, which starts with the camera open."""
-    frames_dir = panel_dir / "report"
     with tempfile.TemporaryDirectory() as tmp:
         page_html = panel_dir / "readme-phone.html"
         copied_html = Path(tmp) / "copied.html"
@@ -815,7 +813,6 @@ def headset_frame(sprite, content, size):
     squeezed sideways as the lens turns away."""
     image = Image.new("RGB", sprite.size, BACKGROUND)
     image.paste(sprite, (0, 0), sprite)
-    full_width = None
     for mask, (left, top, right, bottom) in lens_regions(sprite):
         height = bottom - top
         width = right - left
@@ -830,7 +827,7 @@ def report_gif(panel_dir):
     width = 640
     scale = width / 1200
     cuts, clicks, pointer, frames = load_walkthrough(panel_dir / "report", width)
-    report_click, done_click = clicks[-2], clicks[-1]
+    report_click = clicks[-2]
     card = Image.open(panel_dir / "readme-report.png").convert("RGBA")
     flat = Image.new("RGB", card.size, BACKGROUND)
     flat.paste(card, mask=card)
