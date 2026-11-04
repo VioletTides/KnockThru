@@ -39,6 +39,16 @@ int get(const std::string& url, const fs::path& out) {
     return run_program({"curl", "--fail", "--silent", "--max-time", "5", "--output", out.string(), url});
 }
 
+// Connects `fd` to the report server at `url`, an http://127.0.0.1:port/ link.
+void connect_to(int fd, const std::string& url) {
+    const auto rest = url.substr(7);
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(static_cast<std::uint16_t>(std::stoi(rest.substr(rest.find(':') + 1))));
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    ::connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof address);
+}
+
 // The seconds `body` takes to run.
 double timed(const std::function<void()>& body) {
     const auto start = std::chrono::steady_clock::now();
@@ -160,14 +170,8 @@ int main() {
     {
         // A connection that sends nothing, like a browser's spare one, holds the server at most 300 ms.
         auto server = std::make_unique<ReportServer>("report\n", "https://example.com");
-        const auto rest = server->url().substr(7);
-        const int port = std::stoi(rest.substr(rest.find(':') + 1));
         const int idle = ::socket(AF_INET, SOCK_STREAM, 0);
-        sockaddr_in address{};
-        address.sin_family = AF_INET;
-        address.sin_port = htons(static_cast<std::uint16_t>(port));
-        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        ::connect(idle, reinterpret_cast<sockaddr*>(&address), sizeof address);
+        connect_to(idle, server->url());
         usleep(50000);
         int got = 0;
         const double waited = timed([&] { got = get(server->url(), root / "idle-page.html"); });
@@ -196,17 +200,11 @@ int main() {
         // A phone that stops reading mid-download must not hold up Done, which destroys the server.
         auto server =
             std::make_unique<ReportServer>(std::string(20 * 1024 * 1024, 'x'), "https://example.com");
-        const auto rest = server->url().substr(7);
-        const int port = std::stoi(rest.substr(rest.find(':') + 1));
-        const auto path = rest.substr(rest.find('/')) + "/report/knockthru-report.txt";
+        const auto path = server->url().substr(server->url().find('/', 7)) + "/report/knockthru-report.txt";
         const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
         int small = 4096;
         ::setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &small, sizeof small);
-        sockaddr_in address{};
-        address.sin_family = AF_INET;
-        address.sin_port = htons(static_cast<std::uint16_t>(port));
-        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        ::connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof address);
+        connect_to(fd, server->url());
         const auto request = "GET " + path + " HTTP/1.1\r\n\r\n";
         ::send(fd, request.data(), request.size(), 0);
         usleep(500000); // the server is now waiting on a full socket
