@@ -9,49 +9,6 @@ namespace knockthru {
 
 using namespace panel_style;
 
-namespace panel_style {
-
-void draw_sprite(Canvas& canvas, const sprites::Sprite& sprite, float x, float y, float height, float angle) {
-    const float a = angle * anim::kPi / 180, c = std::cos(a), s = std::sin(a);
-    const auto place = [&](const std::vector<std::vector<float>>& source) {
-        std::vector<std::vector<Point>> rings;
-        for (const auto& ring : source) {
-            auto& out = rings.emplace_back();
-            for (std::size_t i = 0; i + 1 < ring.size(); i += 2) {
-                const float px = ring[i] * height, py = ring[i + 1] * height;
-                out.push_back({x + px * c + py * s, y - px * s + py * c});
-            }
-        }
-        return rings;
-    };
-    canvas.polygon(place(sprite.body), kText);
-    if (!sprite.accent.empty()) canvas.polygon(place(sprite.accent), kAccent);
-}
-
-void burst(Canvas& canvas, float x, float y, std::optional<float> played, float scale) {
-    if (!played) return;
-    const float spread = anim::ease_out(*played), fade = 1 - anim::ease_in_out(*played);
-    for (int k = 0; k < 8; ++k) {
-        const float a = k * anim::kPi / 4 + anim::kPi / 8, dx = std::cos(a), dy = std::sin(a);
-        const float inner = (20 + 14 * spread) * scale, outer = inner + (8 - 2 * spread) * scale;
-        // A short ray with round ends, shaped like the rays in images/logo.svg. A single polygon keeps the
-        // faded color from doubling where separate end circles would overlap the bar.
-        const float half = 3.2f * scale;
-        std::vector<Point> ray;
-        for (const float end : {outer, inner}) {
-            const float cx = x + dx * end, cy = y + dy * end,
-                        turn = end == outer ? -anim::kPi / 2 : anim::kPi / 2;
-            for (int i = 0; i <= 8; ++i) {
-                const float b = a + turn + i * anim::kPi / 8;
-                ray.push_back({cx + std::cos(b) * half, cy + std::sin(b) * half});
-            }
-        }
-        canvas.polygon({ray}, faded(kAccent, fade));
-    }
-}
-
-} // namespace panel_style
-
 Panel::Panel(const std::filesystem::path& fonts)
     : bold_(fonts / "NotoSans-SemiBold.ttf"), regular_(fonts / "NotoSans-Regular.ttf"),
       canvas_(kWidth, kHeight), scratch_(kWidth, kHeight), background_(kWidth, kHeight) {

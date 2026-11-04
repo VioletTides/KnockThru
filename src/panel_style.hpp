@@ -5,11 +5,9 @@
 
 #include "animation.hpp"
 #include "canvas.hpp"
-#include "sprite_shapes.hpp"
 
 #include <cmath>
 #include <cstdint>
-#include <optional>
 
 namespace knockthru::panel_style {
 
@@ -33,7 +31,6 @@ inline constexpr Color kOnError{40, 14, 12};
 // The knocks row is a tint of the accent while knocks act, so the passthrough tile keeps the full accent.
 inline constexpr Color kActive{34, 62, 94};
 inline constexpr Color kActiveHover{40, 72, 108};
-inline constexpr Color kTable{120, 92, 70};
 // The headset trace on the debug graph, apart from the blue left trace, the yellow right trace, and errors.
 inline constexpr Color kHeadsetTrace{185, 140, 255};
 
@@ -45,17 +42,9 @@ inline constexpr const char* kKindTitles[3] = {
     "Controllers together", "Controller on a surface", "Knock on the headset"};
 inline constexpr const char* kKindOnce[3] = {"Knock the controllers together",
     "Knock one controller on a surface, like your leg", "Knock on the side of the headset with a controller"};
-inline constexpr const char* kKindNames[3] = {"a together knock", "a surface knock", "a headset knock"};
 
 inline Color faded(Color color, float alpha) {
     return {color.r, color.g, color.b, static_cast<std::uint8_t>(std::lround(color.a * anim::clamp(alpha)))};
 }
-
-// Draws a sprite with its anchor at (x, y), `height` pixels tall, turned
-// counterclockwise by `angle` degrees.
-void draw_sprite(Canvas& canvas, const sprites::Sprite& sprite, float x, float y, float height, float angle);
-// Impact lines that fly outward from (x, y) and fade. `played` runs from 0 to 1.
-void burst(Canvas& canvas, float x, float y, std::optional<float> played, float scale);
-inline float head_radius(float height) { return 0.288f * height; } // measured on the controller sprites
 
 } // namespace knockthru::panel_style
