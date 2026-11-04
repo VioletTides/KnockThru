@@ -50,20 +50,25 @@ try { value = (EXPRESSION); } finally { fs.writeFileSync(statePath, JSON.stringi
 process.stdout.write(JSON.stringify(value));
 )JS";
 
+// Binds `fd` to a free port on 127.0.0.1 and returns the port.
+int bind_loopback(int fd) {
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    ::bind(fd, reinterpret_cast<sockaddr*>(&address), sizeof address);
+    socklen_t size = sizeof address;
+    ::getsockname(fd, reinterpret_cast<sockaddr*>(&address), &size);
+    return ntohs(address.sin_port);
+}
+
 // A Steam client debug port on 127.0.0.1 with two targets, the bar and its popup.
 class FakeDebugPort {
 public:
     explicit FakeDebugPort(fs::path directory) : directory_(std::move(directory)) {
         set_state(false, true, false);
         listener_ = ::socket(AF_INET, SOCK_STREAM, 0);
-        sockaddr_in address{};
-        address.sin_family = AF_INET;
-        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        ::bind(listener_, reinterpret_cast<sockaddr*>(&address), sizeof address);
+        port_ = bind_loopback(listener_);
         ::listen(listener_, 4);
-        socklen_t size = sizeof address;
-        ::getsockname(listener_, reinterpret_cast<sockaddr*>(&address), &size);
-        port_ = ntohs(address.sin_port);
         timeval timeout{0, 100000}; // accept wakes up to see stop_
         ::setsockopt(listener_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
         thread_ = std::thread([this] { loop(); });
@@ -257,14 +262,8 @@ int main() {
     }
     // The fake port is closed.
     {
-        int probe = ::socket(AF_INET, SOCK_STREAM, 0);
-        sockaddr_in address{};
-        address.sin_family = AF_INET;
-        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        ::bind(probe, reinterpret_cast<sockaddr*>(&address), sizeof address);
-        socklen_t size = sizeof address;
-        ::getsockname(probe, reinterpret_cast<sockaddr*>(&address), &size);
-        const int closed_port = ntohs(address.sin_port);
+        const int probe = ::socket(AF_INET, SOCK_STREAM, 0);
+        const int closed_port = bind_loopback(probe);
         ::close(probe); // nothing listens on this port
         const auto [closed, closed_changed] = error_of([&] { RoomView(closed_port).active(); });
         check(!closed_changed && closed.find("CEF Remote Debugging") != std::string::npos,
