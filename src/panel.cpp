@@ -208,31 +208,17 @@ const Canvas& Panel::render(
     // The tour's Calibrate step hands over to the Learn screen, whose Back returns to the tour.
     const bool tour_on_screen = state.tour && screen_ != Screen::Learn;
 
-    View view = View::Learn;
-    switch (screen_) {
-    case Screen::Main: view = View::Main; break;
-    case Screen::Settings: view = View::Settings; break;
-    case Screen::Reset: view = View::Reset; break;
-    case Screen::Report: view = View::Report; break;
-    case Screen::Pick: view = View::Pick; break;
-    case Screen::Actions: view = View::Actions; break;
-    case Screen::AdvancedWarning: view = View::AdvancedWarning; break;
-    case Screen::Debug: view = View::Debug; break;
-    case Screen::RestoreDefaults: view = View::RestoreDefaults; break;
-    case Screen::WhatsNew: view = View::WhatsNew; break;
-    case Screen::Learn:
-    case Screen::SkipTour: break;
-    }
+    Screen view = screen_ == Screen::SkipTour ? Screen::Learn : screen_;
     std::optional<TourView::Step> tour_step;
     if (calibration) {
         using Phase = CalibrationView::Phase;
-        view = calibration->phase == Phase::Recording ? View::Record : View::Try;
-        if (view == View::Record)
+        view = calibration->phase == Phase::Recording ? Screen::Record : Screen::Try;
+        if (view == Screen::Record)
             record_screen(state, *calibration);
         else
             try_screen(state, *calibration);
     } else if (tour_on_screen) {
-        view = View::Tour;
+        view = Screen::Tour;
         tour_step = state.tour->step;
         tour_screen(state, *state.tour);
         if (screen_ == Screen::SkipTour)
@@ -273,9 +259,10 @@ const Canvas& Panel::render(
 
     // A new view rises into place. The first render has nothing to move from.
     // A card appears over its screen in place, so only the other views rise.
-    const auto screen_below = [](std::optional<View> v) -> std::optional<View> {
-        if (v == View::Reset || v == View::Report || v == View::AdvancedWarning) return View::Settings;
-        if (v == View::RestoreDefaults) return View::Debug;
+    const auto screen_below = [](std::optional<Screen> v) -> std::optional<Screen> {
+        if (v == Screen::Reset || v == Screen::Report || v == Screen::AdvancedWarning)
+            return Screen::Settings;
+        if (v == Screen::RestoreDefaults) return Screen::Debug;
         return std::nullopt;
     };
     const bool overlay = view_ && (screen_below(view) == *view_ || screen_below(*view_) == view);
@@ -291,8 +278,9 @@ const Canvas& Panel::render(
             anim::ease_out(entering));
     }
     transitioning_ = entering < 1;
-    animating_ = view == View::Pick || view == View::Learn || view == View::Record || view == View::Try
-        || view == View::Tour || view == View::Debug || view == View::RestoreDefaults || entering < 1;
+    animating_ = view == Screen::Pick || view == Screen::Learn || view == Screen::Record
+        || view == Screen::Try || view == Screen::Tour || view == Screen::Debug
+        || view == Screen::RestoreDefaults || entering < 1;
     return canvas_;
 }
 
