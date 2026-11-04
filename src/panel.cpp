@@ -202,8 +202,7 @@ const Canvas& Panel::render(
     }
     was_calibrating_ = calibration.has_value();
     if ((screen_ == Screen::AdvancedWarning || debug_open()) && !state.debug) screen_ = Screen::Settings;
-    if (state.tour && !was_touring_) screen_ = Screen::Main; // just started
-    if (!state.tour && was_touring_) screen_ = Screen::Main; // finished or skipped
+    if (state.tour.has_value() != was_touring_) screen_ = Screen::Main; // started, finished, or skipped
     was_touring_ = state.tour.has_value();
     // The tour's Calibrate step hands over to the Learn screen, whose Back returns to the tour.
     const bool tour_on_screen = state.tour && screen_ != Screen::Learn;
