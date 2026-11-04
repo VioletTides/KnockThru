@@ -31,12 +31,16 @@ sources=(
     src/update.cpp
     src/report.cpp
     src/report_server.cpp
+    src/debug_model.cpp
+    src/usage.cpp
     third_party/qrcodegen/qrcodegen.cpp
     src/canvas.cpp
+    src/debug_view.cpp
     src/panel.cpp
     src/panel_main.cpp
     src/panel_calibration.cpp
     src/panel_cards.cpp
+    src/panel_debug.cpp
     src/panel_tour.cpp
     src/overlay_texture.cpp
     third_party/openvr/src/openvr_api_public.cpp

@@ -5,6 +5,7 @@
 
 #include <array>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -12,8 +13,12 @@
 
 namespace knockthru {
 
+// Where a detector number came from. Later sources win.
+enum class Source { Default, Install, User, Calibration };
+
 struct AppConfig {
     DetectorConfig detector;
+    std::map<std::string, Source> detector_sources; // by detector key, such as "controller_peak"
     std::set<std::string> blocked_apps; // SteamVR app keys, like steam.app.620980
     int debug_port = 8080;
     bool paused = false;
@@ -21,6 +26,7 @@ struct AppConfig {
     bool sounds = true;
     bool tour_done = false;
     bool check_updates = true;
+    bool debug = false; // shows the debug view
     KnockActions knock_actions;
 };
 
@@ -69,6 +75,12 @@ void save_sounds(bool sounds);
 void save_knock_actions(const KnockActions& actions);
 void save_tour_done(bool done);
 
+// Writes each detector number in `tuned` that differs from `loaded.detector`. A calibrated number goes
+// to its kind's `peak` in calibration.json, which would override config.json. The rest go to config.json.
+// Loading raises a calibrated peak to Calibrator::floor() and lowers partner_peak to two thirds of the
+// together peak, so those two may not load back unchanged.
+void save_detector(const DetectorConfig& tuned, const AppConfig& loaded);
+
 // Deletes only the user config.json and calibration.json.
 void reset_user_settings();
 
@@ -81,6 +93,8 @@ std::string note_steamvr_version(AppState& state, const std::string& version, co
 Calibration load_calibration();
 void save_calibration(const Calibration& calibration);
 
-void apply_calibration(const Calibration& calibration, DetectorConfig& detector);
+// Marks each number it sets as Source::Calibration in `sources`, when given.
+void apply_calibration(const Calibration& calibration, DetectorConfig& detector,
+    std::map<std::string, Source>* sources = nullptr);
 
 } // namespace knockthru

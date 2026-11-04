@@ -60,6 +60,48 @@ struct KnockEvent {
     int count; // 2 or 3
 };
 
+// How the detector judged one spike, for the debug view.
+enum class Verdict {
+    Counted, // joined the current sequence
+    BelowPeak, // under the peak its kind needs
+    FastBefore, // the controller came in faster than a knock does
+    MovingAfter, // the controller did not nearly stop
+    Untracked, // no samples 30 ms before or after
+    Bounce, // within merge_s of the previous knock
+    Rebound, // within min_gap_s or fast_gap_s of the previous knock in the sequence
+};
+const char* to_string(Verdict verdict);
+
+// A spike of at least half the lowest peak threshold, which is close enough to
+// a knock to be worth showing. Weaker spikes happen all the time in play.
+struct Candidate {
+    Knock knock;
+    Verdict verdict;
+    double threshold; // m/s^2, the peak this kind needs
+    double speed_30ms_before = 0, speed_30ms_after = 0; // m/s, of the knocking controller
+    double before_limit = 0, after_limit = 0; // m/s, the speeds this kind allows
+};
+
+// Why a finished sequence did or did not act, in the order the detector checks.
+enum class SequenceVerdict {
+    Action,
+    WrongCount, // not 2 or 3 knocks
+    NotQuiet, // started within quiet_before_s of the previous sequence
+    MixedKinds,
+    MixedSources, // different devices, or a together knock among single ones
+    MixedSpots, // surface knocks further apart than same_spot
+    TooSlow, // no knock approached at min_approach
+    KindOff,
+};
+const char* to_string(SequenceVerdict verdict);
+
+struct Sequence {
+    std::deque<Knock> knocks;
+    SequenceVerdict verdict;
+    double fastest_approach; // m/s
+    double needed_approach; // m/s, min_approach for the kind of the last knock
+};
+
 // Streaming detector. Feed every pose sample in time order with push(), then
 // call poll() with the current time. A knock is judged about 50 ms after it
 // happens, and a sequence is reported max_gap_s after its last knock.
@@ -72,8 +114,16 @@ public:
 
     // Every knock judged so far, for logging and calibration. Cleared on read.
     std::deque<Knock> take_knocks();
+    // Every candidate spike and finished sequence so far, for the debug view. Cleared on read.
+    std::deque<Candidate> take_candidates();
+    std::deque<Sequence> take_sequences();
 
     const DetectorConfig& config() const { return config_; }
+    // Changes the thresholds and keeps the pose history, so knocks right after the change still count.
+    void set_config(const DetectorConfig& config) { config_ = config; }
+
+    // The sequence still open, oldest knock first.
+    const std::deque<Knock>& sequence() const { return sequence_; }
 
 private:
     struct Sample {
@@ -91,13 +141,17 @@ private:
     std::array<History, 3> history_;
     std::array<double, 3> judged_until_{{-1, -1, -1}};
     std::deque<Knock> sequence_;
-    bool mixed_ = false;
+    // The first reason the open sequence cannot act, or Action while it still can.
+    SequenceVerdict mixed_ = SequenceVerdict::Action;
     double burst_end_t_ = -1e9;
     std::deque<Knock> log_;
+    std::deque<Candidate> candidates_;
+    std::deque<Sequence> sequences_;
     double last_knock_t_ = -1e9;
 
-    std::optional<Knock> judge(Device device, std::size_t index) const;
-    void add(const Knock& knock);
+    std::optional<Candidate> judge(Device device, std::size_t index) const;
+    Verdict add(const Knock& knock);
+    void mix(SequenceVerdict reason);
     std::optional<KnockEvent> finish_sequence();
     static History::const_iterator first_from(const History& history, double t);
     static const Sample* nearest(const History& history, double t);

@@ -30,6 +30,33 @@ std::optional<KnockKind> parse_knock_kind(const std::string& name) {
     return std::nullopt;
 }
 
+const char* to_string(Verdict verdict) {
+    switch (verdict) {
+    case Verdict::Counted: return "counted";
+    case Verdict::BelowPeak: return "below peak";
+    case Verdict::FastBefore: return "too fast before";
+    case Verdict::MovingAfter: return "still moving after";
+    case Verdict::Untracked: return "untracked";
+    case Verdict::Bounce: return "bounce";
+    case Verdict::Rebound: return "rebound";
+    }
+    return "unknown";
+}
+
+const char* to_string(SequenceVerdict verdict) {
+    switch (verdict) {
+    case SequenceVerdict::Action: return "action";
+    case SequenceVerdict::WrongCount: return "wrong count";
+    case SequenceVerdict::NotQuiet: return "not quiet before";
+    case SequenceVerdict::MixedKinds: return "mixed kinds";
+    case SequenceVerdict::MixedSources: return "mixed sources";
+    case SequenceVerdict::MixedSpots: return "mixed spots";
+    case SequenceVerdict::TooSlow: return "approach too slow";
+    case SequenceVerdict::KindOff: return "kind off";
+    }
+    return "unknown";
+}
+
 KnockDetector::KnockDetector(DetectorConfig config) : config_(config) {}
 
 void KnockDetector::push(Device device, double t, const Vec3& position, const Vec3& velocity) {
@@ -89,13 +116,14 @@ double KnockDetector::peak_in(const History& history, double from, double to) {
 }
 
 // Decides whether the controller sample at `i` is a knock: a local peak above
-// the threshold, after which the controller nearly stops.
-std::optional<Knock> KnockDetector::judge(Device device, std::size_t i) const {
+// the threshold, after which the controller nearly stops. Returns nothing for
+// a sample that is not a local peak or is under half the lowest threshold.
+std::optional<Candidate> KnockDetector::judge(Device device, std::size_t i) const {
     const auto& history = history_[index(device)];
     const auto& sample = history[i];
-    if (sample.accel
-        < std::min({config_.controller_peak, config_.confirmed_peak, config_.headset_knock_peak}))
-        return std::nullopt;
+    const double lowest =
+        std::min({config_.controller_peak, config_.confirmed_peak, config_.headset_knock_peak});
+    if (sample.accel < lowest / 2) return std::nullopt;
     for (std::size_t k = i > 3 ? i - 3 : 0; k < std::min(history.size(), i + 4); ++k)
         if (history[k].accel > sample.accel) return std::nullopt;
 
@@ -120,18 +148,30 @@ std::optional<Knock> KnockDetector::judge(Device device, std::size_t i) const {
     const double threshold = surface        ? config_.controller_peak
         : knock.kind == KnockKind::Together ? config_.confirmed_peak
                                             : config_.headset_knock_peak;
-    if (sample.accel < threshold) return std::nullopt;
+    Candidate candidate{knock, Verdict::Counted, threshold};
+    candidate.before_limit = surface ? config_.surface_speed_before : config_.max_speed_before;
+    candidate.after_limit = surface ? config_.surface_speed_after : config_.max_speed_after;
     const auto* before = nearest(history, sample.t - 0.03);
     const auto* after = nearest(history, sample.t + 0.03);
-    if (!before || !after
-        || norm(before->velocity) >= (surface ? config_.surface_speed_before : config_.max_speed_before)
-        || norm(after->velocity) >= (surface ? config_.surface_speed_after : config_.max_speed_after))
-        return std::nullopt;
-    return knock;
+    if (before) candidate.speed_30ms_before = norm(before->velocity);
+    if (after) candidate.speed_30ms_after = norm(after->velocity);
+    if (sample.accel < threshold)
+        candidate.verdict = Verdict::BelowPeak;
+    else if (!before || !after)
+        candidate.verdict = Verdict::Untracked;
+    else if (candidate.speed_30ms_before >= candidate.before_limit)
+        candidate.verdict = Verdict::FastBefore;
+    else if (candidate.speed_30ms_after >= candidate.after_limit)
+        candidate.verdict = Verdict::MovingAfter;
+    return candidate;
 }
 
-void KnockDetector::add(const Knock& knock) {
-    if (knock.t - last_knock_t_ < config_.merge_s) return; // bounce or the other hand of one knock
+void KnockDetector::mix(SequenceVerdict reason) {
+    if (mixed_ == SequenceVerdict::Action) mixed_ = reason;
+}
+
+Verdict KnockDetector::add(const Knock& knock) {
+    if (knock.t - last_knock_t_ < config_.merge_s) return Verdict::Bounce; // also the other hand of one knock
     last_knock_t_ = knock.t;
     log_.push_back(knock);
 
@@ -140,19 +180,23 @@ void KnockDetector::add(const Knock& knock) {
     // which stops the tail of a clapping run from reading as a double.
     if (sequence_.empty()) {
         // A real "knock knock" starts from stillness, not right after other knocks.
-        if (knock.t - burst_end_t_ < config_.quiet_before_s) mixed_ = true;
+        if (knock.t - burst_end_t_ < config_.quiet_before_s) mix(SequenceVerdict::NotQuiet);
     } else {
         const auto& last = sequence_.back();
         // Tables bounce later than controllers or the headset rebound, so fast
         // together and headset doubles can sit closer than surface ones.
         const double gap = knock.kind == KnockKind::Surface ? config_.min_gap_s : config_.fast_gap_s;
-        if (knock.t - last.t < gap) return;
-        if (knock.kind != last.kind || knock.source != last.source
-            || (knock.kind == KnockKind::Surface
-                && distance(knock.position, last.position) > config_.same_spot))
-            mixed_ = true;
+        if (knock.t - last.t < gap) return Verdict::Rebound;
+        if (knock.kind != last.kind)
+            mix(SequenceVerdict::MixedKinds);
+        else if (knock.source != last.source)
+            mix(SequenceVerdict::MixedSources);
+        else if (knock.kind == KnockKind::Surface
+            && distance(knock.position, last.position) > config_.same_spot)
+            mix(SequenceVerdict::MixedSpots);
     }
     sequence_.push_back(knock);
+    return Verdict::Counted;
 }
 
 std::optional<KnockEvent> KnockDetector::finish_sequence() {
@@ -165,19 +209,27 @@ std::optional<KnockEvent> KnockDetector::finish_sequence() {
     // leftover spikes in the play and noise recordings form false doubles.
     double fastest = 0;
     for (const auto& knock : sequence_) fastest = std::max(fastest, knock.approach_speed);
-    const bool slow = fastest < config_.min_approach[index(last.kind)];
+    const double needed = config_.min_approach[index(last.kind)];
     burst_end_t_ = last.t;
-    const bool mixed = mixed_;
+    auto verdict = SequenceVerdict::Action;
+    if (count != 2 && count != 3)
+        verdict = SequenceVerdict::WrongCount;
+    else if (mixed_ != SequenceVerdict::Action)
+        verdict = mixed_;
+    else if (fastest < needed)
+        verdict = SequenceVerdict::TooSlow;
+    else if (!config_.enabled[index(last.kind)])
+        verdict = SequenceVerdict::KindOff;
+    sequences_.push_back({std::move(sequence_), verdict, fastest, needed});
     sequence_.clear();
-    mixed_ = false;
-    if (mixed || slow || (count != 2 && count != 3) || !config_.enabled[index(last.kind)])
-        return std::nullopt;
+    mixed_ = SequenceVerdict::Action;
+    if (verdict != SequenceVerdict::Action) return std::nullopt;
     return KnockEvent{last.t, last.kind, count};
 }
 
 std::optional<KnockEvent> KnockDetector::poll(double now) {
     const double horizon = now - kJudgeDelay;
-    std::deque<Knock> found;
+    std::deque<Candidate> found;
     for (const auto device : {Device::Left, Device::Right}) {
         const auto& history = history_[index(device)];
         auto& judged = judged_until_[index(device)];
@@ -186,12 +238,16 @@ std::optional<KnockEvent> KnockDetector::poll(double now) {
                                               [](double t, const Sample& s) { return t < s.t; })
             - history.begin());
         for (; i < history.size() && history[i].t <= horizon; ++i) {
-            if (auto knock = judge(device, i)) found.push_back(*knock);
+            if (auto candidate = judge(device, i)) found.push_back(*candidate);
             judged = history[i].t;
         }
     }
-    std::sort(found.begin(), found.end(), [](const Knock& a, const Knock& b) { return a.t < b.t; });
-    for (const auto& knock : found) add(knock);
+    std::sort(found.begin(), found.end(),
+        [](const Candidate& a, const Candidate& b) { return a.knock.t < b.knock.t; });
+    for (auto& candidate : found) {
+        if (candidate.verdict == Verdict::Counted) candidate.verdict = add(candidate.knock);
+        candidates_.push_back(candidate);
+    }
 
     if (!sequence_.empty() && horizon - sequence_.back().t > config_.max_gap_s) return finish_sequence();
     return std::nullopt;
@@ -201,6 +257,18 @@ std::deque<Knock> KnockDetector::take_knocks() {
     std::deque<Knock> knocks;
     knocks.swap(log_);
     return knocks;
+}
+
+std::deque<Candidate> KnockDetector::take_candidates() {
+    std::deque<Candidate> candidates;
+    candidates.swap(candidates_);
+    return candidates;
+}
+
+std::deque<Sequence> KnockDetector::take_sequences() {
+    std::deque<Sequence> sequences;
+    sequences.swap(sequences_);
+    return sequences;
 }
 
 } // namespace knockthru

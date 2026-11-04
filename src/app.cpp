@@ -3,6 +3,8 @@
 #include "calibrator.hpp"
 #include "config.hpp"
 #include "dashboard_panel.hpp"
+#include "debug_model.hpp"
+#include "debug_view.hpp"
 #include "diagnostics.hpp"
 #include "haptics.hpp"
 #include "install.hpp"
@@ -17,6 +19,7 @@
 #include "steamvr.hpp"
 #include "style.hpp"
 #include "update.hpp"
+#include "usage.hpp"
 
 #include <openvr.h>
 
@@ -51,6 +54,23 @@ namespace fs = std::filesystem;
 struct RoomViewResult {
     bool on;
     std::string message; // empty for a plain read
+};
+
+// What handle_knocks did with the sequence the detector just finished, for the debug view.
+struct Handled {
+    SetOutcome outcome = SetOutcome::NoAction;
+    KnockAction action = KnockAction::None; // the one that ran
+};
+
+// The debug view and what feeds it. It exists only while config.json has "debug": true.
+struct DebugParts {
+    DebugModel model;
+    DebugView view;
+    bool open = false; // the debug view was open at the last update
+    CpuUsage cpu;
+    std::string cpu_text, battery_text; // read once a second, since both cost a file read
+    double next_usage = 0, next_fill = 0;
+    std::optional<std::pair<double, double>> too_light; // detector time and peak of the last Too light spike
 };
 
 std::string today() {
@@ -112,9 +132,14 @@ private:
     void cancel_calibration();
     void save_calibration(double t);
     void record_knocks(double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event);
-    void handle_knocks(double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event);
+    Handled handle_knocks(double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event);
     void collect_jobs(double t);
     void draw_panel(double t);
+    void feed_debug(const Handled& handled);
+    void sync_debug();
+    void tune_detector(const PanelClick& click);
+    void fill_debug_view(double t);
+    void update_debug(double t);
 #ifdef KNOCKTHRU_TEST_HOOK
     void run_test_commands(double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event);
     void run_test_command(
@@ -146,6 +171,7 @@ private:
     std::optional<std::string> updated_from_;
     Haptics haptics_;
     std::unique_ptr<DashboardPanel> panel_;
+    std::unique_ptr<DebugParts> debug_;
 
     const std::array<fs::path, 3> config_files_{install_directory() / "config.json",
         user_directory() / "config.json", user_directory() / "calibration.json"};
@@ -164,6 +190,9 @@ private:
 
     std::future<RoomViewResult> room_view_job_;
     bool room_view_job_toggles_ = false;
+    double room_view_started_ = 0; // clock time the job started
+    std::optional<double> room_view_ms_; // how long the last job took
+    bool room_view_failed_ = false;
     bool dashboard_changed_ = false; // the button went missing and the log says so
     std::future<void> tint_job_;
 
@@ -232,6 +261,7 @@ App::App() {
         state_.update_notice =
             UpdateNotice{false, std::string("You now have version ") + kVersion + "." + had};
     }
+    sync_debug();
 }
 
 // Logs each SteamVR update, the usual cause when Room View control breaks. A newer KnockThru
@@ -306,6 +336,7 @@ void App::run() {
         for (const auto& sample : samples_) {
             controllers |= sample.device != Device::Hmd;
             detector_.push(sample.device, sample.t, sample.position, sample.velocity);
+            if (debug_) debug_->model.push({sample.device, sample.t, sample.position, sample.velocity});
             if (recording_) recording_->samples.push_back(sample);
         }
         auto knock_event = detector_.poll(t);
@@ -314,12 +345,14 @@ void App::run() {
         run_test_commands(t, knocks, knock_event);
 #endif
         if (recording_) record_knocks(t, knocks, knock_event);
-        handle_knocks(t, knocks, knock_event);
+        feed_debug(handle_knocks(t, knocks, knock_event));
         collect_jobs(t);
+        update_debug(t);
         draw_panel(t);
         haptics_.update(t);
         // Knocks are judged 50 ms late anyway, and the pose thread keeps sampling every 1 ms.
-        // The open panel and queued buzzes get 5 ms, for steady frames and pulse spacing.
+        // The open panel, which can show the debug view, and queued buzzes get 5 ms, for steady frames and
+        // pulse spacing.
         // A view transition gets 1 ms, so each frame lands close to the display's.
         // With no controller tracked, as in standby, no knock can start, so 100 ms is enough.
         const bool busy = (panel_ && panel_->visible()) || haptics_.pending();
@@ -368,10 +401,9 @@ bool App::slow_check(double t) {
             show(std::string("Settings not reloaded: ") + error.what(), true);
         }
     }
-    if (panel_ && panel_->visible()) {
-        read_room_view(); // Room View can also change from the bar or the side button
-        read_opaque();
-    }
+    // Room View can also change from the bar or the side button
+    if (panel_ && (panel_->visible() || panel_->debug_open())) read_room_view();
+    if (panel_ && panel_->visible()) read_opaque();
     // FrameDrop updates delete the install directory, then copy the new
     // one. A binary gone for 15 s means the app was removed.
     if (fs::exists(binary_)) {
@@ -428,6 +460,13 @@ void App::handle_click(const PanelClick& click, double t) {
     case PanelCommand::Calibrate: start_calibration(click.kind, t); break;
     case PanelCommand::CancelCalibration: cancel_calibration(); break;
     case PanelCommand::SaveCalibration: save_calibration(t); break;
+
+    case PanelCommand::TuneDown:
+    case PanelCommand::TuneUp:
+    case PanelCommand::UndoTuning:
+    case PanelCommand::KeepTuning: tune_detector(click); break;
+    case PanelCommand::TestBuzz: haptics_.buzz(1, t); break;
+    case PanelCommand::TestClick: break; // handle_click already played it
     }
 }
 
@@ -628,7 +667,8 @@ void App::record_knocks(double t, const std::deque<Knock>& knocks, const std::op
     if (panel_) panel_->invalidate();
 }
 
-void App::handle_knocks(double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event) {
+Handled App::handle_knocks(
+    double t, const std::deque<Knock>& knocks, const std::optional<KnockEvent>& event) {
     // Opens the click stream on the first knock, so it is ready if a triple knock follows.
     if (config_.sounds && !config_.paused && !knocks.empty()) prepare_click();
 
@@ -668,9 +708,9 @@ void App::handle_knocks(double t, const std::deque<Knock>& knocks, const std::op
                 true);
             end_calibration();
         }
-        return;
+        return {};
     }
-    if (!event) return;
+    if (!event) return {};
     const std::string what =
         std::string(" (") + sequence_name(*event) + " " + to_string(event->kind) + " knock)";
     if (calibrator_ && calibration_ && calibration_->phase == Phase::Trying) {
@@ -682,23 +722,26 @@ void App::handle_knocks(double t, const std::deque<Knock>& knocks, const std::op
         calibration_->trial_t = t;
         log("Try step heard " + calibration_->trial_heard + (passed ? ": passed" : ": missed"));
         haptics_.buzz(passed ? 1 : 3, t);
-        return;
+        return {};
     }
-    if (calibrator_) return;
+    if (calibrator_) return {};
     // The tour's knock steps act even when paused or off in this game, so the user can practice.
     // Only while the panel shows them, so a tour left open never overrides the settings in a game.
     const bool practicing =
         tour_ && (tour_->step == Step::Double || tour_->step == Step::Triple) && panel_ && panel_->visible();
     if (config_.paused && !practicing) {
         log("Ignored" + what + ": paused");
-    } else if (config_.blocked_apps.count(state_.app_key) && !practicing) {
-        log("Ignored" + what + ": knocks are off in " + state_.app_key);
-    } else {
-        // The tour teaches the default actions, whatever Knock actions says.
-        run_action(practicing ? KnockActions::default_for(event->count)
-                              : config_.knock_actions.get(event->kind, event->count),
-            *event, what, t);
+        return {SetOutcome::Paused};
     }
+    if (config_.blocked_apps.count(state_.app_key) && !practicing) {
+        log("Ignored" + what + ": knocks are off in " + state_.app_key);
+        return {SetOutcome::Blocked};
+    }
+    // The tour teaches the default actions, whatever Knock actions says.
+    const auto action = practicing ? KnockActions::default_for(event->count)
+                                   : config_.knock_actions.get(event->kind, event->count);
+    run_action(action, *event, what, t);
+    return {action == KnockAction::None ? SetOutcome::NoAction : SetOutcome::Ran, action};
 }
 
 void App::collect_jobs(double t) {
@@ -719,6 +762,7 @@ void App::collect_jobs(double t) {
     }
 
     if (ready(room_view_job_)) {
+        room_view_ms_ = (clock_.now() - room_view_started_) * 1000;
         const bool toggled = room_view_job_toggles_;
         room_view_job_toggles_ = false;
         try {
@@ -726,6 +770,7 @@ void App::collect_jobs(double t) {
             if (state_.room_view != result.on && panel_) panel_->invalidate();
             state_.room_view = result.on;
             state_.room_view_error.clear();
+            room_view_failed_ = false;
             dashboard_changed_ = false;
             if (!result.message.empty()) show(result.message);
         } catch (const DashboardChanged& error) {
@@ -734,6 +779,7 @@ void App::collect_jobs(double t) {
                 log(std::string(error.what()) + ". SteamVR " + steamvr_version()
                     + ". A Steam update may have changed the dashboard.");
             dashboard_changed_ = true;
+            room_view_failed_ = true;
             state_.room_view.reset();
             state_.room_view_error =
                 "A Steam update moved the Room View button. Update KnockThru in Settings.";
@@ -742,6 +788,7 @@ void App::collect_jobs(double t) {
                 haptics_.buzz(3, t);
             }
         } catch (const std::exception& error) {
+            room_view_failed_ = true;
             state_.room_view.reset();
             const std::string reason = error.what();
             state_.room_view_error = reason.find("debug port") != std::string::npos
@@ -827,8 +874,126 @@ void App::draw_panel(double t) {
     panel_->set_bar_icon(config_.classic_bar_icon);
     state_.enabled = config_.detector.enabled;
     state_.app_blocked = config_.blocked_apps.count(state_.app_key) > 0;
+    state_.debug = debug_ ? &debug_->view : nullptr;
     state_.calibration = calibration_;
     panel_->draw(state_, t);
+}
+
+// Hands the detector's candidates and finished sequences to the debug model. Without the model, they are
+// only drained, so they never pile up.
+void App::feed_debug(const Handled& handled) {
+    const auto candidates = detector_.take_candidates();
+    const auto sequences = detector_.take_sequences();
+    if (!debug_) return;
+    for (const auto& candidate : candidates) {
+        debug_->model.add_candidate(candidate);
+        if (candidate.verdict == Verdict::BelowPeak)
+            debug_->too_light = std::make_pair(candidate.knock.t, candidate.threshold);
+    }
+    // Only an Action sequence reaches handle_knocks, so only it has an outcome.
+    for (const auto& sequence : sequences)
+        debug_->model.add_set(sequence,
+            sequence.verdict == SequenceVerdict::Action ? handled.outcome : SetOutcome::NoAction,
+            handled.action);
+}
+
+// Creates or destroys the debug parts to match config.json.
+void App::sync_debug() {
+    if (config_.debug == (debug_ != nullptr)) return;
+    if (!config_.debug) {
+        debug_.reset();
+        log("Debug view off");
+        return;
+    }
+    try {
+        debug_ = std::make_unique<DebugParts>();
+        log("Debug view on");
+    } catch (const std::exception& error) {
+        log(std::string("Debug view unavailable: ") + error.what());
+    }
+}
+
+// Steps, undoes, or saves the detector numbers the debug view tunes.
+void App::tune_detector(const PanelClick& click) {
+    if (calibrator_) {
+        show("Tuning waits until the calibration ends");
+        return;
+    }
+    auto live = detector_.config();
+    switch (click.command) {
+    case PanelCommand::TuneDown:
+    case PanelCommand::TuneUp:
+        step_tunable(live, click.tunable, click.command == PanelCommand::TuneUp ? 1 : -1);
+        detector_.set_config(live);
+        break;
+    case PanelCommand::UndoTuning: detector_.set_config(config_.detector); break;
+    case PanelCommand::KeepTuning:
+        if (save([&] { save_detector(live, config_); })) show("Detector settings saved");
+        break;
+    default: break;
+    }
+}
+
+void App::fill_debug_view(double t) {
+    auto& d = *debug_;
+    auto& view = d.view;
+    for (std::size_t i = 0; i < view.accel.size(); ++i)
+        view.accel[i] = d.model.accel(static_cast<Device>(i), t, 5);
+
+    const auto& feed = d.model.feed();
+    view.last.reset();
+    view.recent.clear();
+    if (!feed.empty()) {
+        view.last = feed.back();
+        for (auto it = std::next(feed.rbegin()); it != feed.rend() && view.recent.size() < 3; ++it)
+            view.recent.push_back(*it);
+    }
+
+    // The graph's line is the peak the newest feed entry missed, when that entry is a Too light spike.
+    // Otherwise it is the peak a surface knock needs now.
+    const bool missed = d.too_light && view.last && view.last->t == d.too_light->first;
+    view.threshold = missed ? d.too_light->second : detector_.config().controller_peak;
+    view.set_knocks = static_cast<int>(std::min<std::size_t>(3, detector_.sequence().size()));
+    view.tunables = tunables(detector_.config(), config_);
+
+    if (t >= d.next_usage) {
+        d.next_usage = t + 1;
+        d.cpu_text = number(d.cpu.sample(), 1) + "%";
+        const auto power = battery_mw();
+        d.battery_text = power ? std::to_string(std::lround(*power)) + " mW" : "Plugged in";
+    }
+    StatusRow game{"Game", state_.app_name.empty() ? state_.app_key : state_.app_name, "", false};
+    if (game.value.empty()) game.value = "None";
+    StatusRow passthrough{"Passthrough", "Checking", "", false};
+    if (!state_.room_view_error.empty()) {
+        passthrough.value = state_.room_view_error;
+        passthrough.bad = true;
+    } else if (state_.room_view) {
+        passthrough.value = *state_.room_view ? "On" : "Off";
+    }
+    std::string port_text =
+        room_view_ms_ ? std::to_string(std::lround(*room_view_ms_)) + " ms" : "Not read yet";
+    if (room_view_failed_) port_text = room_view_ms_ ? "Failed after " + port_text : "Failed";
+    const StatusRow port{"Debug port", port_text, "Switches Room View", room_view_failed_};
+    const double rate = std::max(d.model.pose_rate(Device::Left, t), d.model.pose_rate(Device::Right, t));
+    view.status_left = {
+        game, passthrough, port, {"Pose rate", std::to_string(std::lround(rate)) + "/s", "", false}};
+    view.status_right = {{"CPU", d.cpu_text, "", false}, {"Battery", d.battery_text, "", false}};
+}
+
+// While the debug view is open, fills it at most 30 times a second. The dashboard tab draws it.
+void App::update_debug(double t) {
+    if (!debug_ || !panel_) return;
+    auto& d = *debug_;
+    const bool open = panel_->debug_open();
+    if (open != d.open) {
+        d.open = open;
+        if (open) read_room_view();
+    }
+    if (open && t >= d.next_fill) {
+        d.next_fill = t + 1.0 / 30;
+        fill_debug_view(t);
+    }
 }
 
 #ifdef KNOCKTHRU_TEST_HOOK
@@ -840,6 +1005,8 @@ void App::draw_panel(double t) {
 //   knock KIND PEAK APPROACH one knock, with its spike in m/s^2 and approach speed in m/s
 //   action KIND COUNT        a double (2) or triple (3) knock
 //   snapshot PATH            saves the panel as a PNG
+// With "debug": true in config.json, `click 460 68` opens Settings and `click 1050 560` opens the debug
+// view. `click X 160` then picks a tab, with X 227 (Live), 600 (Tuning), or 973 (Status).
 // Reopens the file for each read, because glibc keeps a stream at end of file
 // once it got there, so an open stream never sees lines added later.
 void App::run_test_commands(double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event) {
@@ -958,6 +1125,7 @@ void App::reload() {
     config_ = load_config(install_directory());
     stamp_ = config_stamp();
     if (!calibrator_) detector_ = KnockDetector(config_.detector);
+    sync_debug();
 }
 
 // SteamVR's dashboard click. Steam already clicks when the Room View button
@@ -982,6 +1150,7 @@ void App::read_room_view() {
     if (room_view_job_.valid()) return;
     const RoomView room_view(config_.debug_port);
     room_view_job_toggles_ = false;
+    room_view_started_ = clock_.now();
     room_view_job_ =
         std::async(std::launch::async, [room_view] { return RoomViewResult{room_view.active(), ""}; });
 }
@@ -1002,6 +1171,7 @@ bool App::toggle_room_view(const std::string& why) {
     if (room_view_job_.valid()) room_view_job_.wait(); // a plain read, at most a few ms
     const RoomView room_view(config_.debug_port);
     room_view_job_toggles_ = true;
+    room_view_started_ = clock_.now();
     room_view_job_ = std::async(std::launch::async, [room_view, why] {
         const bool on = room_view.toggle();
         return RoomViewResult{on, std::string("Passthrough ") + (on ? "on" : "off") + why};

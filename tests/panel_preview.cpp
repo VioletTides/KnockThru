@@ -1,4 +1,4 @@
-// Writes the dashboard panel in sample states to PNG files.
+// Writes the dashboard panel and the debug view in sample states to PNG files.
 // Usage: panel_preview OUTPUT_DIRECTORY
 //        panel_preview --readme OUTPUT_DIRECTORY
 //        panel_preview --bench
@@ -6,9 +6,11 @@
 // frames a second, to review the animations. The --readme form writes clean states for
 // the README images instead. The --bench form prints milliseconds per frame for
 // the screens the headset redraws most.
+#include "debug_view.hpp"
 #include "panel.hpp"
 #include "report_server.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <fstream>
@@ -36,6 +38,84 @@ void shot(Panel& panel, const PanelState& state, double t, const std::filesystem
     std::optional<std::pair<float, float>> hover = std::nullopt) {
     panel.render(state, hover, t - 0.5);
     panel.render(state, hover, t).write_png(path);
+}
+
+// A quiet baseline with a few knocks, 10 ms per point, like the debug graph's mockup.
+std::vector<float> trace(unsigned seed, float scale, const std::vector<std::pair<int, float>>& spikes) {
+    std::vector<float> out;
+    float v = 3;
+    for (int i = 0; i < 1000; ++i) {
+        seed = (seed * 9301 + 49297) % 233280;
+        v = std::clamp(v + (seed / 233280.0f - 0.5f) * 1.2f, 1.0f, 7.0f);
+        out.push_back(v * scale);
+    }
+    for (const auto& [at, height] : spikes) {
+        out[at - 1] += height * 0.2f;
+        out[at] = height;
+        out[at + 1] = height * 0.35f;
+    }
+    return out;
+}
+
+FeedEntry feed(const std::string& title, const std::string& verdict, const std::string& detail, bool good) {
+    return {0, title, verdict, detail, good};
+}
+
+// The debug view's three tabs, one PNG each, and the Live tab while a controller swings fast.
+void debug_view(const std::filesystem::path& out, const PanelState& idle) {
+    Panel panel(KNOCKTHRU_FONTS);
+    DebugView view;
+    view.accel = {trace(3, 0.6f, {{540, 34}}), trace(1, 1, {{120, 91}, {144, 84}, {440, 52}, {620, 91}}),
+        trace(7, 1, {{260, 71}, {760, 71}})};
+    view.set_knocks = 2;
+    view.last = feed("Right controller", "Too light", "52 m/s² (min 60)", false);
+    view.recent = {feed("Surface knock twice", "Passthrough", "", true),
+        feed("Right controller", "Kept moving", "0.83 m/s after (max 0.55)", false),
+        feed("Together knock twice", "Too soon", "0.4 s after the last set (min 0.8)", false)};
+
+    AppConfig saved;
+    saved.detector_sources = {{"controller_peak", Source::Calibration}, {"max_speed_after", Source::User}};
+    DetectorConfig live = saved.detector;
+    live.controller_peak = 60;
+    live.confirmed_peak = 34;
+    view.tunables = tunables(live, saved);
+
+    view.status_left = {{"Game", "Half-Life: Alyx", "", false}, {"Passthrough", "On", "", false},
+        {"Debug port", "140 ms", "Switches Room View", false}, {"Pose rate", "1000/s", "", false}};
+    view.status_right = {{"CPU", "2.3%", "", false}, {"Battery", "Plugged in", "", false}};
+
+    PanelState state = idle;
+    state.debug = &view;
+    const auto click = [&](float x, float y) {
+        panel.render(state);
+        panel.click(x, y);
+    };
+    click(460, 60); // Settings
+    click(1050, 560); // the Debug view row
+    const std::array<std::pair<float, const char*>, 3> tabs{
+        {{227, "live"}, {600, "tuning"}, {973, "status"}}};
+    for (const auto& [x, name] : tabs) {
+        click(x, 160);
+        panel.render(state).write_png(out / (std::string("debug-") + name + ".png"));
+    }
+    click(600, 160);
+    click(900, 428); // All settings
+    panel.render(state).write_png(out / "debug-tuning-all.png");
+    view.tunables = tunables(saved.detector, saved);
+    panel.render(state).write_png(out / "debug-tuning-saved.png");
+
+    // A fast swing: the right controller passes the 100 m/s² full scale for 0.5 s, and one bucket is not a
+    // number. The left trace has a run of off-scale buckets and an infinite one.
+    view.tunables = tunables(live, saved);
+    click(184, 160);
+    auto& right = view.accel[static_cast<int>(Device::Right)];
+    for (int i = 0; i < 50; ++i) right[700 + i] = 60 + 340 * std::sin(i * 3.14159f / 49);
+    right[760] = std::nanf("");
+    auto& left = view.accel[static_cast<int>(Device::Left)];
+    left[820] = left[821] = 450;
+    left[822] = INFINITY;
+    left[823] = 180;
+    panel.render(state, std::make_pair(100.0f, 68.0f)).write_png(out / "debug-live-swing.png");
 }
 
 // Walks through the five calibration steps, as clicks and the app would.
@@ -542,6 +622,11 @@ int main(int argc, char** argv) {
     settings_panel.render(idle);
     settings_panel.click(460, 60);
     settings_panel.render(idle, std::make_pair(600.0f, 200.0f)).write_png(out / "panel-settings.png");
+    const DebugView debug_data;
+    PanelState debugging = idle;
+    debugging.debug = &debug_data;
+    settings_panel.render(debugging, std::make_pair(600.0f, 200.0f))
+        .write_png(out / "panel-settings-debug.png");
     PanelState update = idle;
     update.version = "0.1.0";
     settings_panel.render(update).write_png(out / "panel-settings-update-idle.png");
@@ -606,6 +691,7 @@ int main(int argc, char** argv) {
 
     tour(out, idle);
     knock_actions(out, idle);
+    debug_view(out, idle);
 
     Canvas icon(256, 256);
     Panel::draw_icon(icon);

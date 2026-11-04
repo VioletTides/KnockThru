@@ -39,11 +39,30 @@ void write_json(const fs::path& path, const json& value) {
     fs::rename(temporary, path);
 }
 
-void merge(AppConfig& config, const json& file, const fs::path& path) {
+// Every detector number a config.json can set, by key.
+std::map<std::string, double*> detector_fields(DetectorConfig& d) {
+    return {{"controller_peak", &d.controller_peak}, {"confirmed_peak", &d.confirmed_peak},
+        {"partner_peak", &d.partner_peak}, {"headset_peak", &d.headset_peak},
+        {"headset_knock_peak", &d.headset_knock_peak}, {"max_speed_after", &d.max_speed_after},
+        {"surface_speed_after", &d.surface_speed_after}, {"max_speed_before", &d.max_speed_before},
+        {"surface_speed_before", &d.surface_speed_before}, {"together_distance", &d.together_distance},
+        {"same_spot", &d.same_spot}, {"merge_s", &d.merge_s}, {"min_gap_s", &d.min_gap_s},
+        {"fast_gap_s", &d.fast_gap_s}, {"max_gap_s", &d.max_gap_s}, {"quiet_before_s", &d.quiet_before_s}};
+}
+
+// The kind whose calibration sets a detector key, if any.
+std::optional<KnockKind> calibrated_kind(const std::string& key) {
+    if (key == "controller_peak") return KnockKind::Surface;
+    if (key == "confirmed_peak") return KnockKind::Together;
+    if (key == "headset_knock_peak") return KnockKind::Headset;
+    return std::nullopt;
+}
+
+void merge(AppConfig& config, const json& file, const fs::path& path, Source source) {
     const auto fail = [&](const std::string& what) { throw std::runtime_error(path.string() + ": " + what); };
     const std::map<std::string, bool*> flags{{"paused", &config.paused},
         {"classic_bar_icon", &config.classic_bar_icon}, {"sounds", &config.sounds},
-        {"tour_done", &config.tour_done}, {"check_updates", &config.check_updates}};
+        {"tour_done", &config.tour_done}, {"check_updates", &config.check_updates}, {"debug", &config.debug}};
     for (const auto& [key, value] : file.items()) {
         if (key == "knock_types") {
             if (!value.is_array()) fail("knock_types must be a list");
@@ -92,21 +111,14 @@ void merge(AppConfig& config, const json& file, const fs::path& path) {
             if (!value.is_number_integer()) fail("debug_port must be a whole number");
             config.debug_port = value.get<int>();
         } else if (key == "detector") {
-            auto& d = config.detector;
-            const std::map<std::string, double*> fields{{"controller_peak", &d.controller_peak},
-                {"confirmed_peak", &d.confirmed_peak}, {"partner_peak", &d.partner_peak},
-                {"headset_peak", &d.headset_peak}, {"headset_knock_peak", &d.headset_knock_peak},
-                {"max_speed_after", &d.max_speed_after}, {"surface_speed_after", &d.surface_speed_after},
-                {"max_speed_before", &d.max_speed_before}, {"surface_speed_before", &d.surface_speed_before},
-                {"together_distance", &d.together_distance}, {"same_spot", &d.same_spot},
-                {"merge_s", &d.merge_s}, {"min_gap_s", &d.min_gap_s}, {"fast_gap_s", &d.fast_gap_s},
-                {"max_gap_s", &d.max_gap_s}, {"quiet_before_s", &d.quiet_before_s}};
+            const auto fields = detector_fields(config.detector);
             if (!value.is_object()) fail("detector must be an object");
             for (const auto& [name, number] : value.items()) {
                 const auto field = fields.find(name);
                 if (field == fields.end()) fail("unknown detector setting " + name);
                 if (!number.is_number()) fail("detector." + name + " must be a number");
                 *field->second = number.get<double>();
+                config.detector_sources[name] = source;
             }
         } else if (key.rfind("_", 0) != 0) { // keys starting with _ are comments
             fail("unknown setting " + key);
@@ -126,9 +138,13 @@ fs::path user_directory() {
 
 AppConfig load_config(const fs::path& install_directory) {
     AppConfig config;
-    for (const auto& path : {install_directory / "config.json", user_directory() / "config.json"})
-        merge(config, read_json(path), path);
-    apply_calibration(load_calibration(), config.detector);
+    for (const auto& [name, field] : detector_fields(config.detector))
+        config.detector_sources[name] = Source::Default;
+    merge(config, read_json(install_directory / "config.json"), install_directory / "config.json",
+        Source::Install);
+    merge(
+        config, read_json(user_directory() / "config.json"), user_directory() / "config.json", Source::User);
+    apply_calibration(load_calibration(), config.detector, &config.detector_sources);
     return config;
 }
 
@@ -143,7 +159,7 @@ void update_user_config(const std::string& key, const json& value) {
     else
         file[key] = value;
     AppConfig check;
-    merge(check, file, path); // never write a file that load_config would reject
+    merge(check, file, path, Source::User); // never write a file that load_config would reject
     write_json(path, file);
 }
 
@@ -177,6 +193,31 @@ void save_knock_actions(const KnockActions& actions) {
 }
 
 void save_tour_done(bool done) { update_user_config("tour_done", done); }
+
+void save_detector(const DetectorConfig& tuned, const AppConfig& loaded) {
+    auto tuned_copy = tuned;
+    auto loaded_copy = loaded.detector;
+    const auto tuned_fields = detector_fields(tuned_copy);
+    const auto loaded_fields = detector_fields(loaded_copy);
+    auto calibration = load_calibration();
+    bool calibration_changed = false;
+    json detector = read_json(user_directory() / "config.json").value("detector", json::object());
+    bool detector_changed = false;
+    for (const auto& [name, field] : tuned_fields) {
+        const double value = *field;
+        if (value == *loaded_fields.at(name)) continue;
+        const auto kind = calibrated_kind(name);
+        if (kind && loaded.detector_sources.at(name) == Source::Calibration && calibration[*kind]) {
+            calibration[*kind]->peak = value;
+            calibration_changed = true;
+        } else {
+            detector[name] = value;
+            detector_changed = true;
+        }
+    }
+    if (calibration_changed) save_calibration(calibration);
+    if (detector_changed) update_user_config("detector", detector);
+}
 
 void reset_user_settings() {
     for (const auto* name : {"config.json", "calibration.json"}) {
@@ -283,7 +324,11 @@ void save_calibration(const Calibration& calibration) {
     write_json(user_directory() / "calibration.json", file);
 }
 
-void apply_calibration(const Calibration& calibration, DetectorConfig& detector) {
+void apply_calibration(
+    const Calibration& calibration, DetectorConfig& detector, std::map<std::string, Source>* sources) {
+    const auto mark = [&](const char* key) {
+        if (sources) (*sources)[key] = Source::Calibration;
+    };
     auto copy = calibration;
     // A file saved under an older, lower floor gets the current one.
     for (const auto kind : {KnockKind::Together, KnockKind::Surface, KnockKind::Headset})
@@ -293,16 +338,21 @@ void apply_calibration(const Calibration& calibration, DetectorConfig& detector)
     };
     if (const auto& surface = copy[KnockKind::Surface]) {
         detector.controller_peak = surface->peak;
+        mark("controller_peak");
         approach(KnockKind::Surface, *surface);
     }
     if (const auto& together = copy[KnockKind::Together]) {
         detector.confirmed_peak = together->peak;
+        mark("confirmed_peak");
         // A soft together knock also gives a soft partner spike.
-        detector.partner_peak = std::min(detector.partner_peak, together->peak * 2 / 3);
+        const double partner = std::min(detector.partner_peak, together->peak * 2 / 3);
+        if (partner < detector.partner_peak) mark("partner_peak");
+        detector.partner_peak = partner;
         approach(KnockKind::Together, *together);
     }
     if (const auto& headset = copy[KnockKind::Headset]) {
         detector.headset_knock_peak = headset->peak;
+        mark("headset_knock_peak");
         approach(KnockKind::Headset, *headset);
     }
 }
