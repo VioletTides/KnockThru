@@ -99,7 +99,7 @@ enum class SequenceVerdict {
     WrongCount, // not 2 or 3 knocks
     NotQuiet, // started within quiet_before_s of the previous sequence
     MixedKinds,
-    MixedSources, // different devices, or a together knock among single ones
+    MixedSources, // surface knocks from different hands
     MixedSpots, // surface knocks further apart than same_spot
     TooSlow, // no knock approached at min_approach
     KindOff,
@@ -125,9 +125,13 @@ public:
 
     // Every knock judged so far, for logging and calibration. Cleared on read.
     std::deque<Knock> take_knocks();
-    // Every candidate spike and finished sequence so far, for the debug view. Cleared on read.
+    // Every candidate spike and finished sequence so far, for the debug view. Cleared on read. Kept only
+    // while explaining.
     std::deque<Candidate> take_candidates();
     std::deque<Sequence> take_sequences();
+    // On, the detector also judges spikes from half the lowest threshold and keeps every candidate and
+    // sequence. Off, it does only the work knocks need. Knocks are the same either way.
+    void set_explain(bool on) { explain_ = on; }
 
     const DetectorConfig& config() const { return config_; }
     // Changes the thresholds and keeps the pose history, so knocks right after the change still count.
@@ -159,6 +163,7 @@ private:
     std::deque<Candidate> candidates_;
     std::deque<Sequence> sequences_;
     double last_knock_t_ = -1e9;
+    bool explain_ = false;
 
     std::optional<Candidate> judge(Device device, std::size_t index) const;
     Verdict add(const Knock& knock);

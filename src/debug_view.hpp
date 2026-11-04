@@ -17,7 +17,7 @@ struct Tunable {
     std::string label; // "Surface strength (m/s²)"
     double value, saved; // live and saved
     int decimals;
-    std::string detail; // "From calibration", "From config.json", "Saved value 40", or empty for defaults
+    std::string detail; // "From calibration", "Saved", "Saved value 40", or empty for defaults
 
     bool changed() const { return std::abs(value - saved) > 1e-9; }
 };
@@ -26,6 +26,9 @@ struct Tunable {
 std::vector<Tunable> tunables(const DetectorConfig& live, const AppConfig& saved);
 // Moves the number of tunable `index` one step down (-1) or up (+1), not below zero.
 void step_tunable(DetectorConfig& live, int index, int direction);
+// Copies each unsaved tuned number from `live` into `next`, the config after a reload, unless the reload
+// changed that number's saved value. `saved` is the config before the reload.
+void keep_tuning(DetectorConfig& next, const DetectorConfig& live, const DetectorConfig& saved);
 
 // A line of the Status tab. `detail` is the dim line under the label.
 struct StatusRow {

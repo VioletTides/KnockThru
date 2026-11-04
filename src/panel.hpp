@@ -76,8 +76,11 @@ struct PanelState {
     std::array<bool, 3> enabled{true, true, true}; // per KnockKind
     KnockActions knock_actions;
     std::string app_key, app_name; // the running game, empty when none
+    // The name of the app in front, or its key when SteamVR gives no name.
+    std::string game_name() const { return app_name.empty() ? app_key : app_name; }
     bool app_blocked = false;
-    const DebugView* debug = nullptr; // set while config.json has "debug": true. Settings then opens it
+    const DebugView* debug = nullptr; // what Advanced in Settings shows
+    bool advanced_warning_off = false; // Advanced opens without its warning
     std::optional<CalibrationView> calibration;
     std::optional<TourView> tour;
     std::optional<KnockKind> calibration_saved;
@@ -132,6 +135,8 @@ enum class PanelCommand {
     TuneUp,
     UndoTuning,
     KeepTuning, // saves the tuned numbers
+    RestoreDefaults, // every detector number back to its default
+    HideAdvancedWarning, // "Don't remind me" was on when Advanced opened
     TestBuzz,
     TestClick,
 };
@@ -157,8 +162,8 @@ public:
         const PanelState& state, std::optional<std::pair<float, float>> hover = std::nullopt, double now = 0);
 
     bool animating() const { return animating_; }
-    // True while the debug view is on screen, which stays so when the dashboard closes.
-    bool debug_open() const { return screen_ == Screen::Debug; }
+    // True while Advanced is on screen, which stays so when the dashboard closes.
+    bool debug_open() const { return screen_ == Screen::Debug || screen_ == Screen::RestoreDefaults; }
     // True during the 0.3 s rise of a new view, which wants every display frame.
     bool transitioning() const { return transitioning_; }
 
@@ -169,9 +174,35 @@ public:
     static void draw_icon(Canvas& canvas, IconStyle style = IconStyle::Tile);
 
 private:
-    enum class Screen { Main, Settings, Reset, Report, Pick, Learn, SkipTour, Actions, Debug };
+    enum class Screen {
+        Main,
+        Settings,
+        Reset,
+        Report,
+        Pick,
+        Learn,
+        SkipTour,
+        Actions,
+        AdvancedWarning,
+        Debug,
+        RestoreDefaults
+    };
     // What is on screen, for transitions: a screen, a calibration phase, or the tour.
-    enum class View { Main, Settings, Reset, Report, Pick, Learn, Record, Try, Tour, Actions, Debug };
+    enum class View {
+        Main,
+        Settings,
+        Reset,
+        Report,
+        Pick,
+        Learn,
+        Record,
+        Try,
+        Tour,
+        Actions,
+        AdvancedWarning,
+        Debug,
+        RestoreDefaults
+    };
     enum class DebugTab { Live, Tuning, Status };
     struct Target {
         Rect rect;
@@ -180,6 +211,7 @@ private:
         std::optional<KnockKind> learn = {};
         std::optional<DebugTab> tab = {};
         std::optional<bool> all_settings = {};
+        std::optional<bool> dont_remind = {};
     };
 
     Font bold_, regular_;
@@ -188,6 +220,7 @@ private:
     KnockKind learn_kind_ = KnockKind::Together;
     DebugTab debug_tab_ = DebugTab::Live;
     bool debug_all_ = false; // the Tuning tab shows every detector number
+    bool dont_remind_ = false; // the switch on the Advanced warning
     bool saved_dismissed_ = false;
     bool was_calibrating_ = false;
     bool was_touring_ = false;
@@ -214,9 +247,9 @@ private:
     void tour_screen(const PanelState& state, const TourView& tour);
     void tour_knock_step(const PanelState& state, const TourView& tour);
     void tour_buttons(bool first, bool last, bool complete);
-    void confirm_card(const std::string& title, const std::string& text, const std::string& cancel,
-        Screen cancel_to, const std::string& confirm, PanelClick confirm_click, bool danger,
-        bool cancel_primary = false);
+    Rect confirm_card(const std::string& title, const std::string& text, const std::string& cancel,
+        Screen cancel_to, const std::string& confirm, std::optional<PanelClick> confirm_click,
+        Screen confirm_to, bool danger, bool cancel_primary = false, float height = 390, int max_lines = 3);
     void steps(int current, int total);
     void check_mark(float cx, float cy, float radius, float pop, std::optional<Color> fill = std::nullopt);
     void knock_scene(KnockKind kind, Rect box, float t, int knocks);
@@ -228,6 +261,7 @@ private:
     void action_list(Rect rect, const PanelState& state, int count);
     void update_control(const PanelState& state);
     void report_card(const PanelState& state);
+    void advanced_warning();
     void update_card(const UpdateNotice& notice);
     void alert_mark(float cx, float cy, float scale, Color color);
     void progress_button(Rect rect, const std::string& label, float progress);
@@ -236,7 +270,7 @@ private:
     void style_control(Rect rect, const PanelState& state);
     void switch_row(Rect rect, std::optional<PanelClick> click, bool on, const std::string& title,
         const std::string& detail, bool enabled, bool divider);
-    void button_row(Rect rect, const std::string& title, const std::string& detail, const std::string& label,
+    void button_row(Rect rect, const std::string& title, const std::string& label,
         std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger, bool divider = true);
     void button(Rect rect, const std::string& label, std::optional<PanelClick> click,
         std::optional<Screen> go_to, bool primary = false, bool enabled = true, bool danger = false,
@@ -244,15 +278,15 @@ private:
     std::vector<Rect> segments(Rect track, const std::vector<std::string>& names, std::optional<int> selected,
         float size, Color raised);
     float pill_width(const std::string& label, float padding);
-    void debug_screen(const DebugView& view);
+    void debug_screen(const PanelState& state);
     void debug_live(const DebugView& view, Rect area);
     void debug_tuning(const DebugView& view, Rect area);
     void debug_stepper(Rect rect, const Tunable& tunable, int index);
     void debug_footer(const DebugView& view, Rect rect);
     void debug_status(const DebugView& view, Rect area);
-    void debug_graph(Rect rect, const DebugView& view, int points);
+    void debug_graph(Rect rect, const DebugView& view);
     void set_dots(float x, float cy, float radius, int filled);
-    void list_card(Rect rect, int rows, float row_height = 80);
+    void list_card(Rect rect, int rows, float row_height = 80, float heading = 0);
     void list_row(
         Rect rect, const std::string& label, const std::string& detail, float reserve, bool hover_fill);
     void value_row(Rect rect, const std::string& label, const std::string& detail, const std::string& value,

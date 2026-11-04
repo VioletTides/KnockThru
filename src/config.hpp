@@ -9,6 +9,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace knockthru {
@@ -26,12 +27,14 @@ struct AppConfig {
     bool sounds = true;
     bool tour_done = false;
     bool check_updates = true;
-    bool debug = false; // shows the debug view
+    bool advanced_warning_off = false; // Advanced in Settings opens without its warning
     KnockActions knock_actions;
 };
 
 // Every detector number a config.json can set, by key.
 std::map<std::string, double*> detector_fields(DetectorConfig& d);
+// The detector number a key names, or nullptr for an unknown key.
+double DetectorConfig::* detector_member(std::string_view key);
 
 // state.json, for what is not a setting. A missing or bad file gives defaults.
 struct AppState {
@@ -70,8 +73,8 @@ std::filesystem::path home_directory();
 // Defaults, then <install>/config.json, then the user config.json, then
 // calibration.json. Missing files are skipped. A bad file throws.
 AppConfig load_config(const std::filesystem::path& install_directory);
-// Like load_config, but a bad file gives the defaults plus any calibration that loads,
-// and `error` says what failed.
+// Like load_config, but a bad file is skipped and the files that load still count. `error` says what failed
+// first.
 AppConfig load_config_or_defaults(const std::filesystem::path& install_directory, std::string& error);
 
 // Each changes one key in the user config.json and keeps the rest.
@@ -82,12 +85,17 @@ void save_sounds(bool sounds);
 // Writes the table, or removes the key when every action is the default.
 void save_knock_actions(const KnockActions& actions);
 void save_tour_done(bool done);
+void save_advanced_warning_off(bool off);
 
 // Writes each detector number in `tuned` that differs from `loaded.detector`. A calibrated number goes
 // to its kind's `peak` in calibration.json, which would override config.json. The rest go to config.json.
 // Loading raises a calibrated peak to Calibrator::floor() and lowers partner_peak to two thirds of the
 // together peak, so those two may not load back unchanged.
 void save_detector(const DetectorConfig& tuned, const AppConfig& loaded);
+
+// Removes `detector` from the user config.json and deletes calibration.json, so every detector number
+// goes back to its default. The other settings stay.
+void restore_detector_defaults();
 
 // Deletes only the user config.json and calibration.json.
 void reset_user_settings();

@@ -14,8 +14,6 @@ namespace knockthru {
 namespace fs = std::filesystem;
 namespace {
 
-const fs::path kBattery = "/sys/class/power_supply/max1720x_bat_7-36";
-
 std::string read_line(const fs::path& path) {
     std::ifstream in(path);
     std::string line;
@@ -54,14 +52,15 @@ double CpuUsage::sample() {
     return percent;
 }
 
-std::optional<double> battery_mw() {
+std::optional<double> battery_mw(const fs::path& supplies) {
+    const auto battery = supplies / "max1720x_bat_7-36";
     // The gauge reads charging state while a charger is attached, so power only means something on battery.
-    if (read_line(kBattery / "status") != "Discharging") return std::nullopt;
+    if (read_line(battery / "status") != "Discharging") return std::nullopt;
     std::error_code error;
-    for (const auto& supply : fs::directory_iterator("/sys/class/power_supply", error))
+    for (const auto& supply : fs::directory_iterator(supplies, error))
         if (read_line(supply.path() / "online") == "1") return std::nullopt;
-    const std::string current = read_line(kBattery / "current_now");
-    const std::string voltage = read_line(kBattery / "voltage_now");
+    const std::string current = read_line(battery / "current_now");
+    const std::string voltage = read_line(battery / "voltage_now");
     if (current.empty() || voltage.empty()) return std::nullopt;
     // current_now is in uA and voltage_now in uV. The sign of current_now depends on the gauge driver.
     return std::abs(std::atof(current.c_str())) * std::atof(voltage.c_str()) / 1e9;

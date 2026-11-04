@@ -167,14 +167,11 @@ void Panel::switch_row(Rect rect, std::optional<PanelClick> click, bool on, cons
     if (enabled && click) targets_.push_back({rect, click, std::nullopt});
 }
 
-// A settings row with a title, a detail line, and a button at the right.
-void Panel::button_row(Rect rect, const std::string& title, const std::string& detail,
-    const std::string& label, std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger,
-    bool divider) {
+// A settings row with a title and a button at the right.
+void Panel::button_row(Rect rect, const std::string& title, const std::string& label,
+    std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger, bool divider) {
     if (divider) canvas_.rounded_rect({rect.x + 24, rect.y, rect.w - 48, 1.5f}, 0, kHairline);
-    canvas_.text(bold_, title, rect.x + 24, detail.empty() ? rect.y + rect.h / 2 : rect.y + rect.h / 2 - 17,
-        30, kText);
-    if (!detail.empty()) canvas_.text(regular_, detail, rect.x + 24, rect.y + rect.h / 2 + 21, 26, kDim);
+    canvas_.text(bold_, title, rect.x + 24, rect.y + rect.h / 2, 30, kText);
     button({rect.x + rect.w - 24 - 170, rect.y + rect.h / 2 - 30, 170, 60}, label, click, go_to, false, true,
         danger);
 }
@@ -247,7 +244,7 @@ const Canvas& Panel::render(
         screen_ = Screen::Pick; // canceled or saved
     }
     was_calibrating_ = calibration.has_value();
-    if (screen_ == Screen::Debug && !state.debug) screen_ = Screen::Settings; // debug turned off
+    if ((screen_ == Screen::AdvancedWarning || debug_open()) && !state.debug) screen_ = Screen::Settings;
     if (state.tour && !was_touring_) screen_ = Screen::Main; // just started
     if (!state.tour && was_touring_) screen_ = Screen::Main; // finished or skipped
     was_touring_ = state.tour.has_value();
@@ -262,7 +259,9 @@ const Canvas& Panel::render(
     case Screen::Report: view = View::Report; break;
     case Screen::Pick: view = View::Pick; break;
     case Screen::Actions: view = View::Actions; break;
+    case Screen::AdvancedWarning: view = View::AdvancedWarning; break;
     case Screen::Debug: view = View::Debug; break;
+    case Screen::RestoreDefaults: view = View::RestoreDefaults; break;
     case Screen::Learn:
     case Screen::SkipTour: break;
     }
@@ -280,7 +279,7 @@ const Canvas& Panel::render(
         tour_screen(state, *state.tour);
         if (screen_ == Screen::SkipTour)
             confirm_card("Skip the tour?", "You can replay it any time from Settings", "Keep going",
-                Screen::Main, "Skip tour", PanelClick{PanelCommand::TourSkip}, false, true);
+                Screen::Main, "Skip tour", PanelClick{PanelCommand::TourSkip}, Screen::Main, false, true);
     } else if (screen_ == Screen::Main) {
         main_screen(state);
     } else if (screen_ == Screen::Settings) {
@@ -289,7 +288,7 @@ const Canvas& Panel::render(
         settings_screen(state);
         confirm_card("Reset KnockThru?",
             "This deletes your settings, blocked games, and calibration. The tour starts again afterward.",
-            "Cancel", Screen::Settings, "Reset", PanelClick{PanelCommand::FactoryReset}, true);
+            "Cancel", Screen::Settings, "Reset", PanelClick{PanelCommand::FactoryReset}, Screen::Main, true);
     } else if (screen_ == Screen::Report) {
         settings_screen(state);
         report_card(state);
@@ -297,18 +296,29 @@ const Canvas& Panel::render(
         pick_screen(state);
     } else if (screen_ == Screen::Actions) {
         actions_screen(state);
+    } else if (screen_ == Screen::AdvancedWarning) {
+        settings_screen(state);
+        advanced_warning();
     } else if (screen_ == Screen::Debug) {
-        debug_screen(*state.debug);
+        debug_screen(state);
+    } else if (screen_ == Screen::RestoreDefaults) {
+        debug_screen(state);
+        confirm_card("Restore defaults?",
+            "Every knock number goes back to the default. Calibrate again afterward.", "Cancel",
+            Screen::Debug, "Restore", PanelClick{PanelCommand::RestoreDefaults}, Screen::Debug, true);
     } else {
         learn_screen(state);
     }
     if (state.update_notice && !calibration && !tour_on_screen) update_card(*state.update_notice);
 
     // A new view rises into place. The first render has nothing to move from.
-    // The reset confirm appears over Settings in place, so only the other views rise.
-    const auto over_settings = [](std::optional<View> v) { return v == View::Reset || v == View::Report; };
-    const bool overlay =
-        (over_settings(view) && view_ == View::Settings) || (view == View::Settings && over_settings(view_));
+    // A card appears over its screen in place, so only the other views rise.
+    const auto screen_below = [](std::optional<View> v) -> std::optional<View> {
+        if (v == View::Reset || v == View::Report || v == View::AdvancedWarning) return View::Settings;
+        if (v == View::RestoreDefaults) return View::Debug;
+        return std::nullopt;
+    };
+    const bool overlay = view_ && (screen_below(view) == *view_ || screen_below(*view_) == view);
     if ((view_ && *view_ != view && !overlay) || (tour_step && tour_step_ && *tour_step_ != *tour_step))
         view_t_ = now;
     view_ = view;
@@ -322,7 +332,7 @@ const Canvas& Panel::render(
     }
     transitioning_ = entering < 1;
     animating_ = view == View::Pick || view == View::Learn || view == View::Record || view == View::Try
-        || view == View::Tour || view == View::Debug || entering < 1;
+        || view == View::Tour || view == View::Debug || view == View::RestoreDefaults || entering < 1;
     return canvas_;
 }
 
@@ -333,10 +343,12 @@ std::optional<PanelClick> Panel::click(float x, float y) {
             // Leaving the calibration screens hides the Saved banner.
             if (screen_ == Screen::Pick && *target.go_to == Screen::Settings) saved_dismissed_ = true;
             screen_ = *target.go_to;
+            if (screen_ == Screen::AdvancedWarning) dont_remind_ = false;
             if (target.learn) learn_kind_ = *target.learn;
         }
         if (target.tab) debug_tab_ = *target.tab;
         if (target.all_settings) debug_all_ = *target.all_settings;
+        if (target.dont_remind) dont_remind_ = *target.dont_remind;
         return target.click ? target.click : PanelClick{PanelCommand::Navigate};
     }
     return std::nullopt;

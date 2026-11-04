@@ -108,10 +108,17 @@ int main() {
         check(load_state().steamvr_version.empty(), "a damaged state file gives defaults");
     }
 
-    // Debug flag and detector sources.
-    check(!load_config(install).debug, "debug starts false");
-    std::ofstream(user / "config.json") << R"({"debug": true})";
-    check(load_config(install).debug, "debug: true loads");
+    // The Advanced warning flag, Restore defaults, and detector sources.
+    check(!load_config(install).advanced_warning_off, "the Advanced warning starts on");
+    save_advanced_warning_off(true);
+    check(load_config(install).advanced_warning_off, "Don't remind me saves");
+    std::ofstream(user / "config.json") << R"({"sounds": false, "detector": {"merge_s": 0.06}})";
+    std::ofstream(user / "calibration.json") << R"({"surface": {"peak": 30, "approach": 0.4}})";
+    restore_detector_defaults();
+    const auto restored = load_config(install);
+    check(restored.detector.merge_s == DetectorConfig{}.merge_s && !restored.sounds
+            && !fs::exists(user / "calibration.json"),
+        "Restore defaults drops tuned and calibrated numbers and keeps other settings");
     fs::remove(user / "config.json");
 
     fs::create_directories(install);
@@ -172,6 +179,26 @@ int main() {
         save_detector(tuned, saved);
         check(load_config(install).detector.controller_peak == Calibrator::floor(KnockKind::Surface),
             "a calibrated peak under the floor loads back at the floor");
+    }
+
+    {
+        // A bad file is skipped, and the files that load still count.
+        std::ofstream(user / "config.json", std::ios::trunc) << R"({"sounds": false})";
+        std::ofstream(user / "calibration.json", std::ios::trunc) << R"({"surface": {)";
+        std::string error;
+        const auto loaded = load_config_or_defaults(install, error);
+        check(!loaded.sounds && error.find("calibration.json") != std::string::npos,
+            "a bad calibration.json keeps the config.json settings");
+        check(expect_throw([&] { load_config(install); }), "load_config throws on a bad file");
+        std::ofstream(user / "calibration.json", std::ios::trunc) << R"({"surface": {"peak": 90}})";
+        std::ofstream(user / "config.json", std::ios::trunc) << "{";
+        error.clear();
+        const auto calibrated = load_config_or_defaults(install, error);
+        check(calibrated.detector_sources.at("controller_peak") == Source::Calibration
+                && error.find("config.json") != std::string::npos,
+            "a bad config.json keeps the calibration");
+        fs::remove(user / "calibration.json");
+        fs::remove(user / "config.json");
     }
 
     if (fs::exists("/dev/full")) {

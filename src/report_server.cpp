@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <random>
 #include <sstream>
 #include <stdexcept>
@@ -23,20 +24,6 @@
 
 namespace knockthru {
 namespace {
-
-std::string html_escape(const std::string& text) {
-    std::string out;
-    for (const char c : text) {
-        switch (c) {
-        case '&': out += "&amp;"; break;
-        case '<': out += "&lt;"; break;
-        case '>': out += "&gt;"; break;
-        case '"': out += "&quot;"; break;
-        default: out += c;
-        }
-    }
-    return out;
-}
 
 // The interface that carries the default route, from /proc/net/route.
 std::string default_interface() {
@@ -51,30 +38,8 @@ std::string default_interface() {
     return "";
 }
 
-// Sends in waits of at most 200 ms, so a phone that stops reading never holds the
-// server past `stop`, which Done sets, or past 30 s in all.
-void send_all(int fd, const std::atomic<bool>& stop, const std::string& data) {
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
-    for (std::size_t sent = 0; sent < data.size();) {
-        if (stop || std::chrono::steady_clock::now() > deadline) return;
-        pollfd ready{fd, POLLOUT, 0};
-        if (::poll(&ready, 1, 200) <= 0) continue;
-        const auto n = ::send(fd, data.data() + sent, data.size() - sent, MSG_NOSIGNAL | MSG_DONTWAIT);
-        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
-        if (n <= 0) return;
-        sent += static_cast<std::size_t>(n);
-    }
-}
-
-std::string response(const std::string& status, const std::string& type, const std::string& body,
-    const std::string& extra = "") {
-    return "HTTP/1.1 " + status + "\r\nContent-Type: " + type
-        + "\r\nContent-Length: " + std::to_string(body.size())
-        + "\r\nCache-Control: no-store\r\nConnection: close\r\n" + extra + "\r\n" + body;
-}
-
-} // namespace
-
+// The headset's IPv4 address on the network its default route uses, such as 192.168.2.222. Empty without a
+// network.
 std::string local_address() {
     const auto preferred = default_interface();
     ifaddrs* list = nullptr;
@@ -94,6 +59,78 @@ std::string local_address() {
     ::freeifaddrs(list);
     return !found.empty() ? found : preferred.empty() ? fallback : "";
 }
+
+// A complete HTTP/1.1 response that closes the connection. `extra` is more header lines, each ending in CRLF.
+std::string response(const std::string& status, const std::string& type, const std::string& body,
+    const std::string& extra = "") {
+    return "HTTP/1.1 " + status + "\r\nContent-Type: " + type
+        + "\r\nContent-Length: " + std::to_string(body.size())
+        + "\r\nCache-Control: no-store\r\nConnection: close\r\n" + extra + "\r\n" + body;
+}
+
+// Sends in waits of at most 200 ms, so a client that stops reading never holds the server past `stop`, or
+// past 30 s in all.
+void send_all(int fd, const std::atomic<bool>& stop, const std::string& data) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    for (std::size_t sent = 0; sent < data.size();) {
+        if (stop || std::chrono::steady_clock::now() > deadline) return;
+        pollfd ready{fd, POLLOUT, 0};
+        if (::poll(&ready, 1, 200) <= 0) continue;
+        const auto n = ::send(fd, data.data() + sent, data.size() - sent, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (n <= 0) return;
+        sent += static_cast<std::size_t>(n);
+    }
+}
+
+struct Request {
+    std::string method, path;
+};
+
+// Reads the request line from `client` and checks `stop` every 200 ms. Returns nothing when the client
+// leaves, stalls, or sends an oversized line.
+std::optional<Request> read_request(int client, const std::atomic<bool>& stop) {
+    constexpr std::size_t kMaxLine = 8192;
+    // Short receive waits, so the stop check runs at least every 200 ms.
+    timeval timeout{0, 200000};
+    ::setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+    std::string request;
+    char buffer[1024];
+    // One deadline for the whole request, so a client that sends a byte at a time cannot hold the server. A
+    // browser may open a spare connection and send nothing, so the first byte has to come within 300 ms.
+    const auto start = std::chrono::steady_clock::now();
+    while (request.find("\r\n") == std::string::npos) {
+        if (request.size() > kMaxLine) return std::nullopt;
+        const auto waited = std::chrono::steady_clock::now() - start;
+        if (stop || waited > std::chrono::seconds(3)
+            || (request.empty() && waited > std::chrono::milliseconds(300)))
+            return std::nullopt;
+        const auto n = ::recv(client, buffer, sizeof buffer, 0);
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (n <= 0) return std::nullopt;
+        request.append(buffer, static_cast<std::size_t>(n));
+    }
+    Request parsed;
+    std::istringstream line(request.substr(0, request.find("\r\n")));
+    line >> parsed.method >> parsed.path;
+    return parsed;
+}
+
+std::string html_escape(const std::string& text) {
+    std::string out;
+    for (const char c : text) {
+        switch (c) {
+        case '&': out += "&amp;"; break;
+        case '<': out += "&lt;"; break;
+        case '>': out += "&gt;"; break;
+        case '"': out += "&quot;"; break;
+        default: out += c;
+        }
+    }
+    return out;
+}
+
+} // namespace
 
 std::string make_zip(const std::vector<std::pair<std::string, std::string>>& files) {
     // Stored entries, without compression: the recording is already gzipped, and the report is small.
@@ -259,10 +296,12 @@ ReportServer::ReportServer(std::string report, std::string issue_link)
     : report_(std::move(report)), issue_link_(std::move(issue_link)) {
     const auto address = local_address();
     if (address.empty()) throw std::runtime_error("The Frame is not on a network");
+    // 16 random hex digits, the secret in the server's paths.
     std::random_device random;
     static const char* digits = "0123456789abcdef";
     for (int i = 0; i < 16; ++i) token_ += digits[random() % 16];
 
+    // The kernel picks the port. SteamOS's firewall opens TCP ports 1024 to 65535.
     listener_ = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (listener_ < 0) throw std::runtime_error("Cannot create a socket");
     sockaddr_in bind_address{};
@@ -292,6 +331,8 @@ void ReportServer::set_recording(std::filesystem::path recording) {
 
 ReportServer::~ReportServer() {
     stop_ = true;
+    // Wakes the accept wait at once, so closing the report card never stalls the app loop.
+    ::shutdown(listener_, SHUT_RDWR);
     thread_.join();
     ::close(listener_);
 }
@@ -309,23 +350,10 @@ void ReportServer::loop() {
 }
 
 void ReportServer::answer(int client) {
-    // Short receive waits, so the stop check above runs at least every 200 ms.
-    timeval timeout{0, 200000};
-    ::setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
-    std::string request;
-    char buffer[1024];
-    int waits = 0;
-    while (request.find("\r\n") == std::string::npos && request.size() < 4096) {
-        if (stop_) return;
-        const auto n = ::recv(client, buffer, sizeof buffer, 0);
-        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && ++waits < 15)
-            continue; // 3 s for the request line
-        if (n <= 0) return;
-        request.append(buffer, static_cast<std::size_t>(n));
-    }
-    std::istringstream line(request.substr(0, request.find("\r\n")));
-    std::string method, path;
-    line >> method >> path;
+    const auto request = read_request(client, stop_);
+    if (!request) return;
+    const auto& method = request->method;
+    const auto& path = request->path;
     std::string report;
     std::filesystem::path recording;
     {

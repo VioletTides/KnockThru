@@ -21,18 +21,6 @@ const char* action_name(KnockAction action) {
     return "";
 }
 
-// The action for knocking twice and thrice, for the Settings row that opens Knock actions.
-std::string actions_summary(const PanelState& state) {
-    std::string text;
-    for (const int count : kKnockCounts) {
-        const auto action = state.knock_actions.shared(count);
-        if (!text.empty()) text += ", ";
-        text += std::string(count == 2 ? "Twice: " : "Thrice: ")
-            + (action ? action_name(*action) : "set per kind");
-    }
-    return text;
-}
-
 } // namespace
 
 void Panel::passthrough_tile(Rect rect, const PanelState& state) {
@@ -122,7 +110,7 @@ void Panel::main_screen(const PanelState& state) {
     if (state.app_key.empty()) {
         switch_row({x, y, w, 128}, std::nullopt, false, "No game running", "", false, true);
     } else {
-        const auto name = state.app_name.empty() ? state.app_key : state.app_name;
+        const auto name = state.game_name();
         switch_row({x, y, w, 128}, PanelClick{PanelCommand::BlockApp}, !state.app_blocked,
             "Knocks in " + name, state.app_blocked ? "Off for this game only" : "", true, true);
     }
@@ -134,25 +122,21 @@ void Panel::main_screen(const PanelState& state) {
 void Panel::settings_screen(const PanelState& state) {
     back_header("Settings", Screen::Main);
     update_control(state);
-    // The debug row is a seventh, so the rows shrink to keep the card's height.
-    const int rows = state.debug ? 7 : 6;
-    const float top = 128, w = kWidth - 2 * kMargin, card = 6 * 92, row = card / rows;
+    // Seven rows share the height of six, at 92 px each.
+    const float top = 128, w = kWidth - 2 * kMargin, card = 6 * 92, row = card / 7;
     canvas_.rounded_rect({kMargin, top, w, card}, kRadius, kSurface);
-    button_row({kMargin, top, w, row}, "Knocks getting missed?", "KnockThru learns how hard you knock",
-        "Calibrate", std::nullopt, Screen::Pick, false, false);
-    button_row({kMargin, top + row, w, row}, "Knock actions", actions_summary(state), "Change", std::nullopt,
-        Screen::Actions, false);
-    switch_row({kMargin, top + 2 * row, w, row}, PanelClick{PanelCommand::Sounds}, state.sounds, "Sounds",
-        "Click on knocks and on buttons", true, true);
-    button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "", "Replay",
-        PanelClick{PanelCommand::StartTour}, std::nullopt, false);
-    button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
+    button_row({kMargin, top, w, row}, "Knocks getting missed?", "Calibrate", std::nullopt, Screen::Pick,
+        false, false);
+    button_row({kMargin, top + row, w, row}, "Knock actions", "Change", std::nullopt, Screen::Actions, false);
+    switch_row({kMargin, top + 2 * row, w, row}, PanelClick{PanelCommand::Sounds}, state.sounds, "Sounds", "",
+        true, true);
+    button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "Replay", PanelClick{PanelCommand::StartTour},
+        std::nullopt, false);
+    button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Report",
         PanelClick{PanelCommand::ShowReport}, Screen::Report, false);
-    if (state.debug)
-        button_row({kMargin, top + 5 * row, w, row}, "Debug view", "Live knock decisions and tuning", "Open",
-            std::nullopt, Screen::Debug, false);
-    button_row({kMargin, top + (rows - 1) * row, w, row}, "Factory reset", "Delete settings and calibration",
-        "Reset", std::nullopt, Screen::Reset, true);
+    button_row({kMargin, top + 5 * row, w, row}, "Advanced", "Open", std::nullopt,
+        state.advanced_warning_off ? Screen::Debug : Screen::AdvancedWarning, false);
+    button_row({kMargin, top + 6 * row, w, row}, "Factory reset", "Reset", std::nullopt, Screen::Reset, true);
     if (state.message_is_error) message(state, top + card + 40);
 }
 

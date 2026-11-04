@@ -1,4 +1,4 @@
-// Debug model tests: graph series, the feed rules, and CPU use.
+// Debug model tests: graph series, the feed rules, CPU use, and battery power.
 #include "check.hpp"
 #include "debug_model.hpp"
 #include "usage.hpp"
@@ -6,9 +6,12 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
+
+#include <unistd.h>
 
 using namespace knockthru;
 
@@ -161,9 +164,12 @@ void feed_tests() {
         "a together triple that switched the style");
     model.add_set(
         set(SequenceVerdict::Action, 2, KnockKind::Headset), SetOutcome::Ran, KnockAction::PerfGraph);
-    check(model.feed().back().title == "Headset knock twice" && model.feed().back().verdict == "Perf graph",
+    check(model.feed().back().title == "Headset knock twice"
+            && model.feed().back().verdict == "Performance graph",
         "a headset double that opened the perf graph");
 
+    model.add_set(set(SequenceVerdict::Action, 2), SetOutcome::Failed, KnockAction::Passthrough);
+    check(model.feed().back().verdict == "Failed" && !model.feed().back().good, "an action that did not run");
     model.add_set(set(SequenceVerdict::Action, 2), SetOutcome::Paused, KnockAction::Passthrough);
     check(model.feed().back().verdict == "Paused" && !model.feed().back().good, "a paused action set");
     model.add_set(set(SequenceVerdict::Action, 2), SetOutcome::Blocked, KnockAction::Passthrough);
@@ -207,8 +213,27 @@ void usage_tests() {
     while (std::chrono::steady_clock::now() < until) sink = sink + std::sqrt(2.0);
     const double percent = usage.sample();
     check(percent > 10 && percent <= 110, "a busy loop shows as CPU use, got " + std::to_string(percent));
-    const auto power = battery_mw();
-    check(!power || *power >= 0, "battery power is missing or not negative");
+
+    // A fake gauge: -500 mA at 3.8 V is 1900 mW.
+    namespace fs = std::filesystem;
+    const auto supplies = fs::temp_directory_path() / ("knockthru-usage-test-" + std::to_string(getpid()));
+    const auto battery = supplies / "max1720x_bat_7-36", charger = supplies / "charger";
+    fs::create_directories(battery);
+    fs::create_directories(charger);
+    const auto write = [](const fs::path& path, const char* text) { std::ofstream(path) << text << "\n"; };
+    write(battery / "status", "Discharging");
+    write(battery / "current_now", "-500000");
+    write(battery / "voltage_now", "3800000");
+    write(charger / "online", "0");
+    const auto power = battery_mw(supplies);
+    check(power && std::abs(*power - 1900) < 1e-6, "battery power in mW from the gauge");
+    write(charger / "online", "1");
+    check(!battery_mw(supplies), "no battery power while a charger is online");
+    write(charger / "online", "0");
+    write(battery / "status", "Charging");
+    check(!battery_mw(supplies), "no battery power while charging");
+    check(!battery_mw(supplies / "missing"), "no battery power without a gauge");
+    fs::remove_all(supplies);
 }
 
 } // namespace

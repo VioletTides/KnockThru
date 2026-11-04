@@ -150,6 +150,34 @@ int main() {
     }
 
     {
+        // A connection that sends nothing, like a browser's spare one, holds the server at most 300 ms.
+        auto server = std::make_unique<ReportServer>("report\n", "https://example.com");
+        const auto rest = server->url().substr(7);
+        const int port = std::stoi(rest.substr(rest.find(':') + 1));
+        const int idle = ::socket(AF_INET, SOCK_STREAM, 0);
+        sockaddr_in address{};
+        address.sin_family = AF_INET;
+        address.sin_port = htons(static_cast<std::uint16_t>(port));
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        ::connect(idle, reinterpret_cast<sockaddr*>(&address), sizeof address);
+        usleep(50000);
+        auto start = std::chrono::steady_clock::now();
+        const auto page = root / "idle-page.html";
+        const int got = run_program(
+            {"curl", "--fail", "--silent", "--max-time", "5", "--output", page.string(), server->url()});
+        const double waited = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        check(got == 0 && waited < 1,
+            "an idle connection delays the page under 1 s: " + std::to_string(waited) + " s");
+        ::close(idle);
+        // Closing the report card stops the server without waiting out its accept poll.
+        start = std::chrono::steady_clock::now();
+        server.reset();
+        const double stopping =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        check(stopping < 0.05, "the report server stops at once: " + std::to_string(stopping) + " s");
+    }
+
+    {
         // A missing file:// ZIP fails with a readable message, whatever curl's exit code.
         Release missing{"0.9.0", "file://" + (root / "no-such.zip").string(), std::string(64, '0')};
         try {

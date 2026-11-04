@@ -15,7 +15,7 @@ namespace {
 // The Live tab's graph tile, in canvas pixels.
 constexpr int kTileLeft = 40, kTileRight = 616, kTileTop = 220, kTileBottom = 734;
 
-// A panel on the debug view's Live tab, reached by clicking Settings and then the Debug view row.
+// A panel on Advanced's Live tab, reached by clicking Settings, the Advanced row, and Open on its warning.
 struct DebugScreen {
     DebugView view;
     PanelState state;
@@ -27,6 +27,8 @@ struct DebugScreen {
         panel.click(460, 60);
         panel.render(state);
         panel.click(1050, 560);
+        panel.render(state);
+        panel.click(812, 551);
     }
 
     // The screen with the left controller steady at 30 m/s² except for `middle` halfway along.
@@ -66,9 +68,22 @@ void off_scale_tests() {
     check(screen.live(100).hash() != spike, "a value at the full scale is not a spike");
 }
 
+// A reload keeps a tuned number unless that number's saved value changed.
+void keep_tuning_tests() {
+    std::cout << "keep tuning\n";
+    DetectorConfig saved, live, next;
+    live.controller_peak = saved.controller_peak + 5;
+    live.confirmed_peak = saved.confirmed_peak + 5;
+    next.confirmed_peak = saved.confirmed_peak + 10;
+    keep_tuning(next, live, saved);
+    check(next.controller_peak == live.controller_peak, "an unsaved tuned number survives a reload");
+    check(next.confirmed_peak == saved.confirmed_peak + 10, "a newly saved number replaces the tuned one");
+}
+
 } // namespace
 
 int main() {
     off_scale_tests();
+    keep_tuning_tests();
     return finish();
 }

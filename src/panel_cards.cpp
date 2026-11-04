@@ -10,9 +10,9 @@ namespace knockthru {
 
 using namespace panel_style;
 
-namespace panel_style {
+namespace {
 
-// The code on white with a 4-module quiet zone, in whole pixels per module.
+// Draws `text` as a QR code on white with a 4-module quiet zone, in whole pixels per module.
 void draw_qr(Canvas& canvas, Rect white, const std::string& text) {
     canvas.rounded_rect(white, kRadius, {255, 255, 255});
     if (text.empty()) return;
@@ -38,7 +38,7 @@ void draw_qr(Canvas& canvas, Rect white, const std::string& text) {
     }
 }
 
-} // namespace panel_style
+} // namespace
 
 // Clears the targets and dims the screen below a card, so only the card responds.
 void Panel::scrim() {
@@ -125,19 +125,35 @@ void Panel::report_card(const PanelState& state) {
         Screen::Settings, true);
 }
 
-// A confirm card over the screen below it. Only its two buttons respond.
-void Panel::confirm_card(const std::string& title, const std::string& text, const std::string& cancel,
-    Screen cancel_to, const std::string& confirm, PanelClick confirm_click, bool danger,
-    bool cancel_primary) {
+// A confirm card over the screen below it, centred at y 385. Only its two buttons respond. Returns the card,
+// so a caller can add to it.
+Rect Panel::confirm_card(const std::string& title, const std::string& text, const std::string& cancel,
+    Screen cancel_to, const std::string& confirm, std::optional<PanelClick> confirm_click, Screen confirm_to,
+    bool danger, bool cancel_primary, float height, int max_lines) {
     scrim();
-    const Rect card{220, 190, kWidth - 440, 390};
+    const Rect card{220, 385 - height / 2, kWidth - 440, height};
     canvas_.rounded_rect(card, kRadius, kSurface);
     canvas_.text(bold_, title, card.x + 48, card.y + 72, 38, kText);
-    paragraph(regular_, text, card.x + 48, card.y + 140, 28, 40, card.w - 96, 3, kText);
+    paragraph(regular_, text, card.x + 48, card.y + 140, 28, 40, card.w - 96, max_lines, kText);
     const float by = card.y + card.h - 48 - 72;
     button({card.x + 48, by, 240, 72}, cancel, std::nullopt, cancel_to, cancel_primary);
-    button({card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, Screen::Main, !cancel_primary,
+    button({card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, confirm_to, !cancel_primary,
         true, danger);
+    return card;
+}
+
+// The warning before Advanced opens. Its switch stops it from showing again once Open is pressed.
+void Panel::advanced_warning() {
+    const auto open = dont_remind_ ? std::optional<PanelClick>(PanelClick{PanelCommand::HideAdvancedWarning})
+                                   : std::nullopt;
+    const Rect card = confirm_card("Advanced settings",
+        "These change how KnockThru hears knocks. Wrong values can stop knocks from working. Restore "
+        "defaults in Tuning puts them back. Use them at your own risk.",
+        "Cancel", Screen::Settings, "Open", open, Screen::Debug, false, true, 500, 4);
+    const Rect remind{card.x + 24, card.y + 270, card.w - 48, 72};
+    switch_row(remind, std::nullopt, dont_remind_, "Don't remind me", "", true, false);
+    targets_.push_back({remind});
+    targets_.back().dont_remind = !dont_remind_;
 }
 
 // The update result over the screen below it. Only OK responds.

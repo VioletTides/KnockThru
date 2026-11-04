@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdio>
 
 namespace knockthru {
 
@@ -30,9 +29,17 @@ Color verdict_color(const FeedEntry& entry) { return entry.good ? kAccent : kErr
 
 } // namespace
 
-// The debug view: a header like Settings', three tabs, and the tab's content.
-void Panel::debug_screen(const DebugView& view) {
-    back_header("Knock debug", Screen::Settings);
+// The debug view: a header like Settings', three tabs, and the tab's content. Messages go in the header,
+// because the tabs fill the screen below it.
+void Panel::debug_screen(const PanelState& state) {
+    const DebugView& view = *state.debug;
+    back_header("Advanced", Screen::Settings);
+    if (!state.message.empty()) {
+        const float x = kMargin + 172 + canvas_.measure(bold_, "Advanced", 38) + 40;
+        const auto lines = canvas_.wrap(regular_, state.message, 26, kWidth - kMargin - x, 2);
+        paragraph(regular_, state.message, x, 68 - 15.0f * (lines.size() - 1), 26, 30, kWidth - kMargin - x,
+            2, state.message_is_error ? kError : kDim);
+    }
     const auto tabs = segments({kMargin, 124, kWidth - 2 * kMargin, 72}, {"Live", "Tuning", "Status"},
         static_cast<int>(debug_tab_), kButton, kRaised);
     for (std::size_t i = 0; i < tabs.size(); ++i)
@@ -45,11 +52,14 @@ void Panel::debug_screen(const DebugView& view) {
     }
 }
 
-void Panel::list_card(Rect rect, int rows, float row_height) {
-    canvas_.rounded_rect({rect.x, rect.y, rect.w, card_height(rows, row_height)}, kRadius, kSurface);
+// A card with `rows` rows under a heading `heading` px high, and a line between each two rows.
+void Panel::list_card(Rect rect, int rows, float row_height, float heading) {
+    canvas_.rounded_rect(
+        {rect.x, rect.y, rect.w, heading + card_height(rows, row_height)}, kRadius, kSurface);
+    const Rect body{rect.x, rect.y + heading, rect.w, 0};
     for (int i = 1; i < rows; ++i)
         canvas_.rounded_rect(
-            {rect.x + 28, row_at(rect, i, row_height).y, rect.w - 56, 1.5f}, 0.5f, kHairline);
+            {body.x + 28, row_at(body, i, row_height).y, body.w - 56, 1.5f}, 0.5f, kHairline);
 }
 
 // A row's label and its dim line. `reserve` is the width the right side needs.
@@ -64,28 +74,34 @@ void Panel::list_row(
             regular_, canvas_.fit(regular_, detail, kDetail, width), rect.x + 28, cy + 17, kDetail, kDim);
 }
 
-// A list row with a value at its right end.
+// A list row with a value at its right end. A long value gets cut, so the label stays whole.
 void Panel::value_row(
     Rect rect, const std::string& label, const std::string& detail, const std::string& value, Color color) {
-    list_row(rect, label, detail, canvas_.measure(bold_, value, kLabel) + 16, false);
-    canvas_.text(bold_, value, rect.x + rect.w - 28, rect.y + rect.h / 2, kLabel, color, Align::Right);
+    const std::string fitted =
+        canvas_.fit(bold_, value, kLabel, rect.w - 56 - canvas_.measure(bold_, label, kLabel) - 16);
+    list_row(rect, label, detail, canvas_.measure(bold_, fitted, kLabel) + 16, false);
+    canvas_.text(bold_, fitted, rect.x + rect.w - 28, rect.y + rect.h / 2, kLabel, color, Align::Right);
 }
 
-// Fills a card with one row per entry: title, detail, and the verdict.
+// Fills a card under an "Earlier" heading with one row per entry: title, detail, and the verdict.
 void Panel::feed_rows(Rect rect, const std::vector<FeedEntry>& entries) {
     const int rows = std::min<int>(entries.size(), kMaxRows);
     if (rows == 0) return;
-    list_card(rect, rows);
+    constexpr float kHeading = 32;
+    list_card(rect, rows, kRowHeight, kHeading);
+    const Rect body{rect.x, rect.y + kHeading, rect.w, 0};
+    canvas_.text(bold_, "Earlier", rect.x + 28, rect.y + 38, kLabel, kText);
     for (int i = 0; i < rows; ++i) {
         const auto& entry = entries[i];
-        const Rect r = row_at(rect, i);
+        const Rect r = row_at(body, i);
         value_row(r, entry.title, entry.detail, entry.verdict, verdict_color(entry));
     }
 }
 
-// Three traces over the last `points` buckets, newest at the right, and the threshold on top. A value
+// Three traces over the graph's span, newest at the right, and the threshold on top. A value
 // above the full scale leaves the graph: its line is cut at the top edge and a triangle marks the spot.
-void Panel::debug_graph(Rect rect, const DebugView& view, int points) {
+void Panel::debug_graph(Rect rect, const DebugView& view) {
+    constexpr int points = static_cast<int>(DebugModel::kGraphSeconds / DebugModel::kBucketSeconds + 0.5);
     const float top = rect.y + kGraphPad, bottom = rect.y + rect.h - kGraphPad;
     // Not a number reads as off the scale too, because `!(value <= full scale)` holds for it.
     const auto off_scale = [](float accel) { return !(accel <= kMaxAccel); };
@@ -129,8 +145,7 @@ void Panel::debug_graph(Rect rect, const DebugView& view, int points) {
     // The line sits on a whole pixel row so its two pixels stay crisp.
     const float ty = std::round(y_of(static_cast<float>(view.threshold)));
     canvas_.rounded_rect({rect.x, ty - 1, rect.w, 2}, 1, kDim);
-    char label[32];
-    std::snprintf(label, sizeof label, "%.0f m/s²", view.threshold);
+    const std::string label = number(view.threshold, 0) + " m/s²";
     const float pill_w = canvas_.measure(bold_, label, kDetail) + 24;
     canvas_.rounded_rect({rect.x + rect.w - pill_w, ty - 17, pill_w, 34}, 17, kBackground);
     canvas_.text(bold_, label, rect.x + rect.w - pill_w + 12, ty + 1, kDetail, kDim);
@@ -163,23 +178,27 @@ void Panel::debug_live(const DebugView& view, Rect area) {
         key_x += 32 + canvas_.measure(regular_, name, kDetail) + 28;
     }
     const float set_cy = bottom - 17;
-    debug_graph({x, top + 44, w, set_cy - 17 - 14 - (top + 44)}, view, 500);
-    canvas_.text(regular_, "Set", x, set_cy, kLabel, kText);
-    set_dots(x + canvas_.measure(regular_, "Set", kLabel) + 14, set_cy, 11, view.set_knocks);
+    debug_graph({x, top + 44, w, set_cy - 17 - 14 - (top + 44)}, view);
+    canvas_.text(regular_, "Knocks", x, set_cy, kLabel, kText);
+    set_dots(x + canvas_.measure(regular_, "Knocks", kLabel) + 14, set_cy, 11, view.set_knocks);
 
     // The last knock and the rows under it.
     const float sx = tile.x + tile.w + gap;
-    const Rect last{sx, area.y, side_w, 208};
+    const Rect last{sx, area.y, side_w, 190};
     canvas_.rounded_rect(last, kRadius, kRaised);
-    canvas_.text(bold_, "Last knock", sx + 30, last.y + 40, kLabel, kText);
+    canvas_.text(bold_, "Last knock", sx + 30, last.y + 38, kLabel, kText);
     const float text_w = side_w - 60;
     if (view.last) {
-        canvas_.text(bold_, canvas_.fit(bold_, view.last->verdict, 56, text_w), sx + 30, last.y + 101, 56,
+        // The device or set it came from, beside the heading.
+        const float heading_w = canvas_.measure(bold_, "Last knock", kLabel) + 24;
+        canvas_.text(regular_, canvas_.fit(regular_, view.last->title, kLabel, text_w - heading_w),
+            sx + side_w - 30, last.y + 38, kLabel, kDim, Align::Right);
+        canvas_.text(bold_, canvas_.fit(bold_, view.last->verdict, 56, text_w), sx + 30, last.y + 94, 56,
             verdict_color(*view.last));
         canvas_.text(
-            bold_, canvas_.fit(bold_, view.last->detail, 30, text_w), sx + 30, last.y + 162, 30, kDim);
+            bold_, canvas_.fit(bold_, view.last->detail, 30, text_w), sx + 30, last.y + 150, 30, kDim);
     } else {
-        canvas_.text(bold_, "No knocks yet", sx + 30, last.y + 101, 56, kDim);
+        canvas_.text(bold_, "No knocks yet", sx + 30, last.y + 94, 56, kDim);
     }
     feed_rows({sx, last.y + last.h + gap, side_w, 0}, view.recent);
 }
@@ -207,15 +226,23 @@ void Panel::debug_footer(const DebugView& view, Rect rect) {
     const bool dirty =
         std::any_of(view.tunables.begin(), view.tunables.end(), [](const Tunable& t) { return t.changed(); });
     const float h = 64, y = rect.y + 14, right = rect.x + rect.w - 14;
-    const float keep_w = pill_width("Keep after restart", 36), undo_w = pill_width("Undo changes", 36);
-    const Rect keep{right - keep_w, y, keep_w, h}, undo{keep.x - 16 - undo_w, y, undo_w, h};
-    button(undo, "Undo changes", PanelClick{PanelCommand::UndoTuning}, std::nullopt, false, dirty, false,
-        kButton);
-    button(keep, "Keep after restart", PanelClick{PanelCommand::KeepTuning}, std::nullopt, true, dirty, false,
-        kButton);
+    // Unsaved changes get Undo and Keep. Saved settings get Restore defaults, for tuning that broke knocks.
+    float limit = right;
+    if (dirty) {
+        const float keep_w = pill_width("Keep after restart", 36), undo_w = pill_width("Undo changes", 36);
+        const Rect keep{right - keep_w, y, keep_w, h}, undo{keep.x - 16 - undo_w, y, undo_w, h};
+        button(undo, "Undo changes", PanelClick{PanelCommand::UndoTuning}, std::nullopt, false, true, false,
+            kButton);
+        button(keep, "Keep after restart", PanelClick{PanelCommand::KeepTuning}, std::nullopt, true, true,
+            false, kButton);
+        limit = undo.x - 16;
+    } else {
+        const float restore_w = pill_width("Restore defaults", 36);
+        button({right - restore_w, y, restore_w, h}, "Restore defaults", std::nullopt,
+            Screen::RestoreDefaults, false, true, false, kButton);
+    }
 
     float x = rect.x + 28;
-    const float limit = undo.x - 16;
     if (debug_all_) {
         const float fewer_w = pill_width("Fewer settings", 28);
         button({x - 14, y, fewer_w, h}, "Fewer settings", std::nullopt, std::nullopt, false, true, false,
@@ -243,14 +270,13 @@ void Panel::debug_tuning(const DebugView& view, Rect area) {
     const bool all = debug_all_;
     const float stepper_w = all ? 160 : 184;
     const float row_h = all ? 48 : kRowHeight, step_h = all ? 44 : 60;
-    const int per_column = all ? (count + 1) / 2 : 3;
-    const int rows = per_column;
+    const int rows = all ? (count + 1) / 2 : 3;
     list_card(left, rows, row_h);
     list_card(right, rows, row_h);
     for (int i = 0; i < count; ++i) {
         if (!all && i >= 5) break;
-        const int column = all ? i / per_column : (i < 3 ? 0 : 1);
-        const int index = all ? i % per_column : (i < 3 ? i : i - 3);
+        const int column = all ? i / rows : (i < 3 ? 0 : 1);
+        const int index = all ? i % rows : (i < 3 ? i : i - 3);
         const Rect r = row_at(column == 0 ? left : right, index, row_h);
         const auto& tunable = view.tunables[i];
         list_row(r, tunable.label, all ? "" : tunable.detail, stepper_w + 16, false);

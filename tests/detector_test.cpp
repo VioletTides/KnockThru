@@ -34,6 +34,7 @@ std::vector<KnockEvent> synthetic(const std::vector<double>& knock_times, Detect
     Device device = Device::Right, Vec3 position = {0.2, 0.8, -0.3}, double duration = 3.0,
     std::deque<Sequence>* sequences = nullptr) {
     KnockDetector detector(config);
+    detector.set_explain(sequences != nullptr);
     std::vector<KnockEvent> events;
     const double dt = 1.0 / 233;
     for (double t = 0; t < duration; t += dt) {
@@ -80,6 +81,7 @@ void synthetic_tests() {
     check(synthetic({1.0, 1.4, 1.8, 2.25}).size() == 0, "four knocks with even gaps do nothing");
     check(synthetic({0.5, 0.75, 1.75, 2.0}).size() == 2, "two doubles 1 s apart both count");
     check(synthetic({0.2, 1.3, 1.55}).size() == 1, "a double 1.1 s after another knock counts");
+    check(synthetic({0.75, 1.3, 1.55}).empty(), "a double 550 ms after another knock does nothing");
 
     DetectorConfig no_surface;
     no_surface.enabled[static_cast<int>(KnockKind::Surface)] = false;
@@ -99,6 +101,7 @@ void synthetic_tests() {
 // A spike after which the controller keeps moving is not a knock.
 void moving_after_test() {
     KnockDetector detector;
+    detector.set_explain(true);
     std::vector<Verdict> verdicts;
     std::vector<KnockEvent> events;
     const double dt = 1.0 / 233;
@@ -293,10 +296,12 @@ std::vector<Row> read_recording(const std::string& name, int* reads = nullptr) {
     return as_read(load(path ? name : std::string(KNOCKTHRU_TEST_DATA) + "/" + name + ".csv.gz"), reads);
 }
 
-// Feeds rows to a detector. `verbose` prints every knock, spike, sequence, and action as it goes.
+// Feeds rows to a detector, with explain mode on if `explain`. `verbose` prints every knock, spike, sequence,
+// and action as it goes, and needs explain mode for the spikes and sequences.
 std::vector<KnockEvent> replay_rows(
-    const std::vector<Row>& rows, const DetectorConfig& config, bool verbose = false) {
+    const std::vector<Row>& rows, const DetectorConfig& config, bool explain = false, bool verbose = false) {
     KnockDetector detector(config);
+    detector.set_explain(explain);
     std::vector<KnockEvent> events;
     for (const auto& row : rows) {
         detector.push(row.device, row.t, row.position, row.velocity);
@@ -331,9 +336,17 @@ std::map<std::string, int> replay(const std::string& name) {
     int reads = 0;
     const auto rows = read_recording(name, &reads);
     std::map<std::string, int> counts;
-    for (const auto& event :
-        replay_rows(rows, test_config(), std::getenv("KNOCKTHRU_TEST_VERBOSE") != nullptr))
+    const auto events = replay_rows(rows, test_config());
+    for (const auto& event : events)
         ++counts[std::string(to_string(event.kind)) + "x" + std::to_string(event.count)];
+    // Explain mode only records verdicts, so it finds the same actions.
+    const auto explained =
+        replay_rows(rows, test_config(), true, std::getenv("KNOCKTHRU_TEST_VERBOSE") != nullptr);
+    check(std::equal(events.begin(), events.end(), explained.begin(), explained.end(),
+              [](const KnockEvent& a, const KnockEvent& b) {
+                  return a.t == b.t && a.kind == b.kind && a.count == b.count;
+              }),
+        name + ": explain mode finds the same actions");
     std::cout << "  " << name << " (" << rows.size() << " samples, " << reads << " reads):";
     for (const auto& [key, value] : counts) std::cout << " " << key << "=" << value;
     std::cout << "\n";
@@ -416,6 +429,7 @@ void replay_tests() {
     check(total(replay("noise")) == 0, "noise: no actions");
     // The controllers bumping while the wearer fit the strap on each one, in Into the Radius 2.
     check(total(replay("straps")) == 0, "straps: no actions");
+    replay("mixed"); // mixed_score judges its actions. This runs its explain mode check.
     mixed_test();
 }
 

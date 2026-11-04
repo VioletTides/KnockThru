@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <stdexcept>
 
@@ -43,16 +44,34 @@ void write_json(const fs::path& path, const json& value) {
     fs::rename(temporary, path);
 }
 
+using Member = double DetectorConfig::*;
+
+const std::pair<const char*, Member> kDetectorMembers[] = {
+    {"controller_peak", &DetectorConfig::controller_peak},
+    {"confirmed_peak", &DetectorConfig::confirmed_peak}, {"partner_peak", &DetectorConfig::partner_peak},
+    {"headset_peak", &DetectorConfig::headset_peak},
+    {"headset_knock_peak", &DetectorConfig::headset_knock_peak},
+    {"max_speed_after", &DetectorConfig::max_speed_after},
+    {"surface_speed_after", &DetectorConfig::surface_speed_after},
+    {"max_speed_before", &DetectorConfig::max_speed_before},
+    {"surface_speed_before", &DetectorConfig::surface_speed_before},
+    {"together_distance", &DetectorConfig::together_distance}, {"same_spot", &DetectorConfig::same_spot},
+    {"merge_s", &DetectorConfig::merge_s}, {"min_gap_s", &DetectorConfig::min_gap_s},
+    {"fast_gap_s", &DetectorConfig::fast_gap_s}, {"max_gap_s", &DetectorConfig::max_gap_s},
+    {"quiet_before_s", &DetectorConfig::quiet_before_s}};
+
 } // namespace
 
 std::map<std::string, double*> detector_fields(DetectorConfig& d) {
-    return {{"controller_peak", &d.controller_peak}, {"confirmed_peak", &d.confirmed_peak},
-        {"partner_peak", &d.partner_peak}, {"headset_peak", &d.headset_peak},
-        {"headset_knock_peak", &d.headset_knock_peak}, {"max_speed_after", &d.max_speed_after},
-        {"surface_speed_after", &d.surface_speed_after}, {"max_speed_before", &d.max_speed_before},
-        {"surface_speed_before", &d.surface_speed_before}, {"together_distance", &d.together_distance},
-        {"same_spot", &d.same_spot}, {"merge_s", &d.merge_s}, {"min_gap_s", &d.min_gap_s},
-        {"fast_gap_s", &d.fast_gap_s}, {"max_gap_s", &d.max_gap_s}, {"quiet_before_s", &d.quiet_before_s}};
+    std::map<std::string, double*> fields;
+    for (const auto& [key, member] : kDetectorMembers) fields[key] = &(d.*member);
+    return fields;
+}
+
+double DetectorConfig::* detector_member(std::string_view key) {
+    for (const auto& [name, member] : kDetectorMembers)
+        if (key == name) return member;
+    return nullptr;
 }
 
 namespace {
@@ -69,7 +88,8 @@ void merge(AppConfig& config, const json& file, const fs::path& path, Source sou
     const auto fail = [&](const std::string& what) { throw std::runtime_error(path.string() + ": " + what); };
     const std::map<std::string, bool*> flags{{"paused", &config.paused},
         {"classic_bar_icon", &config.classic_bar_icon}, {"sounds", &config.sounds},
-        {"tour_done", &config.tour_done}, {"check_updates", &config.check_updates}, {"debug", &config.debug}};
+        {"tour_done", &config.tour_done}, {"check_updates", &config.check_updates},
+        {"advanced_warning_off", &config.advanced_warning_off}};
     for (const auto& [key, value] : file.items()) {
         if (key == "knock_types") {
             if (!value.is_array()) fail("knock_types must be a list");
@@ -158,28 +178,36 @@ AppConfig default_config() {
 
 } // namespace
 
-AppConfig load_config(const fs::path& install_directory) {
+AppConfig load_config_or_defaults(const fs::path& install_directory, std::string& error) {
     auto config = default_config();
-    merge(config, read_json(install_directory / "config.json"), install_directory / "config.json",
-        Source::Install);
-    merge(
-        config, read_json(user_directory() / "config.json"), user_directory() / "config.json", Source::User);
-    apply_calibration(load_calibration(), config.detector, &config.detector_sources);
+    // Each file loads into a copy, so a file that fails halfway leaves nothing behind.
+    const auto load = [&](const std::function<void(AppConfig&)>& apply) {
+        auto next = config;
+        try {
+            apply(next);
+            config = std::move(next);
+        } catch (const std::exception& failure) {
+            if (error.empty()) error = failure.what();
+        }
+    };
+    load([&](AppConfig& next) {
+        merge(next, read_json(install_directory / "config.json"), install_directory / "config.json",
+            Source::Install);
+    });
+    load([](AppConfig& next) {
+        merge(next, read_json(user_directory() / "config.json"), user_directory() / "config.json",
+            Source::User);
+    });
+    load([](AppConfig& next) {
+        apply_calibration(load_calibration(), next.detector, &next.detector_sources);
+    });
     return config;
 }
 
-AppConfig load_config_or_defaults(const fs::path& install_directory, std::string& error) {
-    try {
-        return load_config(install_directory);
-    } catch (const std::exception& failure) {
-        error = failure.what();
-    }
-    auto config = default_config();
-    try {
-        apply_calibration(load_calibration(), config.detector, &config.detector_sources);
-    } catch (const std::exception&) {
-        // The calibration file is bad too. The defaults stand.
-    }
+AppConfig load_config(const fs::path& install_directory) {
+    std::string error;
+    auto config = load_config_or_defaults(install_directory, error);
+    if (!error.empty()) throw std::runtime_error(error);
     return config;
 }
 
@@ -229,6 +257,8 @@ void save_knock_actions(const KnockActions& actions) {
 
 void save_tour_done(bool done) { update_user_config("tour_done", done); }
 
+void save_advanced_warning_off(bool off) { update_user_config("advanced_warning_off", off); }
+
 void save_detector(const DetectorConfig& tuned, const AppConfig& loaded) {
     auto tuned_copy = tuned;
     auto loaded_copy = loaded.detector;
@@ -254,13 +284,25 @@ void save_detector(const DetectorConfig& tuned, const AppConfig& loaded) {
     if (detector_changed) update_user_config("detector", detector);
 }
 
+namespace {
+
+void remove_user_file(const char* name) {
+    const auto path = user_directory() / name;
+    std::error_code error;
+    fs::remove(path, error); // a missing file is not an error
+    if (error) throw std::runtime_error("Cannot delete " + path.string() + ": " + error.message());
+}
+
+} // namespace
+
+void restore_detector_defaults() {
+    update_user_config("detector", nullptr);
+    remove_user_file("calibration.json");
+}
+
 void reset_user_settings() {
-    for (const auto* name : {"config.json", "calibration.json"}) {
-        const auto path = user_directory() / name;
-        std::error_code error;
-        fs::remove(path, error); // a missing file is not an error
-        if (error) throw std::runtime_error("Cannot delete " + path.string() + ": " + error.message());
-    }
+    remove_user_file("config.json");
+    remove_user_file("calibration.json");
 }
 
 AppState load_state() {

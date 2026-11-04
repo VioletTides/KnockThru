@@ -4,27 +4,19 @@
 
 #include <openvr.h>
 
-#include <stdexcept>
-#include <string>
-
 namespace knockthru {
 namespace {
 
 constexpr const char* kSection = "camera";
 constexpr const char* kKey = "roomViewStyle";
-
-void check(vr::EVRSettingsError error) {
-    if (error != vr::VRSettingsError_None)
-        throw std::runtime_error(
-            std::string("camera.roomViewStyle: ") + vr::VRSettings()->GetSettingsErrorNameFromEnum(error));
-}
+constexpr const char* kName = "camera.roomViewStyle";
 
 } // namespace
 
 RoomViewStyle read_style() {
     vr::EVRSettingsError error = vr::VRSettingsError_None;
     const auto value = vr::VRSettings()->GetInt32(kSection, kKey, &error);
-    check(error);
+    check_setting(error, kName);
     return value == static_cast<int>(RoomViewStyle::Opaque) ? RoomViewStyle::Opaque
                                                             : RoomViewStyle::Translucent;
 }
@@ -32,10 +24,9 @@ RoomViewStyle read_style() {
 RoomViewStyle toggle_style() {
     const auto target =
         read_style() == RoomViewStyle::Opaque ? RoomViewStyle::Translucent : RoomViewStyle::Opaque;
-    set_setting(
-        "camera.roomViewStyle", target, read_style, [](RoomViewStyle style, vr::EVRSettingsError* error) {
-            vr::VRSettings()->SetInt32(kSection, kKey, static_cast<int>(style), error);
-        });
+    set_setting(kName, target, read_style, [](RoomViewStyle style, vr::EVRSettingsError* error) {
+        vr::VRSettings()->SetInt32(kSection, kKey, static_cast<int>(style), error);
+    });
     return target;
 }
 

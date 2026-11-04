@@ -62,11 +62,12 @@ struct Handled {
     KnockAction action = KnockAction::None; // the one that ran
 };
 
-// The debug view and what feeds it. It exists only while config.json has "debug": true.
+// Advanced and what feeds it. Everything starts fresh each time Advanced opens, and the model takes poses
+// only while it is open.
 struct DebugParts {
     DebugModel model;
     DebugView view;
-    bool open = false; // the debug view was open at the last update
+    bool open = false; // Advanced showed at the last update
     CpuUsage cpu;
     std::string cpu_text, battery_text; // read once a second, since both cost a file read
     double next_usage = 0, next_fill = 0;
@@ -113,7 +114,6 @@ private:
     void set_knock_action(int count, KnockAction action);
     void toggle_kind(KnockKind kind);
     void toggle_blocked_app();
-    std::string game_name() const;
     void factory_reset();
     void end_tour();
     void check_for_update();
@@ -130,7 +130,6 @@ private:
     void collect_jobs(double t);
     void draw_panel(double t);
     void feed_debug(const Handled& handled);
-    void sync_debug();
     void tune_detector(const PanelClick& click);
     void fill_debug_view(double t);
     void update_debug(double t);
@@ -138,6 +137,7 @@ private:
     void run_test_commands(double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event);
     void run_test_command(
         const std::string& line, double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event);
+    void replay_poses(double t);
 #endif
 
     void note_versions();
@@ -145,7 +145,9 @@ private:
     void save_app_state();
     std::string config_stamp() const;
     void show(const std::string& message, bool error = false);
-    void reload();
+    // Reads the settings again. With `keep`, unsaved Tuning numbers stay in the detector. A bad file is
+    // skipped, and its error is thrown after the rest load.
+    void reload(bool keep = true);
     void play_click();
     void prepare_click();
     void start_tour();
@@ -153,8 +155,8 @@ private:
     void read_opaque();
     bool toggle_room_view(const std::string& why);
     bool toggle_setting(KnockAction action, const std::string& why);
-    void run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t);
-    bool save(const std::function<void()>& write);
+    bool run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t);
+    bool save(const std::function<void()>& write, bool keep = true);
     void start_check();
     void restart_failed(const std::string& version);
     void end_calibration();
@@ -165,7 +167,7 @@ private:
     std::optional<std::string> updated_from_;
     Haptics haptics_;
     std::unique_ptr<DashboardPanel> panel_;
-    std::unique_ptr<DebugParts> debug_;
+    DebugParts debug_;
 
     const std::array<fs::path, 3> config_files_{install_directory() / "config.json",
         user_directory() / "config.json", user_directory() / "calibration.json"};
@@ -174,6 +176,8 @@ private:
     std::string stamp_ = config_stamp();
     KnockDetector detector_{config_.detector};
     std::optional<Calibrator> calibrator_;
+    // The detector's numbers and the saved ones when calibration started, so unsaved tuning outlasts it.
+    DetectorConfig live_before_calibration_, saved_before_calibration_;
     std::optional<CalibrationView> calibration_;
     std::optional<TourView> tour_;
 
@@ -210,6 +214,7 @@ private:
 #ifdef KNOCKTHRU_TEST_HOOK
     fs::path test_commands_;
     std::uintmax_t test_read_ = 0; // bytes already run
+    std::deque<PoseSample> replay_; // recorded poses still to come, stamped in app time
 #endif
 };
 
@@ -249,7 +254,7 @@ App::App() {
         }
     }
 
-    if (!startup_error_.empty()) show("Settings not loaded: " + startup_error_, true);
+    if (!startup_error_.empty()) show("A settings file did not load: " + startup_error_, true);
 
     state_.version = kVersion;
     if (updated_from_) {
@@ -258,7 +263,6 @@ App::App() {
         state_.update_notice =
             UpdateNotice{false, std::string("You now have version ") + kVersion + "." + had};
     }
-    sync_debug();
 }
 
 // Logs each SteamVR update, the usual cause when Room View control breaks. A newer KnockThru
@@ -329,13 +333,17 @@ void App::run() {
         }
 
         poses_.take(samples_);
+#ifdef KNOCKTHRU_TEST_HOOK
+        replay_poses(t);
+#endif
         bool controllers = false;
         for (const auto& sample : samples_) {
             controllers |= sample.device != Device::Hmd;
             detector_.push(sample.device, sample.t, sample.position, sample.velocity);
-            if (debug_) debug_->model.push({sample.device, sample.t, sample.position, sample.velocity});
+            if (debug_.open) debug_.model.push({sample.device, sample.t, sample.position, sample.velocity});
             if (recording_) recording_->samples.push_back(sample);
         }
+        detector_.set_explain(debug_.open);
         auto knock_event = detector_.poll(t);
         auto knocks = detector_.take_knocks();
 #ifdef KNOCKTHRU_TEST_HOOK
@@ -395,12 +403,14 @@ bool App::slow_check(double t) {
             reload();
             log("Settings reloaded");
         } catch (const std::exception& error) {
-            show(std::string("Settings not reloaded: ") + error.what(), true);
+            show(std::string("A settings file did not load: ") + error.what(), true);
         }
     }
     // Room View can also change from the bar or the side button
-    if (panel_ && (panel_->visible() || panel_->debug_open())) read_room_view();
-    if (panel_ && panel_->visible()) read_opaque();
+    if (panel_ && panel_->visible()) {
+        read_room_view();
+        read_opaque();
+    }
     // FrameDrop updates delete the install directory, then copy the new
     // one. A binary gone for 15 s means the app was removed.
     if (fs::exists(binary_)) {
@@ -464,9 +474,14 @@ void App::handle_click(const PanelClick& click, double t) {
     case PanelCommand::TuneDown:
     case PanelCommand::TuneUp:
     case PanelCommand::UndoTuning:
-    case PanelCommand::KeepTuning: tune_detector(click); break;
+    case PanelCommand::KeepTuning:
+    case PanelCommand::RestoreDefaults: tune_detector(click); break;
+    case PanelCommand::HideAdvancedWarning: save([] { save_advanced_warning_off(true); }); break;
     case PanelCommand::TestBuzz: haptics_.buzz(1, t); break;
-    case PanelCommand::TestClick: break; // handle_click already played it
+    case PanelCommand::TestClick:
+        // With Sounds on, handle_click already played it. The test plays it with Sounds off too.
+        if (!config_.sounds) knockthru::play_click();
+        break;
     }
 }
 
@@ -485,14 +500,11 @@ void App::toggle_kind(KnockKind kind) {
         show(std::string(to_string(kind)) + " knocks " + (config_.detector.enabled[i] ? "on" : "off"));
 }
 
-// The name of the app in front, or its key when SteamVR gives no name.
-std::string App::game_name() const { return state_.app_name.empty() ? state_.app_key : state_.app_name; }
-
 void App::toggle_blocked_app() {
     if (state_.app_key.empty()) return;
     auto blocked = config_.blocked_apps;
     if (!blocked.erase(state_.app_key)) blocked.insert(state_.app_key);
-    const auto name = game_name();
+    const auto name = state_.game_name();
     if (!save([&] { save_blocked_apps(blocked); })) return;
     const bool off = config_.blocked_apps.count(state_.app_key) > 0;
     show(std::string("Knocks ") + (off ? "off" : "on") + " in " + name);
@@ -503,7 +515,7 @@ void App::factory_reset() {
     calibration_.reset();
     try {
         reset_user_settings();
-        reload();
+        reload(false);
         log("Factory reset: settings and calibration deleted");
         state_.message.clear();
         state_.message_is_error = false;
@@ -605,6 +617,8 @@ void App::save_report() {
 }
 
 void App::start_calibration(KnockKind kind, double t) {
+    live_before_calibration_ = detector_.config();
+    saved_before_calibration_ = config_.detector;
     calibrator_.emplace(kind, config_.detector, t);
     detector_ = KnockDetector(calibrator_->detector_config());
     calibration_.emplace();
@@ -626,21 +640,31 @@ void App::save_calibration(double t) {
     if (!calibrator_ || !calibration_ || !calibration_->trial_passed.value_or(false)) return;
     const auto kind = calibrator_->kind();
     try {
-        const auto saved = calibrator_->save();
-        log(std::string("Calibrated ") + to_string(kind) + " knocks: " + thresholds_text(saved));
-        calibrator_.reset();
-        calibration_.reset();
-        reload();
-        show("Calibration saved");
-        // The tour's Calibrate step marks its card, so the Saved banner is only for Settings.
-        if (tour_)
-            tour_->calibrated[static_cast<int>(kind)] = true;
-        else
-            state_.calibration_saved = kind;
-        haptics_.buzz(2, t);
+        log(std::string("Calibrated ") + to_string(kind)
+            + " knocks: " + thresholds_text(calibrator_->save()));
     } catch (const std::exception& error) {
         show(std::string("Calibration not saved: ") + error.what(), true);
+        return;
     }
+    // The file is written, so the calibration ends even when another settings file does not load.
+    std::string reload_error;
+    try {
+        reload(false);
+    } catch (const std::exception& error) {
+        reload_error = error.what();
+    }
+    end_calibration();
+    if (!reload_error.empty()) {
+        show("Calibration saved, but a settings file did not load: " + reload_error, true);
+        return;
+    }
+    show("Calibration saved");
+    // The tour's Calibrate step marks its card, so the Saved banner is only for Settings.
+    if (tour_)
+        tour_->calibrated[static_cast<int>(kind)] = true;
+    else
+        state_.calibration_saved = kind;
+    haptics_.buzz(2, t);
 }
 
 // Saves the recording when its 20 s are up.
@@ -743,8 +767,9 @@ Handled App::handle_knocks(
     // The tour teaches the default actions, whatever Knock actions says.
     const auto action = practicing ? KnockActions::default_for(event->count)
                                    : config_.knock_actions.get(event->kind, event->count);
-    run_action(action, *event, what, t);
-    return {action == KnockAction::None ? SetOutcome::NoAction : SetOutcome::Ran, action};
+    const bool ran = run_action(action, *event, what, t);
+    if (action == KnockAction::None) return {SetOutcome::NoAction, action};
+    return {ran ? SetOutcome::Ran : SetOutcome::Failed, action};
 }
 
 void App::collect_jobs(double t) {
@@ -877,46 +902,31 @@ void App::draw_panel(double t) {
     panel_->set_bar_icon(config_.classic_bar_icon);
     state_.enabled = config_.detector.enabled;
     state_.app_blocked = config_.blocked_apps.count(state_.app_key) > 0;
-    state_.debug = debug_ ? &debug_->view : nullptr;
+    state_.debug = &debug_.view;
+    state_.advanced_warning_off = config_.advanced_warning_off;
     state_.calibration = calibration_;
     panel_->draw(state_, t);
 }
 
-// Hands the detector's candidates and finished sequences to the debug model. Without the model, they are
-// only drained, so they never pile up.
+// Hands the detector's candidates and finished sequences to the debug model. The detector keeps them only
+// while Advanced is open.
 void App::feed_debug(const Handled& handled) {
+    if (!debug_.open) return;
     const auto candidates = detector_.take_candidates();
     const auto sequences = detector_.take_sequences();
-    if (!debug_) return;
     for (const auto& candidate : candidates) {
-        debug_->model.add_candidate(candidate);
-        if (candidate.verdict == Verdict::BelowPeak)
-            debug_->too_light = std::make_pair(candidate.knock.t, candidate.threshold);
+        // The graph's line follows only a Too light spike the feed shows.
+        if (debug_.model.add_candidate(candidate) && candidate.verdict == Verdict::BelowPeak)
+            debug_.too_light = std::make_pair(candidate.knock.t, candidate.threshold);
     }
     // Only an Action sequence reaches handle_knocks, so only it has an outcome.
     for (const auto& sequence : sequences)
-        debug_->model.add_set(sequence,
+        debug_.model.add_set(sequence,
             sequence.verdict == SequenceVerdict::Action ? handled.outcome : SetOutcome::NoAction,
             handled.action);
 }
 
-// Creates or destroys the debug parts to match config.json.
-void App::sync_debug() {
-    if (config_.debug == (debug_ != nullptr)) return;
-    if (!config_.debug) {
-        debug_.reset();
-        log("Debug view off");
-        return;
-    }
-    try {
-        debug_ = std::make_unique<DebugParts>();
-        log("Debug view on");
-    } catch (const std::exception& error) {
-        log(std::string("Debug view unavailable: ") + error.what());
-    }
-}
-
-// Steps, undoes, or saves the detector numbers the debug view tunes.
+// Steps, undoes, saves, or restores the detector numbers Advanced tunes.
 void App::tune_detector(const PanelClick& click) {
     if (calibrator_) {
         show("Tuning waits until the calibration ends");
@@ -930,18 +940,29 @@ void App::tune_detector(const PanelClick& click) {
         detector_.set_config(live);
         break;
     case PanelCommand::UndoTuning: detector_.set_config(config_.detector); break;
-    case PanelCommand::KeepTuning:
-        if (save([&] { save_detector(live, config_); })) show("Detector settings saved");
+    case PanelCommand::KeepTuning: {
+        // Loading puts calibrated peaks back inside their limits, so the saved numbers can differ from the
+        // tuned ones. The detector takes what was saved, and the message says when that differs.
+        if (!save([&] { save_detector(live, config_); }, false)) break;
+        const auto rows = tunables(live, config_);
+        const bool moved =
+            std::any_of(rows.begin(), rows.end(), [](const Tunable& row) { return row.changed(); });
+        show(moved ? "Detector settings saved. Some numbers changed to fit their limits"
+                   : "Detector settings saved");
+        break;
+    }
+    case PanelCommand::RestoreDefaults:
+        if (save(restore_detector_defaults, false)) show("Knock numbers restored to the defaults");
         break;
     default: break;
     }
 }
 
 void App::fill_debug_view(double t) {
-    auto& d = *debug_;
+    auto& d = debug_;
     auto& view = d.view;
     for (std::size_t i = 0; i < view.accel.size(); ++i)
-        view.accel[i] = d.model.accel(static_cast<Device>(i), t, 5);
+        view.accel[i] = d.model.accel(static_cast<Device>(i), t, DebugModel::kGraphSeconds);
 
     const auto& feed = d.model.feed();
     view.last.reset();
@@ -965,12 +986,13 @@ void App::fill_debug_view(double t) {
         const auto power = battery_mw();
         d.battery_text = power ? std::to_string(std::lround(*power)) + " mW" : "Plugged in";
     }
-    StatusRow game{"Game", game_name(), "", false};
+    StatusRow game{"Game", state_.game_name(), "", false};
     if (game.value.empty()) game.value = "None";
     StatusRow passthrough{"Passthrough", "Checking", "", false};
     if (!state_.room_view_error.empty()) {
-        passthrough.value = state_.room_view_error;
-        passthrough.bad = true;
+        passthrough = {"Passthrough", "Error", state_.room_view_error, true};
+    } else if (state_.busy) {
+        passthrough.value = "Switching";
     } else if (state_.room_view) {
         passthrough.value = *state_.room_view ? "On" : "Off";
     }
@@ -984,22 +1006,37 @@ void App::fill_debug_view(double t) {
     view.status_right = {{"CPU", d.cpu_text, "", false}, {"Battery", d.battery_text, "", false}};
 }
 
-// While the debug view is open, fills it at most 30 times a second. The dashboard tab draws it.
+// Advanced counts as open while the dashboard shows it. While open, it fills the view at most 30 times a
+// second, and the dashboard tab draws it.
 void App::update_debug(double t) {
-    if (!debug_ || !panel_) return;
-    auto& d = *debug_;
-    const bool open = panel_->debug_open();
-    if (open != d.open) {
-        d.open = open;
-        if (open) read_room_view();
+    if (!panel_) return;
+    const bool open = panel_->visible() && panel_->debug_open();
+    if (open != debug_.open) {
+        debug_ = DebugParts();
+        debug_.open = open;
+        if (open) {
+            read_room_view();
+            // Advanced shows every message. One left from another screen would read as a result here.
+            if (!state_.message_is_error) state_.message.clear();
+        }
     }
-    if (open && t >= d.next_fill) {
-        d.next_fill = t + 1.0 / 30;
+    if (open && t >= debug_.next_fill) {
+        debug_.next_fill = t + 1.0 / 30;
         fill_debug_view(t);
     }
 }
 
 #ifdef KNOCKTHRU_TEST_HOOK
+// While a replay runs, its poses due by `t` replace the live ones.
+void App::replay_poses(double t) {
+    if (replay_.empty()) return;
+    samples_.clear();
+    while (!replay_.empty() && replay_.front().t <= t) {
+        samples_.push_back(replay_.front());
+        replay_.pop_front();
+    }
+}
+
 // Development builds only (KNOCKTHRU_TEST_HOOK). Runs each line appended to
 // ~/.config/knockthru/test-commands, so a script can drive the app over SSH:
 //   open | close             the dashboard opens or closes the panel
@@ -1008,10 +1045,11 @@ void App::update_debug(double t) {
 //   knock KIND PEAK APPROACH one knock, with its spike in m/s^2 and approach speed in m/s
 //   action KIND COUNT        a double (2) or triple (3) knock
 //   snapshot PATH            saves the panel as a PNG
-// With "debug": true in config.json, `click 460 68` opens Settings and `click 1050 560` opens the debug
-// view. `click X 160` then picks a tab, with X 227 (Live), 600 (Tuning), or 973 (Status).
-// Reopens the file for each read, because glibc keeps a stream at end of file
-// once it got there, so an open stream never sees lines added later.
+//   replay PATH FROM TO      plays seconds FROM to TO of a .csv.gz knock recording in place of the live poses
+// `click 460 68` opens Settings and `click 1050 560` presses Advanced. On its warning, `click 900 441` flips
+// "Don't remind me" and `click 812 551` opens. `click X 160` then picks a tab, with X 227 (Live), 600
+// (Tuning), or 973 (Status). Reopens the file for each read, because glibc keeps a stream at end of file once
+// it got there, so an open stream never sees lines added later.
 void App::run_test_commands(double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event) {
     std::error_code error;
     const auto size = fs::file_size(test_commands_, error);
@@ -1082,6 +1120,29 @@ void App::run_test_command(
             if (!(in >> name >> count) || (count != 2 && count != 3))
                 throw std::runtime_error("action needs KIND 2 or 3");
             event = KnockEvent{t, kind_of(name), count};
+        } else if (verb == "replay") {
+            std::string path;
+            double from = 0, to = 0;
+            if (!(in >> path >> from >> to)) throw std::runtime_error("replay needs PATH FROM TO");
+            FILE* pipe = popen(("gzip -dc '" + path + "'").c_str(), "r");
+            if (!pipe) throw std::runtime_error("cannot read " + path);
+            replay_.clear();
+            char buffer[512];
+            while (std::fgets(buffer, sizeof buffer, pipe)) {
+                std::stringstream row(buffer);
+                std::vector<std::string> f;
+                for (std::string field; std::getline(row, field, ',');) f.push_back(field);
+                if (f.size() < 9 || f[2] != "1") continue; // the header, or an untracked pose
+                const double at = std::stod(f[0]);
+                if (at < from || at > to) continue;
+                const Device device = f[1] == "hmd" ? Device::Hmd
+                    : f[1] == "left"                ? Device::Left
+                                                    : Device::Right;
+                replay_.push_back({device, at - from + t, {std::stod(f[3]), std::stod(f[4]), std::stod(f[5])},
+                    {std::stod(f[6]), std::stod(f[7]), std::stod(f[8])}});
+            }
+            pclose(pipe);
+            log("Replaying " + std::to_string(replay_.size()) + " poses");
         } else if (verb == "snapshot") {
             std::string path;
             std::getline(in >> std::ws, path);
@@ -1124,11 +1185,18 @@ void App::show(const std::string& message, bool error) {
     if (panel_) panel_->invalidate();
 }
 
-void App::reload() {
-    config_ = load_config(install_directory());
+void App::reload(bool keep) {
+    const auto saved = config_.detector;
+    // The files that load count even when one fails, so the next toggle starts from what was saved.
+    std::string error;
+    config_ = load_config_or_defaults(install_directory(), error);
     stamp_ = config_stamp();
-    if (!calibrator_) detector_ = KnockDetector(config_.detector);
-    sync_debug();
+    if (!calibrator_) {
+        auto next = config_.detector;
+        if (keep) keep_tuning(next, detector_.config(), saved);
+        detector_ = KnockDetector(next);
+    }
+    if (!error.empty()) throw std::runtime_error(error);
 }
 
 // SteamVR's dashboard click. Steam already clicks when the Room View button
@@ -1186,8 +1254,8 @@ bool App::toggle_room_view(const std::string& why) {
     return true;
 }
 
-// One buzz after a double, two after a triple, three on failure.
-void App::run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t) {
+// One buzz after a double, two after a triple, three on failure. Returns whether the action started.
+bool App::run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t) {
     const int buzzes = event.count - 1;
     const auto tick_tour = [&] {
         if (!tour_) return;
@@ -1200,8 +1268,9 @@ void App::run_action(KnockAction action, const KnockEvent& event, const std::str
             // Buzz now, because the switch can take a second. A failure buzzes 3 times later.
             haptics_.buzz(buzzes, t);
             tick_tour();
+            return true;
         }
-        return;
+        return false;
     case KnockAction::Style:
     case KnockAction::PerfGraph: {
         // Steam clicks when passthrough switches, so KnockThru clicks only for these.
@@ -1209,10 +1278,11 @@ void App::run_action(KnockAction action, const KnockEvent& event, const std::str
         if (changed) play_click();
         haptics_.buzz(changed ? buzzes : 3, t);
         if (changed) tick_tour();
-        return;
+        return changed;
     }
-    case KnockAction::None: log("Ignored" + why + ": Knock actions says do nothing"); return;
+    case KnockAction::None: log("Ignored" + why + ": Knock actions says do nothing"); return false;
     }
+    return false;
 }
 
 // Toggles the room view style for Style, or the performance graph for PerfGraph.
@@ -1236,14 +1306,19 @@ bool App::toggle_setting(KnockAction action, const std::string& why) {
     }
 }
 
-// Runs `write`, then reloads the settings. Shows the error if `write` throws.
-bool App::save(const std::function<void()>& write) {
+// Runs `write`, then reloads the settings. Shows the error if either throws, and returns whether both worked.
+bool App::save(const std::function<void()>& write, bool keep) {
     try {
         write();
-        reload();
-        return true;
     } catch (const std::exception& error) {
         show(std::string("Settings not saved: ") + error.what(), true);
+        return false;
+    }
+    try {
+        reload(keep);
+        return true;
+    } catch (const std::exception& error) {
+        show(std::string("Settings saved, but a settings file did not load: ") + error.what(), true);
         return false;
     }
 }
@@ -1262,10 +1337,13 @@ void App::restart_failed(const std::string& version) {
               "restart SteamVR."};
 }
 
+// Keeps each unsaved tuned number whose saved value the calibration left alone.
 void App::end_calibration() {
     calibrator_.reset();
     calibration_.reset();
-    detector_ = KnockDetector(config_.detector);
+    auto next = config_.detector;
+    keep_tuning(next, live_before_calibration_, saved_before_calibration_);
+    detector_ = KnockDetector(next);
 }
 
 std::string App::room_view_text() const {

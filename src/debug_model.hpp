@@ -20,7 +20,7 @@ struct FeedEntry {
 };
 
 // What the app did with a finished sequence that the detector called an Action.
-enum class SetOutcome { Ran, Paused, Blocked, NoAction };
+enum class SetOutcome { Ran, Failed, Paused, Blocked, NoAction }; // Failed: refused or threw
 
 // Everything the debug view shows, fed once per tick. It holds no OpenVR
 // types, so the host tests cover it.
@@ -28,13 +28,14 @@ class DebugModel {
 public:
     static constexpr double kKeepSeconds = 6; // pose history, the graph's 5 s with slack
     static constexpr double kBucketSeconds = 0.01; // graph resolution
+    static constexpr double kGraphSeconds = 5; // the Live graph's span
     static constexpr std::size_t kFeedSize = 4; // the last knock and the three rows under it
 
     // Samples whose velocity equals the device's last one are repeats and are dropped. So are samples
     // with a time or velocity that is not a number.
     void push(const PoseSample& sample);
-    // Adds the near misses to the feed.
-    void add_candidate(const Candidate& candidate);
+    // Adds the near misses to the feed. Returns whether it added this one.
+    bool add_candidate(const Candidate& candidate);
     void add_set(const Sequence& sequence, SetOutcome outcome, KnockAction action);
 
     // The largest value in each 10 ms bucket over the last `seconds`, oldest bucket first. The bucket
