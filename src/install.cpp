@@ -48,7 +48,6 @@ void register_app() {
         {"action_manifest_path", (install_directory() / "actions.json").generic_u8string()},
         {"strings",
             {{"en_us", {{"name", "KnockThru"}, {"description", "Knock twice to toggle passthrough"}}}}}};
-    fs::create_directories(manifest_path().parent_path());
     std::ofstream(manifest_path(), std::ios::trunc)
         << json{{"source", "builtin"}, {"applications", json::array({app})}}.dump(2);
     check_app(vr::VRApplications()->AddApplicationManifest(manifest_path().u8string().c_str(), false),
@@ -90,7 +89,7 @@ fs::path steamvr_app_config() {
 } // namespace
 
 int install() {
-    stop_running_app(); // restart so an update takes effect
+    stop_running_app();
     VrSession session(vr::VRApplication_Utility);
     register_app();
     check_app(vr::VRApplications()->SetApplicationAutoLaunch(kAppKey, true), "Turn on SteamVR autostart");
