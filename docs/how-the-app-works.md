@@ -28,7 +28,7 @@ flowchart TB
     phone -->|opens the bug report page| kt
 ```
 
-Rounded ends are you and your phone, square boxes are programs, the cylinder is files, and the gray box is the headset. Each arrow points from the part that sends or starts something to the part that receives it.
+Rounded ends are you and your phone, square boxes are programs, the cylinder is files, and the grey box is the headset. Each arrow points from the part that sends or starts something to the part that receives it.
 
 ## From a knock to passthrough
 

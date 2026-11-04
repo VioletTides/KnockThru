@@ -217,7 +217,7 @@ python3 scripts/readme_media.py
 
 To write only some images, name them, as in `python3 scripts/readme_media.py hero timing`. The hero, knock-kinds, and timing images skip the panel renders and take under 40 s each.
 
-The hero's room is `images/photos/living-room.jpg`, a CC0 photo from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Living_room_(Unsplash).jpg). `room_scene()` in `scripts/readme_media.py` turns it gray and tints it with SteamVR's default passthrough hue.
+The hero's room is `images/photos/living-room.jpg`, a CC0 photo from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Living_room_(Unsplash).jpg). `room_scene()` in `scripts/readme_media.py` turns it grey and tints it with SteamVR's default passthrough hue.
 
 The controller and headset sprites in `images/cad/` come from Valve's CAD files. To render them again, download the STEP files from [Valve's Steam Frame repository](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) into one folder. Then run this, which needs cadquery and opencv-python and takes about 12 minutes:
 
