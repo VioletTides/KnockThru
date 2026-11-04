@@ -252,7 +252,8 @@ struct Recorder {
     std::filesystem::path dir;
     double t = 100;
     int index = 0;
-    std::optional<Point> pointer; // starts and ends the loop at kRest
+    Point rest{300, 730}; // hovers nothing on the main screen or under the Saved banner
+    std::optional<Point> pointer = rest; // starts and ends the loop at rest
     std::optional<Point> from, bend, to; // a pointer move in progress, along a curve through bend
     double move_t = 0, move_s = 0;
     std::vector<int> cuts; // frames where the clock jumps, to cross-fade
@@ -292,7 +293,11 @@ struct Recorder {
         clicks.push_back(index);
         panel->click(pointer->first, pointer->second);
     }
-    void write_marks() const {
+    // Moves the pointer back where the loop starts and holds for `seconds`, then writes the
+    // marks. The README script cross-fades the last 0.4 s to the first frame.
+    void finish(const PanelState& state, double seconds) {
+        aim(rest.first, rest.second);
+        play(state, seconds);
         std::ofstream marks(dir / "marks.txt");
         marks << "cuts";
         for (int cut : cuts) marks << " " << cut;
@@ -312,10 +317,7 @@ void readme_calibration(const std::filesystem::path& dir) {
     Panel panel(KNOCKTHRU_FONTS);
     PanelState state = beat_saber_idle();
     state.version = "0.2.0";
-    // A spot that hovers nothing on the main screen or under the Saved banner.
-    const Recorder::Point rest{300, 730};
     Recorder rec{&panel, dir};
-    rec.pointer = rest;
     rec.play(state, 0.5);
     rec.aim(460, 64); // Settings
     rec.play(state, 1.0);
@@ -383,10 +385,7 @@ void readme_calibration(const std::filesystem::path& dir) {
     rec.play(state, 1.0);
     rec.click();
     rec.play(state, 0.4);
-    rec.aim(rest.first, rest.second); // back where the loop starts
-    rec.play(state, 1.6); // the README script cross-fades the last 0.4 s to the first frame
-
-    rec.write_marks();
+    rec.finish(state, 1.6);
 }
 
 // Installing an update from the dot on the Settings button to the restarted app, as frames in `dir`.
@@ -395,9 +394,7 @@ void readme_update(const std::filesystem::path& dir) {
     PanelState state = beat_saber_idle();
     state.version = "1.0.0";
     state.update = {UpdateView::Status::Available, "1.1.0", ""};
-    const Recorder::Point rest{300, 730};
     Recorder rec{&panel, dir};
-    rec.pointer = rest;
     rec.play(state, 1.2);
     rec.aim(460, 64); // Settings, with its yellow update dot
     rec.play(state, 1.1);
@@ -431,9 +428,7 @@ void readme_update(const std::filesystem::path& dir) {
     rec.click();
     state.update_notice.reset();
     rec.play(state, 0.4);
-    rec.aim(rest.first, rest.second);
-    rec.play(state, 1.8); // the README script cross-fades the last 0.4 s to the first frame
-    rec.write_marks();
+    rec.finish(state, 1.8);
 }
 
 // Sending a report: Settings, Report, then Done once the phone has the report, as frames in
@@ -444,9 +439,7 @@ void readme_report(const std::filesystem::path& dir) {
     state.version = "0.2.0";
     state.report_url = kReportUrl;
     state.report_full = true;
-    const Recorder::Point rest{300, 730};
     Recorder rec{&panel, dir};
-    rec.pointer = rest;
     rec.play(state, 0.8);
     rec.aim(460, 64); // Settings
     rec.play(state, 1.1);
@@ -456,15 +449,13 @@ void readme_report(const std::filesystem::path& dir) {
     rec.play(state, 1.3);
     rec.click();
     rec.play(state, 0.3);
-    rec.aim(rest.first, rest.second); // out of the way while the phone works
+    rec.aim(rec.rest.first, rec.rest.second); // out of the way while the phone works
     rec.play(state, 17.5);
     rec.aim(951, 627); // Done
     rec.play(state, 1.1);
     rec.click();
     rec.play(state, 0.4);
-    rec.aim(rest.first, rest.second);
-    rec.play(state, 1.8); // the README script cross-fades the last 0.4 s to the first frame
-    rec.write_marks();
+    rec.finish(state, 1.8);
 }
 
 // Writes the passthrough off, on, and opaque states with no hover highlight.
