@@ -205,7 +205,7 @@ std::optional<KnockEvent> KnockDetector::finish_sequence() {
     // A sequence needs one knock that approached at least min_approach. The
     // later knocks of a quick double start from the rebound, so they come in
     // slow. Slow knocks still join their sequence, so they keep clapping runs
-    // and busy bursts from reading as actions. Dropping them earlier let two
+    // and busy bursts from reading as actions. Dropping them sooner would let two
     // leftover spikes in the play and noise recordings form false doubles.
     double fastest = 0;
     for (const auto& knock : sequence_) fastest = std::max(fastest, knock.approach_speed);

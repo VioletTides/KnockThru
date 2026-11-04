@@ -161,6 +161,8 @@ std::string RoomView::evaluate(const std::string& expression) const {
         // The scripts only fail if the page no longer has what they expect.
         if (reply.contains("error"))
             throw DashboardChanged("Dashboard script failed: " + reply["error"].dump());
+        if (!reply.contains("result") || !reply["result"].is_object() || !reply["result"].contains("result"))
+            throw DashboardChanged("Dashboard script gave no result");
         const auto& result = reply["result"]["result"];
         if (result.value("subtype", "") == "error")
             throw DashboardChanged("Dashboard script failed: " + result.value("description", ""));

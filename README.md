@@ -2,9 +2,9 @@
 
 [![ci](https://github.com/VioletTides/KnockThru/actions/workflows/ci.yml/badge.svg)](https://github.com/VioletTides/KnockThru/actions/workflows/ci.yml)
 
-Knock twice to turn on passthrough and see your room without taking off your Steam Frame. Knock three times to switch between seeing the room through your game and seeing only the room.
+Knock twice to turn on passthrough and see your room without taking off your Steam Frame. Knock thrice to switch between seeing the room through your game and seeing only the room.
 
-![The view in the headset: knocking twice fades your room in over VR, knocking three times shows only the room and then both again, and knocking twice more returns to VR](images/hero.gif)
+![The view in the headset: knocking twice fades your room in over VR, knocking thrice shows only the room and then both again, and knocking twice more returns to VR](images/hero.gif)
 
 <sub>Simulated passthrough. [Photo](https://commons.wikimedia.org/wiki/File:Living_room_(Unsplash).jpg) by Jarosław Ceborski (CC0).</sub>
 
@@ -54,7 +54,7 @@ Frameloader starts KnockThru, which registers with SteamVR and turns on autostar
 
 </details>
 
-From now on KnockThru starts with SteamVR and runs in the background. The first time you open the KnockThru tab in the SteamVR dashboard, a short tour starts. It helps you pick your knocks, calibrate them, and try a double and a triple knock.
+From now on KnockThru starts with SteamVR and runs in the background. The first time you open the KnockThru tab in the SteamVR dashboard, a short tour starts. It helps you pick your knocks, calibrate them, and try knocking twice and thrice.
 
 To pause knocks, turn off the **KnockThru On** switch at the top of the [dashboard tab](#the-dashboard-tab). To clear your settings and calibration, use **Factory reset** in Settings. To remove KnockThru, run `<install folder>/knockthru --uninstall --purge` in Konsole or over SSH, then delete the install folder. `--purge` also deletes your settings and calibration. Leave it out to keep them in `~/.config/knockthru`.
 
@@ -62,13 +62,13 @@ To pause knocks, turn off the **KnockThru On** switch at the top of the [dashboa
 
 Any of these three knocks works. Use the same kind for every knock in a set.
 
-![Three ways to knock: knock the controllers together, knock one controller on a table, or knock on the headset. Each one knocks twice, then three times](images/knock-kinds.gif)
+![Three ways to knock: knock the controllers together, knock one controller on a table, or knock on the headset. Each one knocks twice, then thrice](images/knock-kinds.gif)
 
 A surface knock also works on your leg. Keep the controller where the headset cameras can see it, because knocks out of view get missed more often.
 
 Pause for a moment, then knock at a steady pace. After your last knock, KnockThru waits a moment in case another one follows.
 
-![Timeline: two knocks, a wait of about 0.4 seconds, then passthrough turns on and both controllers buzz. Then three knocks, the same wait, and the style switches with two buzzes](images/timing.gif)
+![Timeline: two knocks, a wait of about 0.4 seconds, then passthrough turns on and both controllers buzz. Then knocking thrice, the same wait, and the style switches with two buzzes](images/timing.gif)
 
 | You knock | What happens | You feel |
 | --- | --- | --- |
@@ -133,8 +133,8 @@ You can send a bug report from the headset with your phone. You need a GitHub ac
 
 1. Open **Settings** in the KnockThru tab and press **Report**.
 2. Take off the headset. Hold your phone up to either lens and scan the QR code. Your phone must be on the same Wi-Fi as the Frame.
-3. On your phone, tap **Copy report and open GitHub**.
-4. Paste the report, say what went wrong, and tap **Create**.
+3. On your phone, press **Copy report and open GitHub**.
+4. Paste the report, say what went wrong, and press **Create**.
 
 The new issue already has your KnockThru and SteamVR versions filled in.
 

@@ -8,6 +8,33 @@ namespace knockthru {
 
 using namespace panel_style;
 
+namespace {
+
+// The names the action lists show.
+const char* action_name(KnockAction action) {
+    switch (action) {
+    case KnockAction::Passthrough: return "Show or hide the room";
+    case KnockAction::Style: return "Translucent or opaque";
+    case KnockAction::PerfGraph: return "Performance graph";
+    case KnockAction::None: return "Do nothing";
+    }
+    return "";
+}
+
+// The action for knocking twice and thrice, for the Settings row that opens Knock actions.
+std::string actions_summary(const PanelState& state) {
+    std::string text;
+    for (const int count : kKnockCounts) {
+        const auto action = state.knock_actions.shared(count);
+        if (!text.empty()) text += ", ";
+        text += std::string(count == 2 ? "Twice: " : "Thrice: ")
+            + (action ? action_name(*action) : "set per kind");
+    }
+    return text;
+}
+
+} // namespace
+
 void Panel::passthrough_tile(Rect rect, const PanelState& state) {
     const bool on = state.room_view.value_or(false);
     const bool broken = !state.room_view_error.empty();
@@ -26,6 +53,10 @@ void Panel::passthrough_tile(Rect rect, const PanelState& state) {
     canvas_.text(bold_, value, x, rect.y + 160, broken ? 64 : 96, kText);
     if (broken) {
         paragraph(regular_, state.room_view_error, x, rect.y + rect.h - 92, 26, 36, w, 2, kText);
+    } else if (state.room_view && !state.busy) {
+        // What a press does, once the state is known and not changing.
+        canvas_.text(regular_, on ? "Press to turn off" : "Press to turn on", x, rect.y + rect.h - 52, 26,
+            on ? kText : kDim);
     }
     targets_.push_back({rect, PanelClick{PanelCommand::RoomView}, std::nullopt});
 }
@@ -51,8 +82,10 @@ void Panel::knocks_row(Rect rect, const PanelState& state) {
     canvas_.rounded_rect(
         rect, kRadius, active ? (hover ? kActiveHover : kActive) : (hover ? kRaisedHover : kRaised));
     const float cy = rect.y + rect.h / 2;
-    const std::string title = state.paused ? "KnockThru Off" : "KnockThru On";
-    canvas_.text(bold_, title, rect.x + 28, cy, 38, kText);
+    canvas_.text(bold_, "KnockThru", rect.x + 28, cy, 38, kText);
+    // The switch is 100 px wide at this scale. Its state in words sits to its left.
+    canvas_.text(bold_, state.paused ? "Off" : "On", rect.x + rect.w - 28 - 100 - 20, cy, 30,
+        state.paused ? kDim : kText, Align::Right);
     switch_control(rect.x + rect.w - 28, cy, !state.paused, true, 1.25f);
     targets_.push_back({rect, PanelClick{PanelCommand::Pause}, std::nullopt});
 }
@@ -86,11 +119,11 @@ void Panel::main_screen(const PanelState& state) {
     y += 8;
 
     if (state.app_key.empty()) {
-        switch_row({x, y, w, 128}, std::nullopt, false, "This game", "No game running", false, true);
+        switch_row({x, y, w, 128}, std::nullopt, false, "No game running", "", false, true);
     } else {
         const auto name = state.app_name.empty() ? state.app_key : state.app_name;
         switch_row({x, y, w, 128}, PanelClick{PanelCommand::BlockApp}, !state.app_blocked,
-            "Knocks in " + name, state.app_blocked ? "Off for this game only" : "On", true, true);
+            "Knocks in " + name, state.app_blocked ? "Off for this game only" : "", true, true);
     }
 
     // The tiles already show what worked, so the main screen only shows errors.
@@ -107,11 +140,11 @@ void Panel::settings_screen(const PanelState& state) {
     canvas_.rounded_rect({kMargin, top, w, card}, kRadius, kSurface);
     button_row({kMargin, top, w, row}, "Knocks getting missed?", "KnockThru learns how hard you knock",
         "Calibrate", std::nullopt, Screen::Pick, false, false);
-    button_row({kMargin, top + row, w, row}, "Knock actions", "What knocking twice or thrice does", "Change",
-        std::nullopt, Screen::Actions, false);
+    button_row({kMargin, top + row, w, row}, "Knock actions", actions_summary(state), "Change", std::nullopt,
+        Screen::Actions, false);
     switch_row({kMargin, top + 2 * row, w, row}, PanelClick{PanelCommand::Sounds}, state.sounds, "Sounds",
         "Click on knocks and on buttons", true, true);
-    button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "Learn the knocks again", "Replay",
+    button_row({kMargin, top + 3 * row, w, row}, "Guided tour", "", "Replay",
         PanelClick{PanelCommand::StartTour}, std::nullopt, false);
     button_row({kMargin, top + 4 * row, w, row}, "Something wrong?", "Tell the developer on GitHub", "Report",
         PanelClick{PanelCommand::ShowReport}, Screen::Report, false);
@@ -136,28 +169,13 @@ void Panel::actions_screen(const PanelState& state) {
     // config.json can give each kind its own actions. The lists then pick nothing, and a press sets every
     // kind.
     const std::string note = differ
-        ? "Your config.json gives knock kinds different actions. A choice here sets them all."
-        : "Every kind of knock gets these actions. To set kinds apart, edit config.json.";
+        ? "Your config.json gives knock kinds different actions. A choice here sets them all"
+        : "Every kind of knock gets these actions. To set kinds apart, edit config.json";
     if (state.message_is_error)
         message(state, 600);
     else
         canvas_.text(regular_, note, kMargin, 620, 26, kDim);
 }
-
-namespace {
-
-// The names the action lists show.
-const char* action_name(KnockAction action) {
-    switch (action) {
-    case KnockAction::Passthrough: return "Show or hide the room";
-    case KnockAction::Style: return "Translucent or opaque";
-    case KnockAction::PerfGraph: return "Performance graph";
-    case KnockAction::None: return "Do nothing";
-    }
-    return "";
-}
-
-} // namespace
 
 // A card titled "Knock twice" or "Knock thrice" with one row per action. The
 // current action is filled, with a check mark, and the default says so. `rect`

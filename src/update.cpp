@@ -182,8 +182,11 @@ void download(const std::string& url, const fs::path& path, int seconds, const s
             *progress = scale
                 * static_cast<float>(std::min(1.0, static_cast<double>(size) / static_cast<double>(length)));
     };
-    const int code = run_program({"curl", "--silent", "--location", "--max-time", std::to_string(seconds),
-                                     "--dump-header", headers, "--output", path.string(), url},
+    // Redirects stay on https, so a hijacked redirect cannot serve a ZIP over plain http.
+    // file is allowed for the first URL only, which tests and local update trials use.
+    const int code = run_program(
+        {"curl", "--silent", "--location", "--proto", "=https,file", "--proto-redir", "=https", "--max-time",
+            std::to_string(seconds), "--dump-header", headers, "--output", path.string(), url},
         cancel, follow);
     if (code == -2) throw Canceled("Download canceled");
     const int status = last_status(headers);
@@ -193,7 +196,7 @@ void download(const std::string& url, const fs::path& path, int seconds, const s
     if (status >= 400) throw std::runtime_error("GitHub answered with HTTP " + std::to_string(status));
     if (code == 0) return; // file:// URLs have no HTTP status, so 0 passes too
     if (code == -1 || code == 127) throw std::runtime_error("curl is missing on this system");
-    if (code == 6 || code == 7) throw std::runtime_error("Cannot reach GitHub. Check the Wi-Fi connection.");
+    if (code == 6 || code == 7) throw std::runtime_error("Cannot reach GitHub: check the Wi-Fi");
     if (code == 28) throw std::runtime_error("GitHub took too long to answer");
     throw std::runtime_error("Download failed, curl exit code " + std::to_string(code));
 }
@@ -338,7 +341,7 @@ void install_release(const Release& release, const fs::path& install_directory, 
         download(release.url, zip, 180, "The release ZIP is missing on GitHub", cancel, progress, 0.9f);
         reach(0.9f);
         if (sha256_file(zip) != release.sha256)
-            throw std::runtime_error("The downloaded ZIP does not match its SHA-256. Nothing changed.");
+            throw std::runtime_error("The download did not match its checksum. Nothing changed");
         const auto staging = work / "files";
         fs::create_directories(staging);
         const int code = run_program({"unzip", "-q", "-o", zip.string(), "-d", staging.string()}, cancel);
@@ -385,8 +388,8 @@ void replace_files(const fs::path& staging, const fs::path& install) {
             const auto target = install / file;
             fs::create_directories(target.parent_path());
             const auto temp = temporary(file);
-            fs::copy_file(staging / file, temp, fs::copy_options::overwrite_existing);
             written.push_back(temp);
+            fs::copy_file(staging / file, temp, fs::copy_options::overwrite_existing);
             fs::permissions(temp, fs::status(staging / file).permissions());
         }
     } catch (...) {

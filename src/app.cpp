@@ -119,6 +119,7 @@ private:
     void handle_click(const PanelClick& click, double t);
     void set_knock_action(int count, KnockAction action);
     void toggle_kind(KnockKind kind);
+    void turn_on_kind(KnockKind kind);
     void toggle_blocked_app();
     void factory_reset();
     void end_tour();
@@ -175,7 +176,8 @@ private:
 
     const std::array<fs::path, 3> config_files_{install_directory() / "config.json",
         user_directory() / "config.json", user_directory() / "calibration.json"};
-    AppConfig config_ = load_config(install_directory());
+    std::string startup_error_;
+    AppConfig config_ = load_config_or_defaults(install_directory(), startup_error_);
     std::string stamp_ = config_stamp();
     KnockDetector detector_{config_.detector};
     std::optional<Calibrator> calibrator_;
@@ -253,6 +255,8 @@ App::App() {
             log(std::string("Tour not marked done: ") + error.what());
         }
     }
+
+    if (!startup_error_.empty()) show("Settings not loaded: " + startup_error_, true);
 
     state_.version = kVersion;
     if (updated_from_) {
@@ -433,6 +437,7 @@ void App::handle_click(const PanelClick& click, double t) {
         break;
     case PanelCommand::SetKnockAction: set_knock_action(click.count, click.action); break;
     case PanelCommand::Kind: toggle_kind(click.kind); break;
+    case PanelCommand::TurnOnKind: turn_on_kind(click.kind); break;
     case PanelCommand::BlockApp: toggle_blocked_app(); break;
     case PanelCommand::FactoryReset: factory_reset(); break;
 
@@ -483,6 +488,16 @@ void App::toggle_kind(KnockKind kind) {
     enabled[i] = !enabled[i];
     if (save([&] { save_knock_types(enabled); }))
         show(std::string(to_string(kind)) + " knocks " + (config_.detector.enabled[i] ? "on" : "off"));
+}
+
+// Turns knocks of `kind` on, for the Saved banner after a calibration.
+void App::turn_on_kind(KnockKind kind) {
+    const auto i = static_cast<int>(kind);
+    if (config_.detector.enabled[i]) return;
+    auto enabled = config_.detector.enabled;
+    enabled[i] = true;
+    if (!save([&] { save_knock_types(enabled); })) return;
+    show(std::string(to_string(kind)) + " knocks on");
 }
 
 void App::toggle_blocked_app() {
@@ -616,7 +631,7 @@ void App::cancel_calibration() {
     if (calibrator_ && calibration_ && calibration_->phase == Phase::Recording)
         log(heard_summary(*calibrator_));
     end_calibration();
-    show("Calibration canceled. Nothing saved.");
+    show("Calibration canceled. Nothing saved");
 }
 
 void App::save_calibration(double t) {
@@ -704,7 +719,7 @@ Handled App::handle_knocks(
         } else if (calibrator_->seconds_left(t) <= 0) {
             log(heard_summary(*calibrator_));
             show("Time ran out after " + std::to_string(calibrator_->count()) + " of "
-                    + std::to_string(Calibrator::kWanted) + " knocks. Nothing saved.",
+                    + std::to_string(Calibrator::kWanted) + " knocks. Nothing saved",
                 true);
             end_calibration();
         }
@@ -718,7 +733,7 @@ Handled App::handle_knocks(
         const bool passed = event->kind == calibrator_->kind() && event->count == 2;
         calibration_->trial_passed = passed;
         calibration_->trial_heard =
-            std::string("a ") + sequence_name(*event) + " " + to_string(event->kind) + " knock";
+            std::string("a ") + to_string(event->kind) + " knock " + (event->count == 3 ? "thrice" : "twice");
         calibration_->trial_t = t;
         log("Try step heard " + calibration_->trial_heard + (passed ? ": passed" : ": missed"));
         haptics_.buzz(passed ? 1 : 3, t);
@@ -782,7 +797,7 @@ void App::collect_jobs(double t) {
             room_view_failed_ = true;
             state_.room_view.reset();
             state_.room_view_error =
-                "A Steam update moved the Room View button. Update KnockThru in Settings.";
+                "A Steam update moved the Room View button. Update KnockThru in Settings";
             if (toggled) {
                 show("Passthrough not changed: Room View button not found", true);
                 haptics_.buzz(3, t);
@@ -824,7 +839,7 @@ void App::collect_jobs(double t) {
                 log(std::string("Daily update check failed: ") + error.what());
             } else {
                 state_.update = {UpdateStatus::Failed, "", error.what()};
-                show(std::string("Update check failed: ") + error.what(), true);
+                show(error.what(), true); // the Settings header says "Check failed"
             }
         }
         if (panel_) panel_->invalidate();
@@ -1029,8 +1044,8 @@ void App::run_test_command(
     const std::string& line, double t, std::deque<Knock>& knocks, std::optional<KnockEvent>& event) {
     static const std::map<std::string, PanelCommand> commands{{"RoomView", PanelCommand::RoomView},
         {"Style", PanelCommand::Style}, {"Pause", PanelCommand::Pause}, {"Kind", PanelCommand::Kind},
-        {"BlockApp", PanelCommand::BlockApp}, {"Calibrate", PanelCommand::Calibrate},
-        {"CancelCalibration", PanelCommand::CancelCalibration},
+        {"TurnOnKind", PanelCommand::TurnOnKind}, {"BlockApp", PanelCommand::BlockApp},
+        {"Calibrate", PanelCommand::Calibrate}, {"CancelCalibration", PanelCommand::CancelCalibration},
         {"SaveCalibration", PanelCommand::SaveCalibration}, {"Sounds", PanelCommand::Sounds},
         {"StartTour", PanelCommand::StartTour}, {"TourNext", PanelCommand::TourNext},
         {"TourBack", PanelCommand::TourBack}, {"TourSkip", PanelCommand::TourSkip},

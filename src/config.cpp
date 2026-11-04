@@ -32,9 +32,13 @@ json read_json(const fs::path& path) {
 void write_json(const fs::path& path, const json& value) {
     fs::create_directories(path.parent_path());
     const auto temporary = path.string() + ".tmp";
-    {
-        std::ofstream stream(temporary, std::ios::trunc);
-        if (!(stream << value.dump(2) << "\n")) throw std::runtime_error("Cannot write " + temporary);
+    std::ofstream stream(temporary, std::ios::trunc);
+    stream << value.dump(2) << "\n";
+    stream.close(); // flushes, so a full disk fails here and never reaches the rename
+    if (stream.fail()) {
+        std::error_code ignored;
+        fs::remove(temporary, ignored);
+        throw std::runtime_error("Cannot write " + temporary);
     }
     fs::rename(temporary, path);
 }
@@ -136,15 +140,39 @@ fs::path user_directory() {
     return fs::path(home) / ".config" / "knockthru";
 }
 
-AppConfig load_config(const fs::path& install_directory) {
+namespace {
+
+AppConfig default_config() {
     AppConfig config;
     for (const auto& [name, field] : detector_fields(config.detector))
         config.detector_sources[name] = Source::Default;
+    return config;
+}
+
+} // namespace
+
+AppConfig load_config(const fs::path& install_directory) {
+    auto config = default_config();
     merge(config, read_json(install_directory / "config.json"), install_directory / "config.json",
         Source::Install);
     merge(
         config, read_json(user_directory() / "config.json"), user_directory() / "config.json", Source::User);
     apply_calibration(load_calibration(), config.detector, &config.detector_sources);
+    return config;
+}
+
+AppConfig load_config_or_defaults(const fs::path& install_directory, std::string& error) {
+    try {
+        return load_config(install_directory);
+    } catch (const std::exception& failure) {
+        error = failure.what();
+    }
+    auto config = default_config();
+    try {
+        apply_calibration(load_calibration(), config.detector, &config.detector_sources);
+    } catch (const std::exception&) {
+        // The calibration file is bad too. The defaults stand.
+    }
     return config;
 }
 

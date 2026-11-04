@@ -173,7 +173,7 @@ std::string report_page(const std::string& report, const std::string& issue_link
 <ol>
 <li>Sign in to GitHub if it asks.</li>
 <li>Paste into the <b>Report</b> box.</li>
-<li>Say what went wrong, then tap <b>Create</b>.</li>
+<li>Say what went wrong, then press <b>Create</b>.</li>
 </ol>
 <p>Copy didn't work? <a href=")HTML"
             + html_escape(download)
@@ -184,14 +184,14 @@ std::string report_page(const std::string& report, const std::string& issue_link
             + html_escape(bundle) + R"HTML(" download>Download the report file</a></li>
 <li><a class="button" href=")HTML"
             + html_escape(issue_link) + R"HTML(">Open GitHub</a></li>
-<li>Sign in if it asks. Attach <b class="file">knockthru-report.zip</b> from your downloads, say what went wrong, then tap <b>Create</b>.</li>
+<li>Sign in if it asks. Attach <b class="file">knockthru-report.zip</b> from your downloads, say what went wrong, then press <b>Create</b>.</li>
 </ol>)HTML";
     return R"HTML(<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KnockThru bug report</title>
 <style>
 /* The panel's colors. The button blue is darker than the panel accent, so its text reaches 4.7:1 (WCAG AA). */
-:root{--bg:#121418;--surface:#1c1f25;--line:#2e323a;--text:#eceef1;--dim:#969ca8;--accent:#2670bc;--link:#50a0f0}
+:root{color-scheme:dark light;--bg:#121418;--surface:#1c1f25;--line:#2e323a;--text:#eceef1;--dim:#969ca8;--accent:#2670bc;--link:#50a0f0}
 @media (prefers-color-scheme: light){
  :root{--bg:#f4f5f7;--surface:#ffffff;--line:#d5d9e0;--text:#16181c;--dim:#545b68;--link:#1f66b0}
 }
@@ -201,23 +201,28 @@ h1{font-size:26px;margin:0 0 8px}
 p{margin:0 0 16px;color:var(--dim)}
 button,a.button{display:block;width:100%;box-sizing:border-box;padding:18px;border:0;border-radius:16px;
  background:var(--accent);color:#f5f7fa;font:600 20px system-ui,sans-serif;text-align:center;text-decoration:none;cursor:pointer}
+button:hover,a.button:hover{filter:brightness(1.15)}
 button:active,a.button:active{transform:scale(0.98)}
 button:focus-visible,a:focus-visible{outline:3px solid var(--link);outline-offset:3px}
 ol{padding-left:24px;margin:20px 0}
 li{margin:0 0 8px}
+label{display:block;margin-top:8px;color:var(--dim)}
 ol.actions li{margin:0 0 16px}
 .file{white-space:nowrap}
 a{color:var(--link)}
 textarea{width:100%;box-sizing:border-box;height:220px;margin-top:8px;background:var(--surface);color:var(--text);
- border:1px solid var(--line);border-radius:16px;padding:12px;font:13px/1.4 ui-monospace,monospace}
+ border:1px solid var(--dim);border-radius:16px;padding:12px;font:16px/1.4 ui-monospace,monospace}
 details{margin-top:24px;color:var(--dim)}
+summary{cursor:pointer;display:flex;align-items:center;min-height:44px}
+summary:focus-visible{outline:3px solid var(--link);outline-offset:3px}
+textarea:focus-visible{outline:3px solid var(--link);outline-offset:3px}
 @media (prefers-reduced-motion: reduce){button:active,a.button:active{transform:none}}
 </style></head><body><main>
 <h1>KnockThru bug report</h1>
-<p>Sent from your Frame. GitHub gets nothing until you tap Create.</p>
+<p>Sent from your Frame. GitHub gets nothing until you press Create.</p>
 )HTML" + steps
         + R"HTML(
-<details><summary>See the report</summary><textarea id="report" readonly>)HTML"
+<details><summary>See the report</summary><label for="report">Report text</label><textarea id="report" readonly>)HTML"
         + html_escape(report) + R"HTML(</textarea></details>
 <script>
 const link = ")HTML"

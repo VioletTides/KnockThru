@@ -261,7 +261,7 @@ int main() {
         check(!no_bar_changed && no_bar.find("dashboard bar not found") != std::string::npos,
             "a target list without the bar says SteamVR may not be running: " + no_bar);
     }
-    // The fake port is closed now.
+    // The fake port is closed.
     {
         int probe = ::socket(AF_INET, SOCK_STREAM, 0);
         sockaddr_in address{};

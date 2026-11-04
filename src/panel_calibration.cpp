@@ -53,11 +53,11 @@ void Panel::pick_screen(const PanelState& state) {
     const bool banner = state.calibration_saved && !saved_dismissed_;
     // A saved kind that is turned off, or KnockThru paused, would leave knocks doing nothing.
     const int saved = state.calibration_saved ? static_cast<int>(*state.calibration_saved) : 0;
+    const bool off = banner && !state.enabled[saved];
     const std::string saved_note = !banner ? ""
-        : state.paused ? "KnockThru is off. Turn it on from the main screen to use knocks."
-        : !state.enabled[saved]
-        ? std::string(kKindTitles[saved]) + " is off. Turn it on from the main screen."
-        : "KnockThru now listens for knocks like the ones you tried";
+        : state.paused                     ? "KnockThru is off. Turn it on from the main screen to use knocks"
+        : !state.enabled[saved]            ? std::string(kKindTitles[saved]) + " is off"
+                                           : "KnockThru now listens for knocks like the ones you tried";
     const float card_h = banner ? 420 : 560;
     for (int k = 0; k < 3; ++k) {
         const Rect card{kMargin + k * 384.0f, 128, 352, card_h};
@@ -71,10 +71,15 @@ void Panel::pick_screen(const PanelState& state) {
         const Rect done{kMargin, 572, kWidth - 2 * kMargin, 120};
         canvas_.rounded_rect(done, kRadius, kActive);
         canvas_.text(bold_, "Saved", done.x + 32, done.y + done.h / 2 - 20, 38, kText);
-        canvas_.text(regular_, canvas_.fit(regular_, saved_note, 26, done.w - 260), done.x + 32,
-            done.y + done.h / 2 + 24, 26, kText);
-        button(
-            {done.x + done.w - 32 - 170, done.y + 30, 170, 60}, "Done", std::nullopt, Screen::Settings, true);
+        const Rect done_button{done.x + done.w - 32 - 170, done.y + 30, 170, 60};
+        const float buttons_w = off ? 2 * 170 + 16 : 170;
+        canvas_.text(regular_, canvas_.fit(regular_, saved_note, 26, done.w - 64 - buttons_w - 24),
+            done.x + 32, done.y + done.h / 2 + 24, 26, kText);
+        // A kind that is off would leave the new calibration unused.
+        if (off)
+            button({done_button.x - 16 - 170, done_button.y, 170, 60}, "Turn on",
+                PanelClick{PanelCommand::TurnOnKind, static_cast<KnockKind>(saved)}, std::nullopt);
+        button(done_button, "Done", std::nullopt, Screen::Settings, true);
     } else if (state.message_is_error) {
         message(state, 730);
     }
@@ -172,9 +177,9 @@ void Panel::record_screen(const PanelState& state, const CalibrationView& view) 
     if (latest >= 0 && hint < 3) {
         const float shown =
             std::min(anim::ease_out(hint / 0.25f), 1 - anim::ease_in_out((hint - 2.5f) / 0.5f));
-        const auto text = latest == view.too_soon_t ? std::string("Too soon. Wait for the ring.")
+        const auto text = latest == view.too_soon_t ? std::string("Too soon: wait for the ring")
             : latest == view.too_light_t
-            ? std::string("Too light. Knock a little harder.")
+            ? std::string("Too light: knock a little harder")
             : std::string("That looked like ") + kKindNames[static_cast<int>(*view.ignored)];
         canvas_.text(regular_, text, x, 670 + 8 * (1 - shown), 26, faded(kError, shown));
     } else if (state.message_is_error) {
@@ -220,15 +225,21 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
         const float shake = anim::buzz(since, 0, 2) * 2;
         canvas_.text(bold_, "Not quite", status.x + 40 + shake, status.y + 70, 34, kError);
         float y = status.y + 124;
-        paragraph(regular_, "Heard " + view.trial_heard + ". Try again, or record your knocks again.",
-            status.x + 40, y, 26, 36, status.w - 80, 3, kDim);
+        y = paragraph(
+            regular_, "Heard " + view.trial_heard, status.x + 40, y, 26, 36, status.w - 80, 2, kDim);
+        paragraph(regular_, "Try again or record again", status.x + 40, y, 26, 36, status.w - 80, 2, kDim);
     }
 
     button({kMargin, 656, 260, 72}, "Record again", PanelClick{PanelCommand::Calibrate, view.kind},
         std::nullopt);
     const bool passed = view.trial_passed.value_or(false);
-    button({kWidth - kMargin - 260, 656, 260, 72}, "Save",
-        PanelClick{PanelCommand::SaveCalibration, view.kind}, std::nullopt, true, passed);
+    const Rect save{kWidth - kMargin - 260, 656, 260, 72};
+    button(save, "Save calibration", PanelClick{PanelCommand::SaveCalibration, view.kind}, std::nullopt, true,
+        passed);
+    // Save stays off until a knock twice passes.
+    if (!passed)
+        canvas_.text(
+            regular_, "Knock twice to save", save.x - 24, save.y + save.h / 2, 24, kDim, Align::Right);
     if (state.message_is_error) message(state, 610);
 }
 

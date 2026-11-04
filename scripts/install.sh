@@ -27,22 +27,33 @@ main() {
         command -v "$tool" >/dev/null 2>&1 || fail "$tool is missing."
     done
 
+    # Only a test release folder on disk may use file://. Redirects always stay on https.
+    case $release_url in
+        file://*) proto='=https,file' schemes='https|file' ;;
+        *) proto='=https' schemes=https ;;
+    esac
+
     work=$(mktemp -d)
     trap 'rm -rf "$work"' EXIT
 
     echo "Finding the latest release"
-    curl -fsSL "$release_url/knockthru.framedrop.json" -o "$work/manifest.json" || fail "cannot download $release_url/knockthru.framedrop.json"
-    python3 - "$work/manifest.json" >"$work/file" <<'EOF' || fail "the release manifest is not valid."
-import json, sys
+    curl -fsSL --proto "$proto" --proto-redir =https "$release_url/knockthru.framedrop.json" -o "$work/manifest.json" || fail "cannot download $release_url/knockthru.framedrop.json"
+    python3 - "$work/manifest.json" "$schemes" >"$work/file" <<'EOF' || fail "the release manifest is not valid."
+import json, re, sys
 entry = json.load(open(sys.argv[1]))["files"][0]
-print(entry["url"])
-print(entry["sha256"])
+url, sha256 = entry["url"], entry["sha256"]
+if not re.match("(" + sys.argv[2] + ")://", url) or not re.search(r"/knockthru-[0-9][0-9A-Za-z.-]*-linux-arm64\.zip$", url):
+    sys.exit(1)
+if not re.fullmatch("[0-9a-f]{64}", sha256):
+    sys.exit(1)
+print(url)
+print(sha256)
 EOF
     zip_url=$(sed -n 1p "$work/file")
     sha256=$(sed -n 2p "$work/file")
 
     echo "Downloading $zip_url"
-    curl -fL --progress-bar "$zip_url" -o "$work/knockthru.zip" || fail "the download failed."
+    curl -fL --proto "$proto" --proto-redir =https --progress-bar "$zip_url" -o "$work/knockthru.zip" || fail "the download failed."
     echo "$sha256  $work/knockthru.zip" | sha256sum -c --status || fail "the ZIP does not match the SHA-256 in the manifest."
 
     # Unpack next to the install folder, then swap the folders. A running KnockThru
@@ -52,7 +63,10 @@ EOF
     unzip -q "$work/knockthru.zip" -d "$dir.new" || fail "the ZIP did not unpack."
     [ -x "$dir.new/knockthru" ] || fail "the ZIP has no knockthru program."
     if [ -e "$dir" ]; then mv "$dir" "$dir.old"; fi
-    mv "$dir.new" "$dir"
+    if ! mv "$dir.new" "$dir"; then
+        if [ -e "$dir.old" ]; then mv "$dir.old" "$dir"; fi
+        fail "the new files could not replace $dir. The old install is back."
+    fi
     rm -rf "$dir.old"
     echo "Installed to $dir"
 

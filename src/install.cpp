@@ -47,7 +47,7 @@ void register_app() {
         {"image_path", icon_path().generic_u8string()},
         {"action_manifest_path", (install_directory() / "actions.json").generic_u8string()},
         {"strings",
-            {{"en_us", {{"name", "KnockThru"}, {"description", "Double knock to toggle passthrough"}}}}}};
+            {{"en_us", {{"name", "KnockThru"}, {"description", "Knock twice to toggle passthrough"}}}}}};
     fs::create_directories(manifest_path().parent_path());
     std::ofstream(manifest_path(), std::ios::trunc)
         << json{{"source", "builtin"}, {"applications", json::array({app})}}.dump(2);
@@ -99,7 +99,7 @@ int install() {
     for (int i = 0; i < 30 && vr::VRApplications()->GetApplicationProcessId(kAppKey) != 0; ++i)
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     check_app(vr::VRApplications()->LaunchDashboardOverlay(kAppKey), "Start KnockThru");
-    std::cout << "KnockThru is running and starts with SteamVR. Double knock to toggle passthrough.\n";
+    std::cout << "KnockThru is running and starts with SteamVR. Knock twice to toggle passthrough.\n";
     return 0;
 }
 
