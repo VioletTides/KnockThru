@@ -30,9 +30,17 @@ Color verdict_color(const FeedEntry& entry) { return entry.good ? kAccent : kErr
 
 } // namespace
 
-// The debug view: a header like Settings', three tabs, and the tab's content.
-void Panel::debug_screen(const DebugView& view) {
+// The debug view: a header like Settings', three tabs, and the tab's content. Messages go in the header,
+// because the tabs fill the screen below it.
+void Panel::debug_screen(const PanelState& state) {
+    const DebugView& view = *state.debug;
     back_header("Advanced", Screen::Settings);
+    if (!state.message.empty()) {
+        const float x = kMargin + 172 + canvas_.measure(bold_, "Advanced", 38) + 40;
+        const auto lines = canvas_.wrap(regular_, state.message, 26, kWidth - kMargin - x, 2);
+        paragraph(regular_, state.message, x, 68 - 15.0f * (lines.size() - 1), 26, 30, kWidth - kMargin - x,
+            2, state.message_is_error ? kError : kDim);
+    }
     const auto tabs = segments({kMargin, 124, kWidth - 2 * kMargin, 72}, {"Live", "Tuning", "Status"},
         static_cast<int>(debug_tab_), kButton, kRaised);
     for (std::size_t i = 0; i < tabs.size(); ++i)
@@ -64,11 +72,13 @@ void Panel::list_row(
             regular_, canvas_.fit(regular_, detail, kDetail, width), rect.x + 28, cy + 17, kDetail, kDim);
 }
 
-// A list row with a value at its right end.
+// A list row with a value at its right end. A long value gets cut, so the label stays whole.
 void Panel::value_row(
     Rect rect, const std::string& label, const std::string& detail, const std::string& value, Color color) {
-    list_row(rect, label, detail, canvas_.measure(bold_, value, kLabel) + 16, false);
-    canvas_.text(bold_, value, rect.x + rect.w - 28, rect.y + rect.h / 2, kLabel, color, Align::Right);
+    const std::string fitted =
+        canvas_.fit(bold_, value, kLabel, rect.w - 56 - canvas_.measure(bold_, label, kLabel) - 16);
+    list_row(rect, label, detail, canvas_.measure(bold_, fitted, kLabel) + 16, false);
+    canvas_.text(bold_, fitted, rect.x + rect.w - 28, rect.y + rect.h / 2, kLabel, color, Align::Right);
 }
 
 // Fills a card under an "Earlier" heading with one row per entry: title, detail, and the verdict.
@@ -178,6 +188,10 @@ void Panel::debug_live(const DebugView& view, Rect area) {
     canvas_.text(bold_, "Last knock", sx + 30, last.y + 38, kLabel, kText);
     const float text_w = side_w - 60;
     if (view.last) {
+        // The device or set it came from, beside the heading.
+        const float heading_w = canvas_.measure(bold_, "Last knock", kLabel) + 24;
+        canvas_.text(regular_, canvas_.fit(regular_, view.last->title, kLabel, text_w - heading_w),
+            sx + side_w - 30, last.y + 38, kLabel, kDim, Align::Right);
         canvas_.text(bold_, canvas_.fit(bold_, view.last->verdict, 56, text_w), sx + 30, last.y + 94, 56,
             verdict_color(*view.last));
         canvas_.text(

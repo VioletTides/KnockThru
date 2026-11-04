@@ -113,12 +113,13 @@ void DebugModel::add_feed(FeedEntry entry) {
     if (feed_.size() > kFeedSize) feed_.pop_front();
 }
 
-void DebugModel::add_candidate(const Candidate& c) {
+bool DebugModel::add_candidate(const Candidate& c) {
     const bool near_miss = c.verdict == Verdict::FastBefore || c.verdict == Verdict::MovingAfter
         || c.verdict == Verdict::Untracked
         || (c.verdict == Verdict::BelowPeak && c.knock.peak >= 0.75 * c.threshold);
-    if (!near_miss) return;
+    if (!near_miss) return false;
     add_feed({c.knock.t, title_of(c.knock.source), verdict_word(c.verdict), spike_detail(c), false});
+    return true;
 }
 
 void DebugModel::add_set(const Sequence& s, SetOutcome outcome, KnockAction action) {
@@ -130,6 +131,7 @@ void DebugModel::add_set(const Sequence& s, SetOutcome outcome, KnockAction acti
             entry.verdict = action_word(action);
             entry.good = true;
             break;
+        case SetOutcome::Failed: entry.verdict = "Failed"; break;
         case SetOutcome::Paused: entry.verdict = "Paused"; break;
         case SetOutcome::Blocked: entry.verdict = "Off in this game"; break;
         case SetOutcome::NoAction: break;

@@ -300,9 +300,9 @@ const Canvas& Panel::render(
         settings_screen(state);
         advanced_warning();
     } else if (screen_ == Screen::Debug) {
-        debug_screen(*state.debug);
+        debug_screen(state);
     } else if (screen_ == Screen::RestoreDefaults) {
-        debug_screen(*state.debug);
+        debug_screen(state);
         confirm_card("Restore defaults?",
             "Every knock number goes back to the default. Calibrate again afterward.", "Cancel",
             Screen::Debug, "Restore", PanelClick{PanelCommand::RestoreDefaults}, Screen::Debug, true);
@@ -312,10 +312,13 @@ const Canvas& Panel::render(
     if (state.update_notice && !calibration && !tour_on_screen) update_card(*state.update_notice);
 
     // A new view rises into place. The first render has nothing to move from.
-    // The reset confirm appears over Settings in place, so only the other views rise.
-    const auto over_settings = [](std::optional<View> v) { return v == View::Reset || v == View::Report; };
-    const bool overlay =
-        (over_settings(view) && view_ == View::Settings) || (view == View::Settings && over_settings(view_));
+    // A card appears over its screen in place, so only the other views rise.
+    const auto screen_below = [](std::optional<View> v) -> std::optional<View> {
+        if (v == View::Reset || v == View::Report || v == View::AdvancedWarning) return View::Settings;
+        if (v == View::RestoreDefaults) return View::Debug;
+        return std::nullopt;
+    };
+    const bool overlay = view_ && (screen_below(view) == *view_ || screen_below(*view_) == view);
     if ((view_ && *view_ != view && !overlay) || (tour_step && tour_step_ && *tour_step_ != *tour_step))
         view_t_ = now;
     view_ = view;
@@ -340,6 +343,7 @@ std::optional<PanelClick> Panel::click(float x, float y) {
             // Leaving the calibration screens hides the Saved banner.
             if (screen_ == Screen::Pick && *target.go_to == Screen::Settings) saved_dismissed_ = true;
             screen_ = *target.go_to;
+            if (screen_ == Screen::AdvancedWarning) dont_remind_ = false;
             if (target.learn) learn_kind_ = *target.learn;
         }
         if (target.tab) debug_tab_ = *target.tab;

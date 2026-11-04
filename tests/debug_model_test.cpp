@@ -164,6 +164,8 @@ void feed_tests() {
     check(model.feed().back().title == "Headset knock twice" && model.feed().back().verdict == "Perf graph",
         "a headset double that opened the perf graph");
 
+    model.add_set(set(SequenceVerdict::Action, 2), SetOutcome::Failed, KnockAction::Passthrough);
+    check(model.feed().back().verdict == "Failed" && !model.feed().back().good, "an action that did not run");
     model.add_set(set(SequenceVerdict::Action, 2), SetOutcome::Paused, KnockAction::Passthrough);
     check(model.feed().back().verdict == "Paused" && !model.feed().back().good, "a paused action set");
     model.add_set(set(SequenceVerdict::Action, 2), SetOutcome::Blocked, KnockAction::Passthrough);

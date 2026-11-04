@@ -276,7 +276,7 @@ private:
     std::vector<Rect> segments(Rect track, const std::vector<std::string>& names, std::optional<int> selected,
         float size, Color raised);
     float pill_width(const std::string& label, float padding);
-    void debug_screen(const DebugView& view);
+    void debug_screen(const PanelState& state);
     void debug_live(const DebugView& view, Rect area);
     void debug_tuning(const DebugView& view, Rect area);
     void debug_stepper(Rect rect, const Tunable& tunable, int index);

@@ -154,7 +154,7 @@ private:
     void read_opaque();
     bool toggle_room_view(const std::string& why);
     bool toggle_setting(KnockAction action, const std::string& why);
-    void run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t);
+    bool run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t);
     bool save(const std::function<void()>& write, bool keep = true);
     void start_check();
     void restart_failed(const std::string& version);
@@ -764,8 +764,9 @@ Handled App::handle_knocks(
     // The tour teaches the default actions, whatever Knock actions says.
     const auto action = practicing ? KnockActions::default_for(event->count)
                                    : config_.knock_actions.get(event->kind, event->count);
-    run_action(action, *event, what, t);
-    return {action == KnockAction::None ? SetOutcome::NoAction : SetOutcome::Ran, action};
+    const bool ran = run_action(action, *event, what, t);
+    if (action == KnockAction::None) return {SetOutcome::NoAction, action};
+    return {ran ? SetOutcome::Ran : SetOutcome::Failed, action};
 }
 
 void App::collect_jobs(double t) {
@@ -911,8 +912,8 @@ void App::feed_debug(const Handled& handled) {
     const auto candidates = detector_.take_candidates();
     const auto sequences = detector_.take_sequences();
     for (const auto& candidate : candidates) {
-        debug_.model.add_candidate(candidate);
-        if (candidate.verdict == Verdict::BelowPeak)
+        // The graph's line follows only a Too light spike the feed shows.
+        if (debug_.model.add_candidate(candidate) && candidate.verdict == Verdict::BelowPeak)
             debug_.too_light = std::make_pair(candidate.knock.t, candidate.threshold);
     }
     // Only an Action sequence reaches handle_knocks, so only it has an outcome.
@@ -986,8 +987,7 @@ void App::fill_debug_view(double t) {
     if (game.value.empty()) game.value = "None";
     StatusRow passthrough{"Passthrough", "Checking", "", false};
     if (!state_.room_view_error.empty()) {
-        passthrough.value = state_.room_view_error;
-        passthrough.bad = true;
+        passthrough = {"Passthrough", "Error", state_.room_view_error, true};
     } else if (state_.room_view) {
         passthrough.value = *state_.room_view ? "On" : "Off";
     }
@@ -1009,7 +1009,11 @@ void App::update_debug(double t) {
     if (open != debug_.open) {
         debug_ = DebugParts();
         debug_.open = open;
-        if (open) read_room_view();
+        if (open) {
+            read_room_view();
+            // Advanced shows every message. One left from another screen would read as a result here.
+            if (!state_.message_is_error) state_.message.clear();
+        }
     }
     if (open && t >= debug_.next_fill) {
         debug_.next_fill = t + 1.0 / 30;
@@ -1207,8 +1211,8 @@ bool App::toggle_room_view(const std::string& why) {
     return true;
 }
 
-// One buzz after a double, two after a triple, three on failure.
-void App::run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t) {
+// One buzz after a double, two after a triple, three on failure. Returns whether the action started.
+bool App::run_action(KnockAction action, const KnockEvent& event, const std::string& why, double t) {
     const int buzzes = event.count - 1;
     const auto tick_tour = [&] {
         if (!tour_) return;
@@ -1221,8 +1225,9 @@ void App::run_action(KnockAction action, const KnockEvent& event, const std::str
             // Buzz now, because the switch can take a second. A failure buzzes 3 times later.
             haptics_.buzz(buzzes, t);
             tick_tour();
+            return true;
         }
-        return;
+        return false;
     case KnockAction::Style:
     case KnockAction::PerfGraph: {
         // Steam clicks when passthrough switches, so KnockThru clicks only for these.
@@ -1230,10 +1235,11 @@ void App::run_action(KnockAction action, const KnockEvent& event, const std::str
         if (changed) play_click();
         haptics_.buzz(changed ? buzzes : 3, t);
         if (changed) tick_tour();
-        return;
+        return changed;
     }
-    case KnockAction::None: log("Ignored" + why + ": Knock actions says do nothing"); return;
+    case KnockAction::None: log("Ignored" + why + ": Knock actions says do nothing"); return false;
     }
+    return false;
 }
 
 // Toggles the room view style for Style, or the performance graph for PerfGraph.
@@ -1257,14 +1263,19 @@ bool App::toggle_setting(KnockAction action, const std::string& why) {
     }
 }
 
-// Runs `write`, then reloads the settings. Shows the error if `write` throws.
+// Runs `write`, then reloads the settings. Shows the error if either throws, and returns whether both worked.
 bool App::save(const std::function<void()>& write, bool keep) {
     try {
         write();
+    } catch (const std::exception& error) {
+        show(std::string("Settings not saved: ") + error.what(), true);
+        return false;
+    }
+    try {
         reload(keep);
         return true;
     } catch (const std::exception& error) {
-        show(std::string("Settings not saved: ") + error.what(), true);
+        show(std::string("Settings saved, but they did not reload: ") + error.what(), true);
         return false;
     }
 }
