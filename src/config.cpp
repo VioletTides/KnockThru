@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
-#include <functional>
 #include <map>
 #include <stdexcept>
 
@@ -180,7 +179,7 @@ AppConfig default_config() {
 AppConfig load_config_or_defaults(const fs::path& install_directory, std::string& error) {
     auto config = default_config();
     // Each file loads into a copy, so a file that fails halfway leaves nothing behind.
-    const auto load = [&](const std::function<void(AppConfig&)>& apply) {
+    const auto load = [&](const auto& apply) {
         auto next = config;
         try {
             apply(next);
