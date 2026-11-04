@@ -21,8 +21,6 @@
 
 namespace knockthru {
 
-constexpr std::array<const char*, 3> kDeviceNames{"hmd", "left", "right"}; // indexed by Device
-
 Vec3 position_of(const vr::TrackedDevicePose_t& pose);
 Vec3 velocity_of(const vr::TrackedDevicePose_t& pose);
 

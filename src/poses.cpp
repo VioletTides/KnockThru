@@ -5,6 +5,8 @@
 
 namespace knockthru {
 
+constexpr std::array<const char*, 3> kDeviceNames{"hmd", "left", "right"}; // indexed by Device
+
 Vec3 position_of(const vr::TrackedDevicePose_t& pose) {
     const auto& m = pose.mDeviceToAbsoluteTracking.m;
     return {m[0][3], m[1][3], m[2][3]};
