@@ -4,7 +4,6 @@
 #include "sprite_shapes.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 
 namespace knockthru {

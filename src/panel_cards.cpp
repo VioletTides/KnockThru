@@ -3,7 +3,6 @@
 
 #include <qrcodegen.hpp>
 
-#include <algorithm>
 #include <cmath>
 
 namespace knockthru {
