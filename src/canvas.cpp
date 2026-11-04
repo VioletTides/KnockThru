@@ -32,8 +32,6 @@ std::u32string decode_utf8(const std::string& text) {
     return out;
 }
 
-float clamp01(float value) { return std::min(1.0f, std::max(0.0f, value)); }
-
 } // namespace
 
 struct Font::Impl {
@@ -119,7 +117,7 @@ void Canvas::rounded_rect(Rect rect, float radius, Color color) {
         const float distance = std::sqrt(dx * dx + dy * dy) - radius;
         const float edge_x = std::min(px - rect.x, rect.x + rect.w - px) + 0.5f;
         const float edge_y = std::min(py - rect.y, rect.y + rect.h - py) + 0.5f;
-        return clamp01(0.5f - distance) * clamp01(edge_x) * clamp01(edge_y);
+        return anim::clamp(0.5f - distance) * anim::clamp(edge_x) * anim::clamp(edge_y);
     };
     // The shape is convex, so each row's fully covered pixels form one run. Only
     // the pixels before and after it need the distance math.
@@ -201,7 +199,7 @@ void Canvas::polygon(const std::vector<std::vector<Point>>& rings, Color color) 
                 coverage[i1] += (x1 - i1) / kSamples;
             }
         }
-        for (int x = first_x; x < last_x; ++x) blend(x, y, color, clamp01(coverage[x]));
+        for (int x = first_x; x < last_x; ++x) blend(x, y, color, anim::clamp(coverage[x]));
     }
 }
 
@@ -225,7 +223,8 @@ void Canvas::arc(float cx, float cy, float inner, float outer, float from, float
         for (int x = x0; x < x1; ++x) {
             const float dx = x + 0.5f - cx, dy = cy - (y + 0.5f);
             const float r = std::sqrt(dx * dx + dy * dy);
-            float coverage = clamp01(outer - r + 0.5f) * (inner > 0 ? clamp01(r - inner + 0.5f) : 1.0f);
+            float coverage =
+                anim::clamp(outer - r + 0.5f) * (inner > 0 ? anim::clamp(r - inner + 0.5f) : 1.0f);
             if (!full) {
                 // Brings the angle into one turn starting at `from`, so arcs that
                 // reach past -pi or pi draw whole.
@@ -234,7 +233,7 @@ void Canvas::arc(float cx, float cy, float inner, float outer, float from, float
                 while (angle >= from + 2 * anim::kPi) angle -= 2 * anim::kPi;
                 const float outside = std::min(angle - from, to - angle);
                 // Round the arc ends by softening a few pixels past each end.
-                coverage *= clamp01(outside * r + 0.5f);
+                coverage *= anim::clamp(outside * r + 0.5f);
             }
             blend(x, y, color, coverage);
         }
@@ -317,7 +316,7 @@ void Canvas::text(
 }
 
 void Canvas::draw(const Canvas& image, int x, int y, float alpha) {
-    const int scale = static_cast<int>(std::lround(clamp01(alpha) * 255));
+    const int scale = static_cast<int>(std::lround(anim::clamp(alpha) * 255));
     for (int iy = 0; iy < image.height_; ++iy) {
         const int dy = y + iy;
         if (dy < 0 || dy >= height_) continue;
