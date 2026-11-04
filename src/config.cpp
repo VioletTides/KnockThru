@@ -135,13 +135,12 @@ void merge(AppConfig& config, const json& file, const fs::path& path, Source sou
             if (!value.is_number_integer()) fail("debug_port must be a whole number");
             config.debug_port = value.get<int>();
         } else if (key == "detector") {
-            const auto fields = detector_fields(config.detector);
             if (!value.is_object()) fail("detector must be an object");
             for (const auto& [name, number] : value.items()) {
-                const auto field = fields.find(name);
-                if (field == fields.end()) fail("unknown detector setting " + name);
+                const auto member = detector_member(name);
+                if (!member) fail("unknown detector setting " + name);
                 if (!number.is_number()) fail("detector." + name + " must be a number");
-                *field->second = number.get<double>();
+                config.detector.*member = number.get<double>();
                 config.detector_sources[name] = source;
             }
         } else if (key.rfind("_", 0) != 0) { // keys starting with _ are comments
@@ -169,8 +168,7 @@ namespace {
 
 AppConfig default_config() {
     AppConfig config;
-    for (const auto& [name, field] : detector_fields(config.detector))
-        config.detector_sources[name] = Source::Default;
+    for (const auto& [name, member] : kDetectorMembers) config.detector_sources[name] = Source::Default;
     return config;
 }
 
@@ -258,17 +256,13 @@ void save_tour_done(bool done) { update_user_config("tour_done", done); }
 void save_advanced_warning_off(bool off) { update_user_config("advanced_warning_off", off); }
 
 void save_detector(const DetectorConfig& tuned, const AppConfig& loaded) {
-    auto tuned_copy = tuned;
-    auto loaded_copy = loaded.detector;
-    const auto tuned_fields = detector_fields(tuned_copy);
-    const auto loaded_fields = detector_fields(loaded_copy);
     auto calibration = load_calibration();
     bool calibration_changed = false;
     json detector = read_json(user_directory() / "config.json").value("detector", json::object());
     bool detector_changed = false;
-    for (const auto& [name, field] : tuned_fields) {
-        const double value = *field;
-        if (value == *loaded_fields.at(name)) continue;
+    for (const auto& [name, member] : kDetectorMembers) {
+        const double value = tuned.*member;
+        if (value == loaded.detector.*member) continue;
         const auto kind = calibrated_kind(name);
         if (kind && loaded.detector_sources.at(name) == Source::Calibration && calibration[*kind]) {
             calibration[*kind]->peak = value;
