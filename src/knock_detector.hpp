@@ -4,6 +4,7 @@
 #include <deque>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace knockthru {
 
@@ -124,11 +125,11 @@ public:
     std::optional<KnockEvent> poll(double now);
 
     // Every knock judged so far, for logging and calibration. Cleared on read.
-    std::deque<Knock> take_knocks();
+    std::deque<Knock> take_knocks() { return std::exchange(log_, {}); }
     // Every candidate spike and finished sequence so far, for the debug view. Cleared on read. Kept only
     // while explaining.
-    std::deque<Candidate> take_candidates();
-    std::deque<Sequence> take_sequences();
+    std::deque<Candidate> take_candidates() { return std::exchange(candidates_, {}); }
+    std::deque<Sequence> take_sequences() { return std::exchange(sequences_, {}); }
     // On, the detector also judges spikes from half the lowest threshold and keeps every candidate and
     // sequence. Off, it does only the work knocks need. Knocks are the same either way.
     void set_explain(bool on) { explain_ = on; }
