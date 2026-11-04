@@ -7,21 +7,18 @@
 
 #include <atomic>
 #include <chrono>
-#include <functional>
-#include <thread>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
-#include <fstream>
-#include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 using namespace knockthru;
