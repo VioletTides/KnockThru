@@ -1,7 +1,5 @@
 #include "calibrator.hpp"
 
-#include "config.hpp"
-
 #include <algorithm>
 #include <cstdio>
 #include <stdexcept>
