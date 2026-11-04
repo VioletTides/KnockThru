@@ -40,6 +40,19 @@ void shot(Panel& panel, const PanelState& state, double t, const std::filesystem
     panel.render(state, hover, t).write_png(path);
 }
 
+// Beat Saber running with passthrough off, where most screens start.
+PanelState beat_saber_idle() {
+    PanelState state;
+    state.room_view = false;
+    state.opaque = false;
+    state.app_key = "steam.app.620980";
+    state.app_name = "Beat Saber";
+    return state;
+}
+
+// The report card's sample link to the page the headset serves.
+constexpr const char* kReportUrl = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
+
 // A quiet baseline with a few knocks, 10 ms per point, like the debug graph's mockup.
 std::vector<float> trace(unsigned seed, float scale, const std::vector<std::pair<int, float>>& spikes) {
     std::vector<float> out;
@@ -297,11 +310,7 @@ struct Recorder {
 // Counted knocks land on the contacts of the panel's own knock drawing.
 void readme_calibration(const std::filesystem::path& dir) {
     Panel panel(KNOCKTHRU_FONTS);
-    PanelState state;
-    state.room_view = false;
-    state.opaque = false;
-    state.app_key = "steam.app.620980";
-    state.app_name = "Beat Saber";
+    PanelState state = beat_saber_idle();
     state.version = "0.2.0";
     // A spot that hovers nothing on the main screen or under the Saved banner.
     const Recorder::Point rest{300, 730};
@@ -383,11 +392,7 @@ void readme_calibration(const std::filesystem::path& dir) {
 // Installing an update from the dot on the Settings button to the restarted app, as frames in `dir`.
 void readme_update(const std::filesystem::path& dir) {
     Panel panel(KNOCKTHRU_FONTS);
-    PanelState state;
-    state.room_view = false;
-    state.opaque = false;
-    state.app_key = "steam.app.620980";
-    state.app_name = "Beat Saber";
+    PanelState state = beat_saber_idle();
     state.version = "1.0.0";
     state.update = {UpdateView::Status::Available, "1.1.0", ""};
     const Recorder::Point rest{300, 730};
@@ -435,13 +440,9 @@ void readme_update(const std::filesystem::path& dir) {
 // `dir`. The README script draws the phone beside it, timed from the Report click.
 void readme_report(const std::filesystem::path& dir) {
     Panel panel(KNOCKTHRU_FONTS);
-    PanelState state;
-    state.room_view = false;
-    state.opaque = false;
-    state.app_key = "steam.app.620980";
-    state.app_name = "Beat Saber";
+    PanelState state = beat_saber_idle();
     state.version = "0.2.0";
-    state.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
+    state.report_url = kReportUrl;
     state.report_full = true;
     const Recorder::Point rest{300, 730};
     Recorder rec{&panel, dir};
@@ -469,17 +470,13 @@ void readme_report(const std::filesystem::path& dir) {
 // Writes the passthrough off, on, and opaque states with no hover highlight.
 int readme(const std::filesystem::path& out) {
     Panel panel(KNOCKTHRU_FONTS);
-    PanelState state;
-    state.room_view = false;
-    state.opaque = false;
-    state.app_key = "steam.app.620980";
-    state.app_name = "Beat Saber";
+    PanelState state = beat_saber_idle();
     shot(panel, state, 10, out / "readme-off.png");
     // The report card, opened from Settings. The README script dims its sample QR code.
     Panel report_panel(KNOCKTHRU_FONTS);
     PanelState report = state;
     report.version = "0.2.0";
-    report.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
+    report.report_url = kReportUrl;
     report.report_full = true;
     report_panel.render(report, std::nullopt, 40);
     report_panel.click(460, 60); // Settings
@@ -545,11 +542,7 @@ void bench_screen(Panel& panel, const PanelState& state, double start, const cha
 }
 
 int bench() {
-    PanelState idle;
-    idle.room_view = false;
-    idle.opaque = false;
-    idle.app_key = "steam.app.620980";
-    idle.app_name = "Beat Saber";
+    PanelState idle = beat_saber_idle();
 
     Panel main_panel(KNOCKTHRU_FONTS);
     bench_screen(main_panel, idle, 10, "main");
@@ -593,11 +586,7 @@ int main(int argc, char** argv) {
     const std::filesystem::path out = argc > 1 ? argv[1] : ".";
     Panel panel(KNOCKTHRU_FONTS);
 
-    PanelState idle;
-    idle.room_view = false;
-    idle.opaque = false;
-    idle.app_key = "steam.app.620980";
-    idle.app_name = "Beat Saber";
+    PanelState idle = beat_saber_idle();
     idle.message = "Passthrough off (double together knock)";
     panel.render(idle, std::make_pair(900.0f, 300.0f)).write_png(out / "panel-idle.png");
 
@@ -694,7 +683,7 @@ int main(int argc, char** argv) {
     update.update = {};
     update.message.clear();
     update.message_is_error = false;
-    update.report_url = "http://192.168.2.222:39841/5f0c9a2e81d34b7a";
+    update.report_url = kReportUrl;
     update.report_full = true;
     settings_panel.click(1050, 542); // Report on the Something wrong? row
     settings_panel.render(update, std::nullopt, 0);
