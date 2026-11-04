@@ -91,7 +91,6 @@ struct Request {
 // leaves, stalls, or sends an oversized line.
 std::optional<Request> read_request(int client, const std::atomic<bool>& stop) {
     constexpr std::size_t kMaxLine = 8192;
-    // Short receive waits, so the stop check runs at least every 200 ms.
     timeval timeout{0, 200000};
     ::setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
     std::string request;
@@ -301,13 +300,12 @@ ReportServer::ReportServer(std::string report, std::string issue_link)
     static const char* digits = "0123456789abcdef";
     for (int i = 0; i < 16; ++i) token_ += digits[random() % 16];
 
-    // The kernel picks the port. SteamOS's firewall opens TCP ports 1024 to 65535.
     listener_ = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (listener_ < 0) throw std::runtime_error("Cannot create a socket");
     sockaddr_in bind_address{};
     bind_address.sin_family = AF_INET;
     bind_address.sin_addr.s_addr = htonl(INADDR_ANY);
-    bind_address.sin_port = 0; // the kernel picks a free port, above 1024
+    bind_address.sin_port = 0;
     socklen_t size = sizeof bind_address;
     if (::bind(listener_, reinterpret_cast<sockaddr*>(&bind_address), sizeof bind_address) < 0
         || ::listen(listener_, 8) < 0
