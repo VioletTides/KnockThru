@@ -4,6 +4,7 @@
 #include "debug_view.hpp"
 #include "knock_actions.hpp"
 #include "knock_detector.hpp"
+#include "update.hpp"
 
 #include <array>
 #include <map>
@@ -88,6 +89,7 @@ struct PanelState {
     UpdateView update;
     float update_progress = 0;
     std::optional<UpdateNotice> update_notice; // covers every screen until OK
+    std::vector<VersionNotes> whats_new; // since the version before an update, newest first
     std::string report_url; // the QR code's link
     bool report_full = false; // report_url is the headset's page, not the bare GitHub form
     std::string report_saved;
@@ -173,6 +175,11 @@ public:
     // Fills a square canvas. The bar styles leave wider gaps, for the bar's small size.
     static void draw_icon(Canvas& canvas, IconStyle style = IconStyle::Tile);
 
+    // The first version on each What's new page.
+    std::vector<std::size_t> whats_new_pages(const std::vector<VersionNotes>& versions);
+    // Empty when every note fits in two lines and every version fits on one page, else what does not fit.
+    std::string whats_new_overflow(const std::vector<VersionNotes>& versions);
+
 private:
     enum class Screen {
         Main,
@@ -185,7 +192,8 @@ private:
         Actions,
         AdvancedWarning,
         Debug,
-        RestoreDefaults
+        RestoreDefaults,
+        WhatsNew
     };
     // What is on screen, for transitions: a screen, a calibration phase, or the tour.
     enum class View {
@@ -201,7 +209,8 @@ private:
         Actions,
         AdvancedWarning,
         Debug,
-        RestoreDefaults
+        RestoreDefaults,
+        WhatsNew
     };
     enum class DebugTab { Live, Tuning, Status };
     struct Target {
@@ -212,6 +221,7 @@ private:
         std::optional<DebugTab> tab = {};
         std::optional<bool> all_settings = {};
         std::optional<bool> dont_remind = {};
+        std::optional<int> page = {}; // on What's new
     };
 
     Font bold_, regular_;
@@ -221,6 +231,7 @@ private:
     DebugTab debug_tab_ = DebugTab::Live;
     bool debug_all_ = false; // the Tuning tab shows every detector number
     bool dont_remind_ = false; // the switch on the Advanced warning
+    int whats_new_page_ = 0;
     bool saved_dismissed_ = false;
     bool was_calibrating_ = false;
     bool was_touring_ = false;
@@ -262,7 +273,11 @@ private:
     void update_control(const PanelState& state);
     void report_card(const PanelState& state);
     void advanced_warning();
-    void update_card(const UpdateNotice& notice);
+    void update_card(const PanelState& state);
+    std::vector<std::string> note_lines(const std::string& note, float width);
+    float notes_height(const VersionNotes& version, float width);
+    float bullets(const std::vector<std::string>& notes, float x, float y, float width);
+    void whats_new_screen(const PanelState& state);
     void alert_mark(float cx, float cy, float scale, Color color);
     void progress_button(Rect rect, const std::string& label, float progress);
     void knocks_row(Rect rect, const PanelState& state);

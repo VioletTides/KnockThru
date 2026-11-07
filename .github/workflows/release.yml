@@ -40,4 +40,9 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "KnockThru ${GITHUB_REF_NAME}" --generate-notes
+        # The version's notes from whats-new.md go above the generated list of pull requests.
+        run: |
+          awk -v v="## ${GITHUB_REF_NAME#v}" '$0 == v {on = 1; next} /^## / {on = 0} on' assets/whats-new.md > notes.md
+          test -s notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* --title "KnockThru ${GITHUB_REF_NAME}" \
+            --notes-file notes.md --generate-notes

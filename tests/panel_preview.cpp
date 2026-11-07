@@ -664,6 +664,23 @@ int main(int argc, char** argv) {
         updated.update_notice = UpdateNotice{false, "You now have version 0.2.0. You had version 0.1.0."};
         Panel main_panel(KNOCKTHRU_FONTS);
         main_panel.render(updated).write_png(out / "panel-updated.png");
+        updated.version = "1.2.1";
+        updated.update = {UpdateView::Status::Updated, "1.2.0", ""};
+        updated.update_notice = UpdateNotice{false, "You now have version 1.2.1. You had version 1.2.0."};
+        updated.whats_new = {{"1.2.1", {"Added patch notes :3"}}};
+        main_panel.render(updated).write_png(out / "panel-updated-notes.png");
+        updated.update_notice = UpdateNotice{false, "You now have version 1.2.1. You had version 1.0.0."};
+        updated.whats_new = {updated.whats_new[0],
+            {"1.2.0", {"Uses less battery while controllers are off or still"}},
+            {"1.1.0", {"Choose what knocking twice or thrice does in Settings"}},
+            {"1.0.2", {"Knocks on your leg count as surface knocks"}},
+            {"1.0.1", {"Uses less CPU while idle", "Settings opens faster"}}};
+        main_panel.render(updated).write_png(out / "panel-updated-whats-new.png");
+        main_panel.click(590, 466); // What's new
+        updated.update_notice.reset();
+        shot(main_panel, updated, 5, out / "panel-whats-new-1.png");
+        main_panel.click(1060, 68); // Older
+        shot(main_panel, updated, 6, out / "panel-whats-new-2.png");
         updated.update_notice = UpdateNotice{true,
             "Version 0.2.0 was not installed. The download did not match its checksum. "
             "Nothing changed. You still have version 0.1.0."};

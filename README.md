@@ -113,7 +113,7 @@ KnockThru checks GitHub for a new release once a day. When one is out, a yellow 
 
 1. Open **Settings** and press **Install**. The button fills as the release downloads and gets checked.
 2. Press **Restart**. KnockThru starts the new version.
-3. A card says which version you have now. Press **OK**.
+3. A card says which version you have now and what changed. If you skipped versions, press **What's new** to see each one. Press **OK** to close the card.
 
 If the install or the restart fails, a card gives the reason. To check right away, press **Check for updates** in Settings. Updating through FrameDrop works too.
 
@@ -185,7 +185,7 @@ The log is `~/.config/knockthru/application.log`.
 Copy the Linux ARM64 ZIP from the releases page to the Frame, then run:
 
 ```sh
-unzip -oq knockthru-1.2.0-linux-arm64.zip -d ~/KnockThru
+unzip -oq knockthru-1.2.1-linux-arm64.zip -d ~/KnockThru
 ~/KnockThru/knockthru --install
 ```
 
@@ -206,7 +206,7 @@ Steam Frame build (needs Zig 0.16.0) and release ZIP (needs Node.js):
 
 ```sh
 scripts/build-arm64.sh
-node scripts/package.mjs --build-dir build-arm64 --version 1.2.0
+node scripts/package.mjs --build-dir build-arm64 --version 1.2.1
 ```
 
 README images (needs Pillow, numpy, ffmpeg, and Chromium, after the host build):
