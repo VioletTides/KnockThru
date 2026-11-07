@@ -219,6 +219,31 @@ int compare_versions(const std::string& a, const std::string& b) {
     return suffix_a < suffix_b ? -1 : 1;
 }
 
+std::vector<VersionNotes> parse_whats_new(const std::string& text) {
+    std::vector<VersionNotes> out;
+    std::stringstream stream(text);
+    for (std::string line; std::getline(stream, line);) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.rfind("## ", 0) == 0)
+            out.push_back({line.substr(3), {}});
+        else if (line.rfind("- ", 0) == 0 && !out.empty())
+            out.back().notes.push_back(line.substr(2));
+    }
+    return out;
+}
+
+std::vector<VersionNotes> notes_between(
+    const std::vector<VersionNotes>& all, const std::string& from, const std::string& to) {
+    std::vector<VersionNotes> out;
+    for (const auto& version : all)
+        if (compare_versions(version.version, to) <= 0
+            && (from.empty() || compare_versions(version.version, from) > 0) && !version.notes.empty())
+            out.push_back(version);
+    std::stable_sort(out.begin(), out.end(),
+        [](const auto& a, const auto& b) { return compare_versions(a.version, b.version) > 0; });
+    return out;
+}
+
 Release parse_manifest(const std::string& text, bool allow_local) {
     json manifest;
     try {

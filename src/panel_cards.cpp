@@ -121,14 +121,89 @@ void Panel::confirm_card(const std::string& title, const std::string& text, cons
         {card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, Screen::Main, true, true, danger);
 }
 
-// The update result over the screen below it. Only OK responds.
-void Panel::update_card(const UpdateNotice& notice) {
+namespace {
+
+// Notes on the update card and the What's new screen.
+constexpr float kNoteSize = 28, kNoteLeading = 40, kNoteIndent = 36;
+// A version on the What's new screen: its number, its notes, then a gap.
+constexpr float kVersionHead = 56, kVersionGap = 16;
+// The What's new list card, and the width of its notes.
+constexpr float kListTop = 128, kListHeight = Panel::kHeight - kListTop - kMargin, kListPad = 8;
+constexpr float kListNoteWidth = Panel::kWidth - 2 * kMargin - 48 - kNoteIndent;
+
+} // namespace
+
+std::vector<std::string> Panel::note_lines(const std::string& note, float width) {
+    return canvas_.wrap(regular_, note, kNoteSize, width, 99);
+}
+
+float Panel::notes_height(const VersionNotes& version, float width) {
+    float lines = 0;
+    for (const auto& note : version.notes) lines += note_lines(note, width).size();
+    return lines * kNoteLeading;
+}
+
+// A dot and up to two lines for each note, from the first line's middle at `y`. Returns the y after them.
+float Panel::bullets(const std::vector<std::string>& notes, float x, float y, float width) {
+    for (const auto& note : notes) {
+        canvas_.circle(x + 8, y, 4, kText);
+        y = paragraph(regular_, note, x + kNoteIndent, y, kNoteSize, kNoteLeading, width, 2, kText);
+    }
+    return y;
+}
+
+std::vector<std::size_t> Panel::whats_new_pages(const std::vector<VersionNotes>& versions) {
+    std::vector<std::size_t> starts;
+    float used = kListHeight;
+    for (std::size_t i = 0; i < versions.size(); ++i) {
+        const float h = kVersionHead + notes_height(versions[i], kListNoteWidth) + kVersionGap;
+        if (used + h > kListHeight - 2 * kListPad) {
+            starts.push_back(i);
+            used = 0;
+        }
+        used += h;
+    }
+    return starts;
+}
+
+std::string Panel::whats_new_overflow(const std::vector<VersionNotes>& versions) {
+    for (const auto& version : versions) {
+        for (const auto& note : version.notes) {
+            const auto lines = note_lines(note, kListNoteWidth);
+            const bool wide = std::any_of(lines.begin(), lines.end(), [&](const auto& line) {
+                return canvas_.measure(regular_, line, kNoteSize) > kListNoteWidth;
+            });
+            if (lines.size() > 2 || wide)
+                return version.version + " has a note longer than two lines: " + note;
+        }
+        if (kVersionHead + notes_height(version, kListNoteWidth) + kVersionGap > kListHeight - 2 * kListPad)
+            return version.version + " does not fit on one page";
+    }
+    return "";
+}
+
+// The update result over the screen below it. After an update, one version whose notes fit shows them
+// here, and anything more gets a What's new button.
+void Panel::update_card(const PanelState& state) {
+    const auto& notice = *state.update_notice;
     targets_.clear();
     canvas_.rounded_rect({0, 0, kWidth, kHeight}, 28, {0, 0, 0, 150});
-    // The card grows with the text, from one to three lines.
-    const float w = kWidth - 440;
+    const float w = kWidth - 440, note_width = w - 96 - kNoteIndent;
     const auto lines = canvas_.wrap(regular_, notice.text, 28, w - 96, 3);
-    const float h = 290 + 40 * static_cast<float>(lines.size());
+    const auto& versions = notice.failed ? std::vector<VersionNotes>{} : state.whats_new;
+    bool inline_notes = versions.size() == 1;
+    float note_count = 0;
+    if (inline_notes) {
+        for (const auto& note : versions[0].notes) {
+            const auto n = note_lines(note, note_width).size();
+            inline_notes = inline_notes && n <= 2;
+            note_count += n;
+        }
+        inline_notes = inline_notes && note_count <= 5;
+    }
+    // The card grows with the text, from one to three lines, and with the notes.
+    const float notes_h = inline_notes ? 16 + kNoteLeading * note_count : 0;
+    const float h = 290 + 40 * static_cast<float>(lines.size()) + notes_h;
     const Rect card{220, (kHeight - h) / 2, w, h};
     canvas_.rounded_rect(card, kRadius, kSurface);
     const float cx = card.x + 48 + 30, cy = card.y + 78;
@@ -144,9 +219,48 @@ void Panel::update_card(const UpdateNotice& notice) {
         canvas_.text(regular_, line, card.x + 48, y, 28, kText);
         y += 40;
     }
+    if (inline_notes) bullets(versions[0].notes, card.x + 48, y + 16, note_width);
     const float by = card.y + card.h - 48 - 72;
-    button({card.x + card.w - 48 - 200, by, 200, 72}, "OK", PanelClick{PanelCommand::DismissUpdateNotice},
-        std::nullopt, true);
+    const PanelClick dismiss{PanelCommand::DismissUpdateNotice};
+    button({card.x + card.w - 48 - 200, by, 200, 72}, "OK", dismiss, std::nullopt, true);
+    if (!versions.empty() && !inline_notes)
+        button({card.x + card.w - 48 - 200 - 20 - 240, by, 240, 72}, "What's new", dismiss, Screen::WhatsNew);
+}
+
+// The notes of every version since the one before the update, a page at a time, newest first.
+void Panel::whats_new_screen(const PanelState& state) {
+    button({kMargin, 36, 140, 64}, "Back", std::nullopt, Screen::Main);
+    canvas_.text(bold_, "What's new", kMargin + 172, 68, 38, kText);
+    const auto& versions = state.whats_new;
+    const auto starts = whats_new_pages(versions);
+    const int pages = static_cast<int>(starts.size());
+    whats_new_page_ = std::clamp(whats_new_page_, 0, std::max(pages - 1, 0));
+    if (pages > 1) {
+        const float right = kWidth - kMargin;
+        const Rect older{right - 200, 36, 200, 64}, newer{older.x - 20 - 190, 36, 190, 64};
+        const bool first = whats_new_page_ == 0, last = whats_new_page_ == pages - 1;
+        button(newer, "Newer", std::nullopt, std::nullopt, false, !first);
+        if (!first) targets_.back().page = whats_new_page_ - 1;
+        button(older, "Older", std::nullopt, std::nullopt, false, !last);
+        if (!last) targets_.back().page = whats_new_page_ + 1;
+        canvas_.text(regular_, std::to_string(whats_new_page_ + 1) + " of " + std::to_string(pages),
+            newer.x - 24, 68, 26, kDim, Align::Right);
+    }
+    if (versions.empty()) return;
+    const std::size_t begin = starts[whats_new_page_];
+    const std::size_t end = whats_new_page_ + 1 < pages ? starts[whats_new_page_ + 1] : versions.size();
+    const float x = kMargin + 24, w = kWidth - 2 * kMargin;
+    float bottom = kListTop + kListPad;
+    for (std::size_t i = begin; i < end; ++i)
+        bottom += kVersionHead + notes_height(versions[i], kListNoteWidth) + kVersionGap;
+    canvas_.rounded_rect({kMargin, kListTop, w, bottom + kListPad - kListTop}, kRadius, kSurface);
+    float y = kListTop + kListPad;
+    for (std::size_t i = begin; i < end; ++i) {
+        if (i != begin) canvas_.rounded_rect({x, y, w - 48, 1.5f}, 0, kHairline);
+        canvas_.text(bold_, versions[i].version, x, y + 34, 28, kDim);
+        y = bullets(versions[i].notes, x, y + kVersionHead + kNoteLeading / 2, kListNoteWidth)
+            - kNoteLeading / 2 + kVersionGap;
+    }
 }
 
 } // namespace knockthru

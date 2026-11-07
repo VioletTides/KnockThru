@@ -54,6 +54,10 @@ Once a day, KnockThru asks GitHub for the latest release's manifest (`src/update
 4. Copies each file in beside the old one under a temporary name, then renames it into place. A failed copy leaves the old version working.
 5. Restarts into the new version.
 
+After the restart, the new version reads `whats-new.md` from the install folder and picks the versions newer than the one it replaced. If only one version has notes and they fit, the update card lists them. Otherwise the card gets a **What's new** button that opens a paged list. `whats_new_test` fails the build if a note needs more than two lines, or if the current version has no notes.
+
+The release workflow puts the same notes at the top of the GitHub release, above the generated list of pull requests.
+
 ## Bug reports
 
 **Report** in Settings writes a report with versions, SteamVR state, settings, and the end of the log (`src/report.cpp`). To get the report to your phone, it shows a QR code. The code links to a small web page the headset serves on your Wi-Fi (`src/report_server.cpp`). The link carries a random token, and the server stops after 15 minutes. On your phone, the page copies the report and opens a prefilled GitHub issue.

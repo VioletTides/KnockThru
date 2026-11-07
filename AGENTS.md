@@ -19,6 +19,7 @@ CI runs the host build, `ctest`, and the Frame build on every pull request.
 
 ## Rules
 
+- Before a release, add the version's notes to `assets/whats-new.md`. The headset shows them after an update, and the release workflow copies them to GitHub.
 - Keep `src/knock_detector.*` free of OpenVR types. The host tests replay the recordings in `tests/data/` through it.
 - After any detector change, `ctest` must pass: no actions in `play`, `noise`, or `straps`, and no wrong actions in `mixed`. If you change a threshold, update the docs page that explains it.
 - Read poses in `vr::TrackingUniverseStanding`. Poses in the raw universe are wrong on the Frame.

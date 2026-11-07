@@ -22,6 +22,20 @@ struct Release {
 // Compares number by number, like strcmp: 0.2.0 < 0.10.1-rc1 < 0.10.1.
 int compare_versions(const std::string& a, const std::string& b);
 
+// One version's entry in whats-new.md.
+struct VersionNotes {
+    std::string version;
+    std::vector<std::string> notes;
+};
+
+// Reads whats-new.md: "## X.Y.Z" starts a version, and "- " starts a note under it. Other lines are skipped.
+std::vector<VersionNotes> parse_whats_new(const std::string& text);
+
+// The versions newer than `from`, up to and including `to`, newest first. An empty `from` means an older
+// KnockThru that did not record its version, so every version up to `to` counts.
+std::vector<VersionNotes> notes_between(
+    const std::vector<VersionNotes>& all, const std::string& from, const std::string& to);
+
 // Throws without a usable ZIP entry. ZIP URLs must be HTTPS, or file:// with `allow_local`.
 Release parse_manifest(const std::string& text, bool allow_local = false);
 

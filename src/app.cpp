@@ -231,6 +231,10 @@ App::App() {
         const auto had = updated_from_->empty() ? "" : " You had version " + *updated_from_ + ".";
         state_.update_notice =
             UpdateNotice{false, std::string("You now have version ") + kVersion + "." + had};
+        std::ifstream notes(install_directory() / "whats-new.md");
+        std::stringstream text;
+        text << notes.rdbuf();
+        state_.whats_new = notes_between(parse_whats_new(text.str()), *updated_from_, kVersion);
     }
 }
 

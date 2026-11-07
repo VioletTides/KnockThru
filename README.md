@@ -101,7 +101,7 @@ KnockThru checks GitHub for a new release once a day. When one is out, a yellow 
 
 1. Open **Settings** and press **Install**. The button fills as the release downloads and gets checked.
 2. Press **Restart**. KnockThru starts the new version.
-3. A card says which version you have now. Press **OK**.
+3. A card says which version you have now and what changed. If you skipped versions, press **What's new** to see each one. Press **OK** to close the card.
 
 If the install or the restart fails, a card gives the reason. To check right away, press **Check for updates** in Settings. Updating through FrameDrop works too.
 
