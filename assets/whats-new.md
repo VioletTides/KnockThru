@@ -3,6 +3,11 @@
 The What's new screen in the headset reads this file. Newest version first.
 Each note starts with "- " and must fit in two lines. ctest checks the fit.
 
+## 1.3.0
+- Advanced in Settings shows why each knock counted or not
+- Tune knock detection live in Advanced
+- A full disk can no longer empty your settings
+
 ## 1.2.1
 - Added patch notes :3
 
