@@ -7,7 +7,7 @@ Each note starts with "- " and must fit in two lines. ctest checks the fit.
 - A full disk or a broken file can no longer reset your settings
 - Updates download only over https
 - Clearer words and easier-to-read text on every screen
-- Advanced in Settings shows why each knock counted or not, and tunes detection live
+- Added Advanced settings for tuning knock detection
 
 ## 1.2.1
 - Added patch notes :3
