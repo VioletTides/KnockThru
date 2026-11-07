@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(KnockThru VERSION 1.2.0 LANGUAGES CXX)
+project(KnockThru VERSION 1.2.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -75,3 +75,10 @@ add_test(NAME debug_render COMMAND debug_render_test)
 add_executable(panel_preview tests/panel_preview.cpp)
 target_link_libraries(panel_preview PRIVATE knockthru_ui)
 target_compile_definitions(panel_preview PRIVATE KNOCKTHRU_FONTS="${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts")
+
+add_executable(whats_new_test tests/whats_new_test.cpp)
+target_link_libraries(whats_new_test PRIVATE knockthru_ui)
+target_compile_options(whats_new_test PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_definitions(whats_new_test PRIVATE KNOCKTHRU_FONTS="${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts"
+    KNOCKTHRU_WHATS_NEW="${CMAKE_CURRENT_SOURCE_DIR}/assets/whats-new.md" KNOCKTHRU_VERSION="${PROJECT_VERSION}")
+add_test(NAME whats_new COMMAND whats_new_test)

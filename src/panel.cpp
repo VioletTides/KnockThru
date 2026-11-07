@@ -262,6 +262,7 @@ const Canvas& Panel::render(
     case Screen::AdvancedWarning: view = View::AdvancedWarning; break;
     case Screen::Debug: view = View::Debug; break;
     case Screen::RestoreDefaults: view = View::RestoreDefaults; break;
+    case Screen::WhatsNew: view = View::WhatsNew; break;
     case Screen::Learn:
     case Screen::SkipTour: break;
     }
@@ -301,6 +302,8 @@ const Canvas& Panel::render(
         advanced_warning();
     } else if (screen_ == Screen::Debug) {
         debug_screen(state);
+    } else if (screen_ == Screen::WhatsNew) {
+        whats_new_screen(state);
     } else if (screen_ == Screen::RestoreDefaults) {
         debug_screen(state);
         confirm_card("Restore defaults?",
@@ -309,7 +312,7 @@ const Canvas& Panel::render(
     } else {
         learn_screen(state);
     }
-    if (state.update_notice && !calibration && !tour_on_screen) update_card(*state.update_notice);
+    if (state.update_notice && !calibration && !tour_on_screen) update_card(state);
 
     // A new view rises into place. The first render has nothing to move from.
     // A card appears over its screen in place, so only the other views rise.
@@ -344,11 +347,13 @@ std::optional<PanelClick> Panel::click(float x, float y) {
             if (screen_ == Screen::Pick && *target.go_to == Screen::Settings) saved_dismissed_ = true;
             screen_ = *target.go_to;
             if (screen_ == Screen::AdvancedWarning) dont_remind_ = false;
+            if (screen_ == Screen::WhatsNew) whats_new_page_ = 0;
             if (target.learn) learn_kind_ = *target.learn;
         }
         if (target.tab) debug_tab_ = *target.tab;
         if (target.all_settings) debug_all_ = *target.all_settings;
         if (target.dont_remind) dont_remind_ = *target.dont_remind;
+        if (target.page) whats_new_page_ = *target.page;
         return target.click ? target.click : PanelClick{PanelCommand::Navigate};
     }
     return std::nullopt;
