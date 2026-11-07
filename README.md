@@ -10,11 +10,11 @@ Knock twice to turn on passthrough and see your room without taking off your Ste
 
 ## How it works
 
-KnockThru runs on the Frame itself. It reads controller and headset motion from SteamVR about once a millisecond, finds knocks in that motion, and clicks Room View on the SteamVR dashboard. Every change to the detector gets tested against motion recorded on a Frame.
+KnockThru runs on the Frame itself. It watches how your controllers and headset move, and when it hears a knock, it presses Room View on the SteamVR dashboard for you. Every change gets tested against real knocks recorded on a Frame.
 
 - [How the app fits together](docs/how-the-app-works.md): what runs where, with diagrams
-- [How knock detection works](docs/knock-detection.md): each rule, and the recording that forced it
-- [The test recordings](docs/test-recordings.md): what the tests replay, and what they must find
+- [How knock detection works](docs/knock-detection.md): how it tells a knock from a swing of your arm
+- [The test recordings](docs/test-recordings.md): the real motion every change gets tested against
 
 ## Install
 
@@ -231,7 +231,7 @@ To replay the knock recording from a bug report, unzip the report and run this:
 build/bin/detector_test knockthru-knocks.csv.gz
 ```
 
-[`docs/`](docs/README.md) explains how knock detection and calibration work, how they were tuned, and how the app fits together.
+[`docs/`](docs/README.md) explains how knock detection and calibration work, and how the app fits together.
 
 </details>
 
