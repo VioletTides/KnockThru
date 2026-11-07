@@ -3,6 +3,9 @@
 The What's new screen in the headset reads this file. Newest version first.
 Each note starts with "- " and must fit in two lines. ctest checks the fit.
 
+## 1.2.1
+- Added patch notes :3
+
 ## 1.2.0
 - Uses less battery while controllers are off or still
 
