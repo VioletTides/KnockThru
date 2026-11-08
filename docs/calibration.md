@@ -1,8 +1,6 @@
 # How calibration works
 
-Everyone knocks a little differently. Some people knock hard, some barely touch. The default thresholds catch most knocks, but soft ones can slip under them. Calibration measures 10 of your knocks and sets the thresholds for that kind of knock to fit you.
-
-The code is in `src/calibrator.cpp`. The saved result goes to `~/.config/knockthru/calibration.json`.
+Everyone knocks a little differently. Some people knock hard, and some barely touch. The default thresholds catch most knocks, but soft ones can slip under them. Calibration measures 10 of your knocks and fits the thresholds for that kind of knock to you.
 
 ## The walkthrough
 
@@ -10,73 +8,45 @@ The code is in `src/calibrator.cpp`. The saved result goes to `~/.config/knockth
 
 1. **Pick** the kind of knock to calibrate: together, surface, or headset.
 2. **Learn** how to knock it, then press Start.
-3. **Record** 10 single knocks within 90 s. A ring fills before each one. One buzz means the knock counted.
-4. **Try** the new thresholds by knocking twice. Save unlocks only if the try works. The try never switches passthrough.
+3. **Record** 10 single knocks within 90 s. A ring fills before each one, and one buzz means the knock counted.
+4. **Try** the new thresholds by knocking twice. Save only unlocks once the try works, and the try never switches passthrough.
 
-The first 3 s after Start don't count, because the hand coming down from pressing Start once counted as a knock. After each counted knock, the next one has to wait 1 s, which is how long the ring takes to fill.
+The first 3 s after Start don't count, so your hand coming down from the Start button isn't taken for a knock. After each counted knock, the next one waits 1 s, while the ring fills.
 
-You can also calibrate from a terminal on the Frame with `knockthru --calibrate together` (or `surface`, or `headset`).
+You can also calibrate from a terminal on the Frame with `knockthru --calibrate together` (or `surface`, or `headset`). The result goes to `~/.config/knockthru/calibration.json`.
 
-## Catching soft knocks without catching everything else
+## How it hears soft knocks
 
-To hear soft knocks, calibration lowers the spike thresholds while it records. Surface knocks need 30 m/s² instead of 60, and together and headset knocks need 12 instead of 40.
+While it records, calibration lowers the spike thresholds a long way: surface knocks need 30 m/s² instead of 60, and together and headset knocks need 12 instead of 40. That low, almost any movement looks like a knock, so calibration is much pickier about which spikes it counts.
 
-At those thresholds, almost anything looks like a knock. The `play` and `noise` recordings gave 84 and 82 knock candidates in 45 s each, about one a second. Two more problems showed up during a real surface calibration on the Frame:
+Spikes less than 0.25 s apart are treated as one burst, and KnockThru judges the burst by its fastest knock. A burst counts when:
 
-- Starting a hard swing from rest spiked at 37 m/s², 0.09 to 0.14 s before the real knock. That early spike took the count instead of the knock, which spiked at 146 and 461.
-- A slow hand movement counted as a knock.
+1. Nothing else happened in the 0.6 s before it. Waving makes clusters of spikes, and people pause between calibration knocks.
+2. The controller came in at 0.25 m/s or faster. This approach speed is the controller's fastest speed in the 100 ms before the spike.
+3. For surface knocks, the controller was nearly still beforehand, averaging under 0.6 m/s from 0.6 s to 0.15 s before the knock. Starting a swing from rest can spike before the real knock lands, and this check skips that early spike.
+4. The spike reaches the floor for its kind (see below). A knock under the floor could never trigger anything, so the walkthrough says "too light" instead of counting it.
 
-So calibration is pickier about which knocks count. Knocks less than 0.25 s apart form a burst, and the burst is judged by its knock with the fastest approach. A burst counts when:
-
-1. Nothing else happened in the 0.6 s before it. Waving makes clusters of spikes, and people wait between calibration knocks.
-2. Its knock approached at 0.25 m/s or faster. Approach speed is the controller's fastest speed in the 100 ms before the spike.
-3. For surface knocks, the controller was nearly still beforehand. It must have averaged under 0.6 m/s from 0.6 to 0.15 s before the knock. Real surface knocks averaged 0.02 to 0.51 m/s there, and false ones in `play` and `noise` mostly 0.64 to 2.8 m/s.
-4. Its spike reaches the floor for its kind (see below). A knock under the floor could never trigger anything, so the walkthrough says "too light" instead of counting it.
-
-Together and headset knocks skip the stillness check. Their false knocks never got past the first two rules, and a headset knock starts with your arm rising.
-
-With these rules, calibrating on the 90 s of `play` and `noise` counts no knocks at all. Calibrating on the `together`, `surface`, and `headset` recordings counts 10 of 10. In the Frame session above, the hard knocks count and the swing starts and slow movement don't.
+Together and headset knocks skip the stillness check, because a headset knock starts with your arm rising.
 
 ## Why approach speed matters
 
-The spike is a noisy measure of how hard you knocked. It divides a velocity change by the time between two controller updates, and that time varies from 2 to 7 ms. In the knock recordings, the hardest tenth of spikes ran 2.8 to 8.3 times the softest tenth.
-
-Approach speed is steadier. The fastest tenth of approaches ran only 1.7 to 2.5 times the slowest tenth. Slow movement also falls well under it. That's why calibration sets an approach threshold as well as a spike threshold.
+The spike alone is a rough measure of how hard you knocked. The spike divides a change in speed by the time between two controller updates, and that time wobbles between 2 and 7 ms, so the same knock can give quite different spikes. How fast the controller came in is much steadier, and slow hand movements fall well under it. That's why calibration sets an approach threshold as well as a spike threshold.
 
 ## Turning 10 knocks into thresholds
 
 Each kind of knock gets two thresholds:
 
 - **Spike threshold:** 60 percent of your weakest recorded spike. It never goes below the floor for that kind, and never above 150 m/s².
-- **Approach threshold:** 55 percent of your second slowest approach. The second slowest, not the slowest, so one odd knock can't drag it down.
+- **Approach threshold:** 55 percent of your second slowest approach. Using the second slowest means one odd knock can't drag it down.
 
-The floors come from replaying the recordings:
+The floors stop calibration from setting a threshold so low that everyday movement gets through:
 
 | Kind | Floor | What goes wrong below it |
 | --- | --- | --- |
-| Surface | 50 m/s² | Replays split real surface doubles apart |
-| Together | 30 m/s² | The strap fitting bumps in the `straps` recording form a double |
-| Headset | 20 m/s² | Soft rebounds slip past the 105 ms gap and turn doubles into triples |
+| Surface | 50 m/s² | Real surface doubles split apart |
+| Together | 30 m/s² | Fitting the controller straps can bump them together into a double |
+| Headset | 20 m/s² | Soft rebounds count as an extra knock and turn doubles into triples |
 
-A calibration file saved under an older, lower floor loads with the current one.
+If a saved threshold is below its floor, KnockThru uses the floor.
 
-To use the approach threshold, a set of knocks needs at least one knock that reaches it. Two other ways failed on the recordings:
-
-- Dropping slow knocks before grouping them let leftover spikes form false doubles in `play` and `noise`. Slow knocks still join their set, so clapping runs stay rejected.
-- Making every knock in a set reach the threshold lost most together doubles, because the second knock of a quick double starts from the rebound and comes in slow.
-
-### The slider that got cut
-
-An earlier version had a sensitivity slider from 30 to 80 percent, in place of the fixed 55. In the replays, anything stricter than 55 percent only lost real doubles. 30 percent matched 55 on surface and headset knocks and did a little better on together knocks, but it leaves less room for movement the recordings don't have. The slider didn't earn its place, so the walkthrough uses 55 percent.
-
-## How well it works
-
-The tests calibrate each kind on its own recording, apply the result, and replay every recording. These are the results today:
-
-| Kind | Spike threshold | Approach threshold | Doubles found | `mixed` right, of 24 |
-| --- | --- | --- | --- | --- |
-| Together | 31.2 m/s² | 0.24 m/s | 19 | 22 |
-| Surface | 55.6 m/s² | 0.68 m/s | 18 | 23 |
-| Headset | 20 m/s² | 0.20 m/s | 22 | 23 |
-
-Every row gives no actions in `play` and `noise`, and no wrong actions in `mixed`. With the default thresholds, the same recordings give 20 together, 18 surface, and 22 headset doubles, and 23 of 24 right in `mixed`.
+Only one knock in a set has to reach the approach threshold. The second knock of a quick double starts from the rebound of the first, so it often comes in slow.

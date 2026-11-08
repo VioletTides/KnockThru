@@ -10,11 +10,11 @@ Knock twice to turn on passthrough and see your room without taking off your Ste
 
 ## How it works
 
-KnockThru runs on the Frame itself. It reads controller and headset motion from SteamVR about once a millisecond, finds knocks in that motion, and clicks Room View on the SteamVR dashboard. Every change to the detector gets tested against motion recorded on a Frame.
+KnockThru runs on the Frame itself. It watches how your controllers and headset move, and when it hears a knock, it presses Room View on the SteamVR dashboard for you. Every change gets tested against real knocks recorded on a Frame.
 
 - [How the app fits together](docs/how-the-app-works.md): what runs where, with diagrams
-- [How knock detection works](docs/knock-detection.md): each rule, and the recording that forced it
-- [The test recordings](docs/test-recordings.md): what the tests replay, and what they must find
+- [How knock detection works](docs/knock-detection.md): how it tells a knock from a swing of your arm
+- [The test recordings](docs/test-recordings.md): the real motion every change gets tested against
 
 ## Install
 
@@ -92,7 +92,7 @@ Open the SteamVR dashboard and pick the **KnockThru** tab to do everything by ha
 - **KnockThru On**: turns knocking off for a while without quitting the app
 - **Controllers together**, **Controller on a surface**, **Knock on the headset**: pick which knock kinds count
 - **Knocks in** your game: turns knocks off only in the game you're playing, for games where you knock things on purpose
-- **Settings**: updates, Calibrate, Knock actions, Sounds, Guided tour, Report, and Factory reset
+- **Settings**: updates, Calibrate, Knock actions, Sounds, Guided tour, Report, Advanced, and Factory reset
 
 ## Calibrate
 
@@ -217,7 +217,7 @@ python3 scripts/readme_media.py
 
 To write only some images, name them, as in `python3 scripts/readme_media.py hero timing`. The hero, knock-kinds, and timing images skip the panel renders and take under 40 s each.
 
-The hero's room is `images/photos/living-room.jpg`, a CC0 photo from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Living_room_(Unsplash).jpg). `room_scene()` in `scripts/readme_media.py` turns it gray and tints it with SteamVR's default passthrough hue.
+The hero's room is `images/photos/living-room.jpg`, a CC0 photo from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Living_room_(Unsplash).jpg). `room_scene()` in `scripts/readme_media.py` turns it grey and tints it with SteamVR's default passthrough hue.
 
 The controller and headset sprites in `images/cad/` come from Valve's CAD files. To render them again, download the STEP files from [Valve's Steam Frame repository](https://gitlab.steamos.cloud/SteamHardware/SteamFrame) into one folder. Then run this, which needs cadquery and opencv-python and takes about 12 minutes:
 
@@ -231,7 +231,7 @@ To replay the knock recording from a bug report, unzip the report and run this:
 build/bin/detector_test knockthru-knocks.csv.gz
 ```
 
-[`docs/`](docs/README.md) explains how knock detection and calibration work, how they were tuned, and how the app fits together.
+[`docs/`](docs/README.md) explains how knock detection and calibration work, and how the app fits together.
 
 </details>
 
