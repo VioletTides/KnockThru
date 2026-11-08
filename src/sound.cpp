@@ -143,8 +143,7 @@ private:
 
     void run() {
         PulseSimple pulse;
-        const auto path = click_file();
-        const auto clip = path.empty() ? std::nullopt : load_clip(path);
+        const auto clip = load_clip(click_file());
         if (!clip || !pulse.load()) return;
         const PulseSimple::SampleSpec spec{PulseSimple::kS16LE, clip->rate, clip->channels};
         // A 20 ms target buffer keeps the click close to the press.

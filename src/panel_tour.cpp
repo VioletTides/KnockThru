@@ -1,7 +1,6 @@
 #include "panel.hpp"
 #include "panel_style.hpp"
 
-#include <algorithm>
 #include <cmath>
 
 namespace knockthru {
@@ -125,9 +124,10 @@ void Panel::tour_screen(const PanelState& state, const TourView& tour) {
             switch_row({kMargin, 136 + k * 112.0f, w, 112},
                 PanelClick{PanelCommand::Kind, static_cast<KnockKind>(k)}, state.enabled[k], kKindTitles[k],
                 k == 0 ? "" : kKindOnce[k], true, k > 0);
-        if (!state.enabled[0] && !state.enabled[1] && !state.enabled[2])
+        const bool any_kind = state.enabled[0] || state.enabled[1] || state.enabled[2];
+        if (!any_kind)
             canvas_.text(regular_, "Turn on at least one knock to continue", kMargin, 530, 28, kError);
-        tour_buttons(false, false, state.enabled[0] || state.enabled[1] || state.enabled[2]);
+        tour_buttons(false, false, any_kind);
         break;
     }
     case Step::Calibrate: {

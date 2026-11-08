@@ -9,49 +9,6 @@ namespace knockthru {
 
 using namespace panel_style;
 
-namespace panel_style {
-
-void draw_sprite(Canvas& canvas, const sprites::Sprite& sprite, float x, float y, float height, float angle) {
-    const float a = angle * anim::kPi / 180, c = std::cos(a), s = std::sin(a);
-    const auto place = [&](const std::vector<std::vector<float>>& source) {
-        std::vector<std::vector<Point>> rings;
-        for (const auto& ring : source) {
-            auto& out = rings.emplace_back();
-            for (std::size_t i = 0; i + 1 < ring.size(); i += 2) {
-                const float px = ring[i] * height, py = ring[i + 1] * height;
-                out.push_back({x + px * c + py * s, y - px * s + py * c});
-            }
-        }
-        return rings;
-    };
-    canvas.polygon(place(sprite.body), kText);
-    if (!sprite.accent.empty()) canvas.polygon(place(sprite.accent), kAccent);
-}
-
-void burst(Canvas& canvas, float x, float y, std::optional<float> played, float scale) {
-    if (!played) return;
-    const float spread = anim::ease_out(*played), fade = 1 - anim::ease_in_out(*played);
-    for (int k = 0; k < 8; ++k) {
-        const float a = k * anim::kPi / 4 + anim::kPi / 8, dx = std::cos(a), dy = std::sin(a);
-        const float inner = (20 + 14 * spread) * scale, outer = inner + (8 - 2 * spread) * scale;
-        // A short ray with round ends, shaped like the rays in images/logo.svg. A single polygon keeps the
-        // faded color from doubling where separate end circles would overlap the bar.
-        const float half = 3.2f * scale;
-        std::vector<Point> ray;
-        for (const float end : {outer, inner}) {
-            const float cx = x + dx * end, cy = y + dy * end,
-                        turn = end == outer ? -anim::kPi / 2 : anim::kPi / 2;
-            for (int i = 0; i <= 8; ++i) {
-                const float b = a + turn + i * anim::kPi / 8;
-                ray.push_back({cx + std::cos(b) * half, cy + std::sin(b) * half});
-            }
-        }
-        canvas.polygon({ray}, faded(kAccent, fade));
-    }
-}
-
-} // namespace panel_style
-
 Panel::Panel(const std::filesystem::path& fonts)
     : bold_(fonts / "NotoSans-SemiBold.ttf"), regular_(fonts / "NotoSans-Regular.ttf"),
       canvas_(kWidth, kHeight), scratch_(kWidth, kHeight), background_(kWidth, kHeight) {
@@ -245,37 +202,22 @@ const Canvas& Panel::render(
     }
     was_calibrating_ = calibration.has_value();
     if ((screen_ == Screen::AdvancedWarning || debug_open()) && !state.debug) screen_ = Screen::Settings;
-    if (state.tour && !was_touring_) screen_ = Screen::Main; // just started
-    if (!state.tour && was_touring_) screen_ = Screen::Main; // finished or skipped
+    if (state.tour.has_value() != was_touring_) screen_ = Screen::Main; // started, finished, or skipped
     was_touring_ = state.tour.has_value();
     // The tour's Calibrate step hands over to the Learn screen, whose Back returns to the tour.
     const bool tour_on_screen = state.tour && screen_ != Screen::Learn;
 
-    View view = View::Learn;
-    switch (screen_) {
-    case Screen::Main: view = View::Main; break;
-    case Screen::Settings: view = View::Settings; break;
-    case Screen::Reset: view = View::Reset; break;
-    case Screen::Report: view = View::Report; break;
-    case Screen::Pick: view = View::Pick; break;
-    case Screen::Actions: view = View::Actions; break;
-    case Screen::AdvancedWarning: view = View::AdvancedWarning; break;
-    case Screen::Debug: view = View::Debug; break;
-    case Screen::RestoreDefaults: view = View::RestoreDefaults; break;
-    case Screen::WhatsNew: view = View::WhatsNew; break;
-    case Screen::Learn:
-    case Screen::SkipTour: break;
-    }
+    Screen view = screen_ == Screen::SkipTour ? Screen::Learn : screen_;
     std::optional<TourView::Step> tour_step;
     if (calibration) {
         using Phase = CalibrationView::Phase;
-        view = calibration->phase == Phase::Recording ? View::Record : View::Try;
-        if (view == View::Record)
+        view = calibration->phase == Phase::Recording ? Screen::Record : Screen::Try;
+        if (view == Screen::Record)
             record_screen(state, *calibration);
         else
             try_screen(state, *calibration);
     } else if (tour_on_screen) {
-        view = View::Tour;
+        view = Screen::Tour;
         tour_step = state.tour->step;
         tour_screen(state, *state.tour);
         if (screen_ == Screen::SkipTour)
@@ -316,9 +258,10 @@ const Canvas& Panel::render(
 
     // A new view rises into place. The first render has nothing to move from.
     // A card appears over its screen in place, so only the other views rise.
-    const auto screen_below = [](std::optional<View> v) -> std::optional<View> {
-        if (v == View::Reset || v == View::Report || v == View::AdvancedWarning) return View::Settings;
-        if (v == View::RestoreDefaults) return View::Debug;
+    const auto screen_below = [](std::optional<Screen> v) -> std::optional<Screen> {
+        if (v == Screen::Reset || v == Screen::Report || v == Screen::AdvancedWarning)
+            return Screen::Settings;
+        if (v == Screen::RestoreDefaults) return Screen::Debug;
         return std::nullopt;
     };
     const bool overlay = view_ && (screen_below(view) == *view_ || screen_below(*view_) == view);
@@ -334,8 +277,9 @@ const Canvas& Panel::render(
             anim::ease_out(entering));
     }
     transitioning_ = entering < 1;
-    animating_ = view == View::Pick || view == View::Learn || view == View::Record || view == View::Try
-        || view == View::Tour || view == View::Debug || view == View::RestoreDefaults || entering < 1;
+    animating_ = view == Screen::Pick || view == Screen::Learn || view == Screen::Record
+        || view == Screen::Try || view == Screen::Tour || view == Screen::Debug
+        || view == Screen::RestoreDefaults || entering < 1;
     return canvas_;
 }
 

@@ -21,8 +21,6 @@
 
 namespace knockthru {
 
-constexpr std::array<const char*, 3> kDeviceNames{"hmd", "left", "right"}; // indexed by Device
-
 Vec3 position_of(const vr::TrackedDevicePose_t& pose);
 Vec3 velocity_of(const vr::TrackedDevicePose_t& pose);
 
@@ -59,10 +57,6 @@ public:
             const auto& pose = poses_[indices_[i]];
             if (pose.bPoseIsValid) callback(static_cast<Device>(i), pose);
         }
-    }
-
-    static void write_csv(std::ostream& out, double t, Device device, const vr::TrackedDevicePose_t& pose) {
-        write_csv_row(out, t, device, position_of(pose), velocity_of(pose), pose.vAngularVelocity.v);
     }
 
 private:

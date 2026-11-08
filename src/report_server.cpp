@@ -91,7 +91,6 @@ struct Request {
 // leaves, stalls, or sends an oversized line.
 std::optional<Request> read_request(int client, const std::atomic<bool>& stop) {
     constexpr std::size_t kMaxLine = 8192;
-    // Short receive waits, so the stop check runs at least every 200 ms.
     timeval timeout{0, 200000};
     ::setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
     std::string request;
@@ -240,7 +239,7 @@ button,a.button{display:block;width:100%;box-sizing:border-box;padding:18px;bord
  background:var(--accent);color:#f5f7fa;font:600 20px system-ui,sans-serif;text-align:center;text-decoration:none;cursor:pointer}
 button:hover,a.button:hover{filter:brightness(1.15)}
 button:active,a.button:active{transform:scale(0.98)}
-button:focus-visible,a:focus-visible{outline:3px solid var(--link);outline-offset:3px}
+button:focus-visible,a:focus-visible,summary:focus-visible,textarea:focus-visible{outline:3px solid var(--link);outline-offset:3px}
 ol{padding-left:24px;margin:20px 0}
 li{margin:0 0 8px}
 label{display:block;margin-top:8px;color:var(--dim)}
@@ -251,8 +250,6 @@ textarea{width:100%;box-sizing:border-box;height:220px;margin-top:8px;background
  border:1px solid var(--dim);border-radius:16px;padding:12px;font:16px/1.4 ui-monospace,monospace}
 details{margin-top:24px;color:var(--dim)}
 summary{cursor:pointer;display:flex;align-items:center;min-height:44px}
-summary:focus-visible{outline:3px solid var(--link);outline-offset:3px}
-textarea:focus-visible{outline:3px solid var(--link);outline-offset:3px}
 @media (prefers-reduced-motion: reduce){button:active,a.button:active{transform:none}}
 </style></head><body><main>
 <h1>KnockThru bug report</h1>
@@ -301,13 +298,12 @@ ReportServer::ReportServer(std::string report, std::string issue_link)
     static const char* digits = "0123456789abcdef";
     for (int i = 0; i < 16; ++i) token_ += digits[random() % 16];
 
-    // The kernel picks the port. SteamOS's firewall opens TCP ports 1024 to 65535.
     listener_ = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (listener_ < 0) throw std::runtime_error("Cannot create a socket");
     sockaddr_in bind_address{};
     bind_address.sin_family = AF_INET;
     bind_address.sin_addr.s_addr = htonl(INADDR_ANY);
-    bind_address.sin_port = 0; // the kernel picks a free port, above 1024
+    bind_address.sin_port = 0;
     socklen_t size = sizeof bind_address;
     if (::bind(listener_, reinterpret_cast<sockaddr*>(&bind_address), sizeof bind_address) < 0
         || ::listen(listener_, 8) < 0

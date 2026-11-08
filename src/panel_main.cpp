@@ -1,7 +1,6 @@
 #include "panel.hpp"
 #include "panel_style.hpp"
 
-#include <algorithm>
 #include <cmath>
 
 namespace knockthru {

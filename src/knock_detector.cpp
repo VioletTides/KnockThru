@@ -257,22 +257,4 @@ std::optional<KnockEvent> KnockDetector::poll(double now) {
     return std::nullopt;
 }
 
-std::deque<Knock> KnockDetector::take_knocks() {
-    std::deque<Knock> knocks;
-    knocks.swap(log_);
-    return knocks;
-}
-
-std::deque<Candidate> KnockDetector::take_candidates() {
-    std::deque<Candidate> candidates;
-    candidates.swap(candidates_);
-    return candidates;
-}
-
-std::deque<Sequence> KnockDetector::take_sequences() {
-    std::deque<Sequence> sequences;
-    sequences.swap(sequences_);
-    return sequences;
-}
-
 } // namespace knockthru

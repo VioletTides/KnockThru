@@ -6,7 +6,6 @@
 #include "update.hpp"
 
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <deque>
 #include <fstream>

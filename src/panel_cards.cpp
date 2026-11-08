@@ -3,7 +3,6 @@
 
 #include <qrcodegen.hpp>
 
-#include <algorithm>
 #include <cmath>
 
 namespace knockthru {
@@ -66,10 +65,7 @@ void Panel::report_card(const PanelState& state) {
     for (int i = 0; i < 3; ++i) {
         canvas_.circle(x + 22, y, 22, kAccent);
         canvas_.text(bold_, std::to_string(i + 1), x + 22, y, 26, kText, Align::Center);
-        const auto lines = canvas_.wrap(regular_, steps[i], 28, text_w - 64, 2);
-        for (std::size_t k = 0; k < lines.size(); ++k)
-            canvas_.text(regular_, lines[k], x + 64, y + k * 40, 28, kText);
-        y += 40 * lines.size() + 36;
+        y = paragraph(regular_, steps[i], x + 64, y, 28, 40, text_w - 64, 2, kText) + 36;
     }
     const std::string hint = state.report_full ? "Hold the phone up to a lens, on the Frame's Wi-Fi"
                                                : "The Frame is offline: save the report below";

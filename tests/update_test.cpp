@@ -7,21 +7,18 @@
 
 #include <atomic>
 #include <chrono>
-#include <functional>
-#include <thread>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
-#include <fstream>
-#include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 using namespace knockthru;
@@ -32,6 +29,28 @@ namespace {
 std::string manifest(const std::string& url, const std::string& hash) {
     return R"({"schema": "framedrop.install/v1", "name": "KnockThru", "files": [{"url": ")" + url
         + R"(", "sha256": ")" + hash + R"("}]})";
+}
+
+// Fetches `url` into `out` through curl and returns curl's exit code.
+int get(const std::string& url, const fs::path& out) {
+    return run_program({"curl", "--fail", "--silent", "--max-time", "5", "--output", out.string(), url});
+}
+
+// Connects `fd` to the report server at `url`, an http://127.0.0.1:port/ link.
+void connect_to(int fd, const std::string& url) {
+    const auto rest = url.substr(7);
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(static_cast<std::uint16_t>(std::stoi(rest.substr(rest.find(':') + 1))));
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    ::connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof address);
+}
+
+// The seconds `body` takes to run.
+double timed(const std::function<void()>& body) {
+    const auto start = std::chrono::steady_clock::now();
+    body();
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
 } // namespace
@@ -100,10 +119,6 @@ int main() {
         ReportServer server("line one\n<b>log</b>\n", issue_url({"0.1.0", "2.18.2", "on", ""}));
         const auto page = root / "page.html", file = root / "report.txt", other = root / "other";
         fs::create_directories(root);
-        const auto get = [](const std::string& url, const fs::path& out) {
-            return run_program(
-                {"curl", "--fail", "--silent", "--max-time", "5", "--output", out.string(), url});
-        };
         check(server.url().rfind("http://", 0) == 0, "report server has an http link: " + server.url());
         check(get(server.url(), page) == 0 && read(page).find("&lt;b&gt;log&lt;/b&gt;") != std::string::npos,
             "report server serves the page with the report escaped");
@@ -152,28 +167,16 @@ int main() {
     {
         // A connection that sends nothing, like a browser's spare one, holds the server at most 300 ms.
         auto server = std::make_unique<ReportServer>("report\n", "https://example.com");
-        const auto rest = server->url().substr(7);
-        const int port = std::stoi(rest.substr(rest.find(':') + 1));
         const int idle = ::socket(AF_INET, SOCK_STREAM, 0);
-        sockaddr_in address{};
-        address.sin_family = AF_INET;
-        address.sin_port = htons(static_cast<std::uint16_t>(port));
-        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        ::connect(idle, reinterpret_cast<sockaddr*>(&address), sizeof address);
+        connect_to(idle, server->url());
         usleep(50000);
-        auto start = std::chrono::steady_clock::now();
-        const auto page = root / "idle-page.html";
-        const int got = run_program(
-            {"curl", "--fail", "--silent", "--max-time", "5", "--output", page.string(), server->url()});
-        const double waited = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        int got = 0;
+        const double waited = timed([&] { got = get(server->url(), root / "idle-page.html"); });
         check(got == 0 && waited < 1,
             "an idle connection delays the page under 1 s: " + std::to_string(waited) + " s");
         ::close(idle);
         // Closing the report card stops the server without waiting out its accept poll.
-        start = std::chrono::steady_clock::now();
-        server.reset();
-        const double stopping =
-            std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        const double stopping = timed([&] { server.reset(); });
         check(stopping < 0.05, "the report server stops at once: " + std::to_string(stopping) + " s");
     }
 
@@ -194,24 +197,15 @@ int main() {
         // A phone that stops reading mid-download must not hold up Done, which destroys the server.
         auto server =
             std::make_unique<ReportServer>(std::string(20 * 1024 * 1024, 'x'), "https://example.com");
-        const auto rest = server->url().substr(7);
-        const int port = std::stoi(rest.substr(rest.find(':') + 1));
-        const auto path = rest.substr(rest.find('/')) + "/report/knockthru-report.txt";
+        const auto path = server->url().substr(server->url().find('/', 7)) + "/report/knockthru-report.txt";
         const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
         int small = 4096;
         ::setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &small, sizeof small);
-        sockaddr_in address{};
-        address.sin_family = AF_INET;
-        address.sin_port = htons(static_cast<std::uint16_t>(port));
-        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        ::connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof address);
+        connect_to(fd, server->url());
         const auto request = "GET " + path + " HTTP/1.1\r\n\r\n";
         ::send(fd, request.data(), request.size(), 0);
         usleep(500000); // the server is now waiting on a full socket
-        const auto start = std::chrono::steady_clock::now();
-        server.reset();
-        const double seconds =
-            std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        const double seconds = timed([&] { server.reset(); });
         ::close(fd);
         check(seconds < 2,
             "the report server stops within 2 s while a phone stalls: " + std::to_string(seconds) + " s");
@@ -219,11 +213,6 @@ int main() {
 
     {
         // Canceling stops a running program, a download that hangs, and an install, quickly.
-        const auto timed = [](const std::function<void()>& body) {
-            const auto start = std::chrono::steady_clock::now();
-            body();
-            return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
-        };
         std::atomic<bool> cancel{false};
         std::thread canceler([&] {
             usleep(200000);

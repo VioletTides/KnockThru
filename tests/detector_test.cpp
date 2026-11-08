@@ -22,30 +22,28 @@ using namespace knockthru;
 
 namespace {
 
-std::vector<KnockEvent> drain(KnockDetector& detector, double now, std::vector<KnockEvent> events = {}) {
+void drain(KnockDetector& detector, double now, std::vector<KnockEvent>& events) {
     if (auto event = detector.poll(now)) events.push_back(*event);
-    return events;
 }
 
-// Simulates one controller resting at `position`, with knocks at the given
+// Simulates the right controller resting for 3 s, with knocks at the given
 // times. Each knock is a fast approach (0.8 m/s) that stops dead. Fills
 // `sequences` with every finished sequence when given.
 std::vector<KnockEvent> synthetic(const std::vector<double>& knock_times, DetectorConfig config = {},
-    Device device = Device::Right, Vec3 position = {0.2, 0.8, -0.3}, double duration = 3.0,
     std::deque<Sequence>* sequences = nullptr) {
     KnockDetector detector(config);
     detector.set_explain(sequences != nullptr);
     std::vector<KnockEvent> events;
     const double dt = 1.0 / 233;
-    for (double t = 0; t < duration; t += dt) {
+    for (double t = 0; t < 3.0; t += dt) {
         double speed = 0;
         for (const double k : knock_times)
             if (t > k - 0.06 && t <= k) speed = 0.8;
         // Tiny jitter, so every sample counts as a new measurement.
         const double jitter = 0.001 * ((static_cast<int>(t / dt) % 2) ? 1 : -1);
-        detector.push(device, t, position, {jitter, -speed, 0});
+        detector.push(Device::Right, t, {0.2, 0.8, -0.3}, {jitter, -speed, 0});
         detector.push(Device::Hmd, t, {0, 1.6, 0}, {0, jitter, 0});
-        events = drain(detector, t, events);
+        drain(detector, t, events);
         if (sequences)
             for (auto& sequence : detector.take_sequences()) sequences->push_back(std::move(sequence));
     }
@@ -55,7 +53,7 @@ std::vector<KnockEvent> synthetic(const std::vector<double>& knock_times, Detect
 // The verdicts of every sequence in a synthetic run, oldest first.
 std::vector<SequenceVerdict> verdicts(const std::vector<double>& knock_times, DetectorConfig config = {}) {
     std::deque<Sequence> sequences;
-    synthetic(knock_times, config, Device::Right, {0.2, 0.8, -0.3}, 3.0, &sequences);
+    synthetic(knock_times, config, &sequences);
     std::vector<SequenceVerdict> out;
     for (const auto& sequence : sequences) out.push_back(sequence.verdict);
     return out;
@@ -111,7 +109,7 @@ void moving_after_test() {
         const double jitter = 0.001 * ((static_cast<int>(t / dt) % 2) ? 1 : -1);
         detector.push(Device::Right, t, {0.2, 0.8, -0.3}, {jitter, -speed, 0});
         detector.push(Device::Hmd, t, {0, 1.6, 0}, {0, jitter, 0});
-        events = drain(detector, t, events);
+        drain(detector, t, events);
         for (const auto& candidate : detector.take_candidates()) verdicts.push_back(candidate.verdict);
     }
     check(
@@ -248,9 +246,9 @@ void pose_rate_tests() {
     std::vector<KnockEvent> events;
     for (const auto& row : read) {
         detector.push(row.device, row.t, row.position, row.velocity);
-        events = drain(detector, row.t, events);
+        drain(detector, row.t, events);
     }
-    events = drain(detector, 4, events);
+    drain(detector, 4, events);
     check(events.size() == 1 && events[0].count == 2, "a double after the controller turns on counts");
     if (std::getenv("KNOCKTHRU_TEST_RATE")) return;
     const auto reads_between = [&](double from, double to) {

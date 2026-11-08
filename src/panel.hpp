@@ -145,7 +145,7 @@ enum class PanelCommand {
 
 struct PanelClick {
     PanelCommand command;
-    KnockKind kind = KnockKind::Together; // for Kind and Calibrate
+    KnockKind kind = KnockKind::Together; // for Kind, Calibrate, and TurnOnKind
     int count = 0; // for SetKnockAction
     KnockAction action = KnockAction::None;
     int tunable = 0; // for TuneDown and TuneUp
@@ -181,6 +181,8 @@ public:
     std::string whats_new_overflow(const std::vector<VersionNotes>& versions);
 
 private:
+    // What is on screen. Record, Try, and Tour mark the calibration phases and the tour for
+    // transitions, and screen_ never holds them.
     enum class Screen {
         Main,
         Settings,
@@ -189,20 +191,6 @@ private:
         Pick,
         Learn,
         SkipTour,
-        Actions,
-        AdvancedWarning,
-        Debug,
-        RestoreDefaults,
-        WhatsNew
-    };
-    // What is on screen, for transitions: a screen, a calibration phase, or the tour.
-    enum class View {
-        Main,
-        Settings,
-        Reset,
-        Report,
-        Pick,
-        Learn,
         Record,
         Try,
         Tour,
@@ -240,7 +228,7 @@ private:
     double now_ = 0;
     bool animating_ = false;
     bool transitioning_ = false;
-    std::optional<View> view_;
+    std::optional<Screen> view_;
     std::optional<TourView::Step> tour_step_;
     double view_t_ = 0;
     std::map<int, Canvas> icons_;

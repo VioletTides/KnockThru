@@ -46,7 +46,8 @@ int detect(double seconds, const std::string& save_path) {
     while (!stopping && (seconds <= 0 || clock.now() < seconds)) {
         const double t = clock.now();
         sampler.sample([&](Device device, const vr::TrackedDevicePose_t& pose) {
-            if (out.is_open()) PoseSampler::write_csv(out, t, device, pose);
+            if (out.is_open())
+                write_csv_row(out, t, device, position_of(pose), velocity_of(pose), pose.vAngularVelocity.v);
             detector.push(device, t, position_of(pose), velocity_of(pose));
         });
         const auto event = detector.poll(t);
