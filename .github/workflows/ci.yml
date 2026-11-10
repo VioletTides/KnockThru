@@ -52,7 +52,7 @@ jobs:
         run: scripts/build-arm64.sh
 
       - name: Package
-        run: node scripts/package.mjs --build-dir build-arm64 --version 0.0.0-ci
+        run: python3 scripts/package.py --build-dir build-arm64 --version 0.0.0-ci
 
   sanitize:
     runs-on: ubuntu-24.04

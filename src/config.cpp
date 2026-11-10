@@ -61,12 +61,6 @@ const std::pair<const char*, Member> kDetectorMembers[] = {
 
 } // namespace
 
-std::map<std::string, double*> detector_fields(DetectorConfig& d) {
-    std::map<std::string, double*> fields;
-    for (const auto& [key, member] : kDetectorMembers) fields[key] = &(d.*member);
-    return fields;
-}
-
 double DetectorConfig::* detector_member(std::string_view key) {
     for (const auto& [name, member] : kDetectorMembers)
         if (key == name) return member;

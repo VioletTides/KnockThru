@@ -76,7 +76,8 @@ void Panel::report_card(const PanelState& state) {
     const bool recording = state.recording_left >= 0;
     std::string record_label = state.recorded ? "Record again" : "Record knocks";
     if (recording) record_label = "Recording " + std::to_string(state.recording_left) + " s";
-    button(record, record_label, PanelClick{PanelCommand::RecordKnocks}, std::nullopt, false, !recording);
+    button(record, record_label, PanelClick{PanelCommand::RecordKnocks}, std::nullopt,
+        recording ? Look::Off : Look::Plain);
     std::string record_note = "Knocks missed or wrong? Record 20 s";
     if (recording)
         record_note =
@@ -118,7 +119,7 @@ void Panel::report_card(const PanelState& state) {
         button(save, "Save to headset", PanelClick{PanelCommand::SaveReport}, std::nullopt);
     }
     button({card.x + card.w - 48 - 240, by, 240, 72}, "Done", PanelClick{PanelCommand::CloseReport},
-        Screen::Settings, true);
+        Screen::Settings, Look::Primary);
 }
 
 // A confirm card over the screen below it, centred at y 385. Only its two buttons respond. Returns the card,
@@ -132,9 +133,13 @@ Rect Panel::confirm_card(const std::string& title, const std::string& text, cons
     canvas_.text(bold_, title, card.x + 48, card.y + 72, 38, kText);
     paragraph(regular_, text, card.x + 48, card.y + 140, 28, 40, card.w - 96, max_lines, kText);
     const float by = card.y + card.h - 48 - 72;
-    button({card.x + 48, by, 240, 72}, cancel, std::nullopt, cancel_to, cancel_primary);
-    button({card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, confirm_to, !cancel_primary,
-        true, danger);
+    Look cancel_look = Look::Plain, confirm_look = danger ? Look::PrimaryDanger : Look::Primary;
+    if (cancel_primary) {
+        cancel_look = Look::Primary;
+        confirm_look = danger ? Look::Danger : Look::Plain;
+    }
+    button({card.x + 48, by, 240, 72}, cancel, std::nullopt, cancel_to, cancel_look);
+    button({card.x + card.w - 48 - 240, by, 240, 72}, confirm, confirm_click, confirm_to, confirm_look);
     return card;
 }
 
@@ -252,7 +257,7 @@ void Panel::update_card(const PanelState& state) {
     if (inline_notes) bullets(versions[0].notes, card.x + 48, y + 16, note_width);
     const float by = card.y + card.h - 48 - 72;
     const PanelClick dismiss{PanelCommand::DismissUpdateNotice};
-    button({card.x + card.w - 48 - 200, by, 200, 72}, "OK", dismiss, std::nullopt, true);
+    button({card.x + card.w - 48 - 200, by, 200, 72}, "OK", dismiss, std::nullopt, Look::Primary);
     if (!versions.empty() && !inline_notes)
         button({card.x + card.w - 48 - 200 - 20 - 240, by, 240, 72}, "What's new", dismiss, Screen::WhatsNew);
 }
@@ -268,9 +273,9 @@ void Panel::whats_new_screen(const PanelState& state) {
         const float right = kWidth - kMargin;
         const Rect older{right - 200, 36, 200, 64}, newer{older.x - 20 - 190, 36, 190, 64};
         const bool first = whats_new_page_ == 0, last = whats_new_page_ == pages - 1;
-        button(newer, "Newer", std::nullopt, std::nullopt, false, !first);
+        button(newer, "Newer", std::nullopt, std::nullopt, first ? Look::Off : Look::Plain);
         if (!first) targets_.back().page = whats_new_page_ - 1;
-        button(older, "Older", std::nullopt, std::nullopt, false, !last);
+        button(older, "Older", std::nullopt, std::nullopt, last ? Look::Off : Look::Plain);
         if (!last) targets_.back().page = whats_new_page_ + 1;
         canvas_.text(regular_, std::to_string(whats_new_page_ + 1) + " of " + std::to_string(pages),
             newer.x - 24, 68, 26, kDim, Align::Right);

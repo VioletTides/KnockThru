@@ -53,20 +53,19 @@ void Panel::switch_control(float right, float cy, bool on, bool enabled, float s
     canvas_.circle(on ? track.x + track.w - r : track.x + r, cy, r - 6 * scale, knob);
 }
 
-// A danger button is red when primary, and has a red label otherwise.
 void Panel::button(Rect rect, const std::string& label, std::optional<PanelClick> click,
-    std::optional<Screen> go_to, bool primary, bool enabled, bool danger, float size) {
-    if (!enabled) {
+    std::optional<Screen> go_to, Look look, float size) {
+    if (look == Look::Off) {
         canvas_.rounded_rect(rect, kRadius, kSurfaceHover);
         canvas_.text(bold_, label, rect.x + rect.w / 2, rect.y + rect.h / 2, size, kDim, Align::Center);
         return;
     }
     const bool hover = hovered(rect);
-    Color fill = hover ? kRaisedHover : kRaised, ink = danger ? kError : kText;
-    if (primary && danger) {
+    Color fill = hover ? kRaisedHover : kRaised, ink = look == Look::Danger ? kError : kText;
+    if (look == Look::PrimaryDanger) {
         fill = hover ? kErrorHover : kError;
         ink = kOnError;
-    } else if (primary) {
+    } else if (look == Look::Primary) {
         fill = hover ? kAccentHover : kAccent;
     }
     canvas_.rounded_rect(rect, kRadius, fill);
@@ -129,8 +128,8 @@ void Panel::button_row(Rect rect, const std::string& title, const std::string& l
     std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger, bool divider) {
     if (divider) canvas_.rounded_rect({rect.x + 24, rect.y, rect.w - 48, 1.5f}, 0, kHairline);
     canvas_.text(bold_, title, rect.x + 24, rect.y + rect.h / 2, 30, kText);
-    button({rect.x + rect.w - 24 - 170, rect.y + rect.h / 2 - 30, 170, 60}, label, click, go_to, false, true,
-        danger);
+    button({rect.x + rect.w - 24 - 170, rect.y + rect.h / 2 - 30, 170, 60}, label, click, go_to,
+        danger ? Look::Danger : Look::Plain);
 }
 
 // One bar per step at the top right. Steps up to `current` (from 1) are filled.

@@ -201,6 +201,8 @@ private:
         WhatsNew
     };
     enum class DebugTab { Live, Tuning, Status };
+    // How a button looks. Danger has a red label, PrimaryDanger is filled red, and Off takes no clicks.
+    enum class Look { Plain, Primary, Danger, PrimaryDanger, Off };
     struct Target {
         Rect rect;
         std::optional<PanelClick> click = {};
@@ -276,8 +278,7 @@ private:
     void button_row(Rect rect, const std::string& title, const std::string& label,
         std::optional<PanelClick> click, std::optional<Screen> go_to, bool danger, bool divider = true);
     void button(Rect rect, const std::string& label, std::optional<PanelClick> click,
-        std::optional<Screen> go_to, bool primary = false, bool enabled = true, bool danger = false,
-        float size = 28);
+        std::optional<Screen> go_to, Look look = Look::Plain, float size = 28);
     std::vector<Rect> segments(Rect track, const std::vector<std::string>& names, std::optional<int> selected,
         float size, Color raised);
     float pill_width(const std::string& label, float padding);

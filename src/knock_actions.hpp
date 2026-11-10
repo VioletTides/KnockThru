@@ -12,8 +12,7 @@ enum class KnockAction { Passthrough, Style, PerfGraph, None };
 constexpr std::array<KnockAction, 4> kKnockActionList{
     KnockAction::Passthrough, KnockAction::Style, KnockAction::PerfGraph, KnockAction::None};
 
-// The knock counts a person can give an action to. A new count needs the
-// detector to report it, a word in count_word(), and a default here.
+// The knock counts a person can give an action to: twice and thrice.
 constexpr std::array<int, 2> kKnockCounts{2, 3};
 
 // The name in config.json: passthrough, style, perf_graph, or none.
@@ -41,9 +40,9 @@ public:
     bool operator==(const KnockActions& other) const { return table_ == other.table_; }
 
 private:
-    using Row = std::array<KnockAction, kKnockCounts.size()>;
-    std::array<Row, 3> table_ = {defaults(), defaults(), defaults()}; // indexed by KnockKind
-    static Row defaults();
+    using Row = std::array<KnockAction, 2>; // for twice and thrice
+    static constexpr Row kDefaults{KnockAction::Passthrough, KnockAction::Style};
+    std::array<Row, 3> table_ = {kDefaults, kDefaults, kDefaults}; // indexed by KnockKind
 };
 
 } // namespace knockthru

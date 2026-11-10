@@ -10,7 +10,7 @@ Both projects use the MIT license below.
 - [KominoVR/frame-passthrough-shortcuts](https://github.com/KominoVR/frame-passthrough-shortcuts):
   Copyright (c) 2026 Frame Passthrough Shortcuts contributors. KnockThru adapts its
   SteamVR session and install code, the Room View style switch, the build setup,
-  and `scripts/package.mjs`.
+  and `scripts/package.py`.
 - [toorux/steam-frame-passthrough-toggle](https://github.com/toorux/steam-frame-passthrough-toggle):
   Copyright (c) 2026 Steam Frame Passthrough Toggle contributors. KnockThru ports its
   debug port client and the script that finds and clicks the Room View button.

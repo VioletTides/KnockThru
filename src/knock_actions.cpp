@@ -1,15 +1,6 @@
 #include "knock_actions.hpp"
 
 namespace knockthru {
-namespace {
-
-int count_index(int count) {
-    for (std::size_t i = 0; i < kKnockCounts.size(); ++i)
-        if (kKnockCounts[i] == count) return static_cast<int>(i);
-    return -1;
-}
-
-} // namespace
 
 const char* to_string(KnockAction action) {
     switch (action) {
@@ -29,24 +20,14 @@ std::optional<KnockAction> parse_knock_action(const std::string& name) {
 
 const char* count_word(int count) { return count == 2 ? "twice" : "thrice"; }
 
-KnockAction KnockActions::default_for(int count) {
-    return count == 2 ? KnockAction::Passthrough : KnockAction::Style;
-}
-
-KnockActions::Row KnockActions::defaults() {
-    Row row{};
-    for (std::size_t i = 0; i < kKnockCounts.size(); ++i) row[i] = default_for(kKnockCounts[i]);
-    return row;
-}
+KnockAction KnockActions::default_for(int count) { return kDefaults[count - 2]; }
 
 KnockAction KnockActions::get(KnockKind kind, int count) const {
-    const int i = count_index(count);
-    return i < 0 ? KnockAction::None : table_[static_cast<int>(kind)][i];
+    return count == 2 || count == 3 ? table_[static_cast<int>(kind)][count - 2] : KnockAction::None;
 }
 
 void KnockActions::set(KnockKind kind, int count, KnockAction action) {
-    const int i = count_index(count);
-    if (i >= 0) table_[static_cast<int>(kind)][i] = action;
+    if (count == 2 || count == 3) table_[static_cast<int>(kind)][count - 2] = action;
 }
 
 void KnockActions::set_all(int count, KnockAction action) {

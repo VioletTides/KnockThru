@@ -231,22 +231,21 @@ void Panel::debug_footer(const DebugView& view, Rect rect) {
     if (dirty) {
         const float keep_w = pill_width("Keep after restart", 36), undo_w = pill_width("Undo changes", 36);
         const Rect keep{right - keep_w, y, keep_w, h}, undo{keep.x - 16 - undo_w, y, undo_w, h};
-        button(undo, "Undo changes", PanelClick{PanelCommand::UndoTuning}, std::nullopt, false, true, false,
+        button(
+            undo, "Undo changes", PanelClick{PanelCommand::UndoTuning}, std::nullopt, Look::Plain, kButton);
+        button(keep, "Keep after restart", PanelClick{PanelCommand::KeepTuning}, std::nullopt, Look::Primary,
             kButton);
-        button(keep, "Keep after restart", PanelClick{PanelCommand::KeepTuning}, std::nullopt, true, true,
-            false, kButton);
         limit = undo.x - 16;
     } else {
         const float restore_w = pill_width("Restore defaults", 36);
         button({right - restore_w, y, restore_w, h}, "Restore defaults", std::nullopt,
-            Screen::RestoreDefaults, false, true, false, kButton);
+            Screen::RestoreDefaults, Look::Plain, kButton);
     }
 
     float x = rect.x + 28;
     if (debug_all_) {
         const float fewer_w = pill_width("Fewer settings", 28);
-        button({x - 14, y, fewer_w, h}, "Fewer settings", std::nullopt, std::nullopt, false, true, false,
-            kButton);
+        button({x - 14, y, fewer_w, h}, "Fewer settings", std::nullopt, std::nullopt, Look::Plain, kButton);
         targets_.back().all_settings = false;
         x += fewer_w + 6;
     }
@@ -323,8 +322,8 @@ void Panel::debug_status(const DebugView& view, Rect area) {
             const auto& [label, command] = tests[i][b];
             const float w = pill_width(label, 26);
             x -= w;
-            button({x, r.y + (r.h - 56) / 2, w, 56}, label, PanelClick{command}, std::nullopt, false, true,
-                false, kButton);
+            button({x, r.y + (r.h - 56) / 2, w, 56}, label, PanelClick{command}, std::nullopt, Look::Plain,
+                kButton);
             x -= 10;
         }
     }

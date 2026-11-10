@@ -8,7 +8,7 @@ Read `docs/README.md` before you change knock detection, calibration, or how the
 
 - Host build and tests: `cmake -S . -B build && cmake --build build && ctest --test-dir build`
 - Frame build: `scripts/build-arm64.sh` (Zig 0.16.0), output in `build-arm64/bin/`
-- Release ZIP: `node scripts/package.mjs --build-dir build-arm64 --version X.Y.Z`
+- Release ZIP: `python3 scripts/package.py --build-dir build-arm64 --version X.Y.Z`
 - Detector tuning sweep: `KNOCKTHRU_TEST_SET="confirmed_peak=30" build/bin/detector_test`. Add `KNOCKTHRU_TEST_VERBOSE=1` to print every knock and event.
 - Replay a recording from a bug report: `build/bin/detector_test knockthru-knocks.csv.gz`
 - Battery use on the Frame: `scripts/measure.sh 60` prints each thread's CPU and wakeups per second over 60 s. On battery, it also prints average power in mW. With KnockThru stopped, it prints power only.

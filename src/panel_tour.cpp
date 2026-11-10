@@ -14,16 +14,17 @@ void Panel::tour_buttons(bool first, bool last, bool complete) {
     const Rect go{kWidth - kMargin - 200, y, 200, h};
     if (first) {
         button({kMargin, y, 180, h}, "Skip", std::nullopt, Screen::SkipTour);
-        button(go, "Start", PanelClick{PanelCommand::TourNext}, std::nullopt, true);
+        button(go, "Start", PanelClick{PanelCommand::TourNext}, std::nullopt, Look::Primary);
         return;
     }
     button({kMargin, y, 180, h}, "Back", PanelClick{PanelCommand::TourBack}, std::nullopt);
     if (last) {
-        button(go, "Done", PanelClick{PanelCommand::TourSkip}, std::nullopt, true);
+        button(go, "Done", PanelClick{PanelCommand::TourSkip}, std::nullopt, Look::Primary);
         return;
     }
     button({go.x - 24 - 160, y, 160, h}, "Skip", std::nullopt, Screen::SkipTour);
-    button(go, "Next", PanelClick{PanelCommand::TourNext}, std::nullopt, true, complete);
+    button(
+        go, "Next", PanelClick{PanelCommand::TourNext}, std::nullopt, complete ? Look::Primary : Look::Off);
 }
 
 // The double and triple knock steps: the knock on a loop at the left, and at the
