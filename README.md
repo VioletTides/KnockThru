@@ -1,6 +1,7 @@
 # <img src="images/logo-wordmark.svg" alt="KnockThru" width="400">
 
 [![ci](https://github.com/VioletTides/KnockThru/actions/workflows/ci.yml/badge.svg)](https://github.com/VioletTides/KnockThru/actions/workflows/ci.yml)
+[![downloads](https://img.shields.io/github/downloads/VioletTides/KnockThru/total)](https://github.com/VioletTides/KnockThru/releases)
 
 Knock twice to turn on passthrough and see your room without taking off your Steam Frame. Knock thrice to switch between seeing the room through your game and seeing only the room.
 
