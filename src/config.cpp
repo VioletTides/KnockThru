@@ -132,7 +132,8 @@ void merge(AppConfig& config, const json& file, const fs::path& path, Source sou
                 }
             }
         } else if (key == "debug_port") {
-            if (!value.is_number_integer()) fail("debug_port must be a whole number");
+            if (!value.is_number_integer() || value < 1 || value > 65535)
+                fail("debug_port must be a whole number from 1 to 65535");
             config.debug_port = value.get<int>();
         } else if (key == "detector") {
             if (!value.is_object()) fail("detector must be an object");
@@ -306,8 +307,8 @@ AppState load_state() {
         state.steamvr_previous = file.value("steamvr_previous", "");
         state.last_update_check = file.value("last_update_check", 0LL);
         state.knockthru_version = file.value("knockthru_version", "");
-    } catch (const std::exception&) {
         state.running = file.value("running", false);
+    } catch (const std::exception&) {
         // A damaged state file only costs the remembered values.
     }
     return state;
