@@ -269,20 +269,23 @@ DetectorConfig test_config() {
     DetectorConfig config;
     const char* set = std::getenv("KNOCKTHRU_TEST_SET");
     if (!set) return config;
-    auto fields = detector_fields(config);
-    fields.insert({{"min_approach_together", &config.min_approach[0]},
-        {"min_approach_surface", &config.min_approach[1]},
-        {"min_approach_headset", &config.min_approach[2]}});
+    // A detector key from config.json, or min_approach_ and a knock kind.
+    const auto field_of = [&](const std::string& name) -> double* {
+        if (const auto member = detector_member(name)) return &(config.*member);
+        const auto kind =
+            name.rfind("min_approach_", 0) == 0 ? parse_knock_kind(name.substr(13)) : std::nullopt;
+        return kind ? &config.min_approach[static_cast<int>(*kind)] : nullptr;
+    };
     std::stringstream list(set);
     std::string item;
     while (std::getline(list, item, ',')) {
         const auto eq = item.find('=');
-        const auto field = fields.find(item.substr(0, eq));
-        if (eq == std::string::npos || field == fields.end()) {
+        double* const field = field_of(item.substr(0, eq));
+        if (eq == std::string::npos || !field) {
             std::cerr << "Unknown setting in KNOCKTHRU_TEST_SET: " << item << "\n";
             std::exit(2);
         }
-        *field->second = std::stod(item.substr(eq + 1));
+        *field = std::stod(item.substr(eq + 1));
     }
     return config;
 }
