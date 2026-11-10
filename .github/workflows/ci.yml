@@ -1,6 +1,7 @@
 # On pull requests and pushes to main: build and test on Linux, render the
 # panel previews, then build and package for the Steam Frame. Catches a broken
-# Frame build before a v* tag reaches release.yml.
+# Frame build before a v* tag reaches release.yml. A second job runs the tests
+# again under AddressSanitizer and UndefinedBehaviorSanitizer.
 name: ci
 
 on:
@@ -52,3 +53,16 @@ jobs:
 
       - name: Package
         run: node scripts/package.mjs --build-dir build-arm64 --version 0.0.0-ci
+
+  sanitize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # The hand-written SHA-256, ZIP writer, HTTP server, and WebSocket client all run in these tests.
+      - name: Build and test with sanitizers
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer"
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
