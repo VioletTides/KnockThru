@@ -1,5 +1,6 @@
-# On a v* tag: run the host tests, build for the Steam Frame, and attach
-# the ZIP, the FrameDrop manifest, and install.sh to a GitHub release.
+# On a v* tag: run the host tests, build for the Steam Frame, sign a build
+# provenance attestation for the release files, and attach the ZIP, the
+# FrameDrop manifest, and install.sh to a GitHub release.
 name: release
 
 on:
@@ -8,12 +9,20 @@ on:
 
 permissions:
   contents: write
+  id-token: write # for the attestation's signing certificate
+  attestations: write
 
 jobs:
   release:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # The host tests and the What's new check read the version from CMakeLists.txt.
+      - name: Check the tag against CMakeLists.txt
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -q "^project(KnockThru VERSION ${version%%-*} " CMakeLists.txt
 
       - name: Build and test
         run: |
@@ -36,6 +45,12 @@ jobs:
           node scripts/package.mjs --build-dir build-arm64 --version "${GITHUB_REF_NAME#v}" \
             --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
           cp scripts/install.sh dist/install.sh
+
+      # Lets anyone check that a release file came from this workflow at this commit:
+      # gh attestation verify <file> --repo VioletTides/KnockThru
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*
 
       - name: Publish the release
         env:
