@@ -36,13 +36,14 @@ int get(const std::string& url, const fs::path& out) {
     return run_program({"curl", "--fail", "--silent", "--max-time", "5", "--output", out.string(), url});
 }
 
-// Connects `fd` to the report server at `url`, an http://127.0.0.1:port/ link.
+// Connects `fd` to the report server at `url`, an http://address:port/ link.
 void connect_to(int fd, const std::string& url) {
     const auto rest = url.substr(7);
+    const auto colon = rest.find(':');
     sockaddr_in address{};
     address.sin_family = AF_INET;
-    address.sin_port = htons(static_cast<std::uint16_t>(std::stoi(rest.substr(rest.find(':') + 1))));
-    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    address.sin_port = htons(static_cast<std::uint16_t>(std::stoi(rest.substr(colon + 1))));
+    ::inet_pton(AF_INET, rest.substr(0, colon).c_str(), &address.sin_addr);
     ::connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof address);
 }
 
