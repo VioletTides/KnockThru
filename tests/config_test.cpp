@@ -51,6 +51,9 @@ int main() {
     std::ofstream(user / "config.json") << R"({"sounds": "yes"})";
     check(expect_throw([&] { load_config(install); }, "sounds must be true or false"),
         "a setting that is not true or false is rejected");
+    std::ofstream(user / "config.json", std::ios::trunc) << R"({"debug_port": 70000})";
+    check(expect_throw([&] { load_config(install); }, "debug_port must be a whole number from 1 to 65535"),
+        "a debug_port that is no port is rejected");
     fs::remove(user / "config.json");
 
     // Knock actions: defaults, a partial table from the file, a bad action, and saving.
@@ -99,10 +102,11 @@ int main() {
                 && state.steamvr_previous == "2.18.2" && state.steamvr_since == "2026-10-20",
             "a new SteamVR version reports the old one");
         state.last_update_check = 1792000000;
+        state.running = true;
         save_state(state);
         const auto loaded = load_state();
         check(loaded.steamvr_version == "2.19.0" && loaded.steamvr_previous == "2.18.2"
-                && loaded.last_update_check == 1792000000,
+                && loaded.last_update_check == 1792000000 && loaded.running,
             "state survives a save and load");
         std::ofstream(user / "state.json") << "not json";
         check(load_state().steamvr_version.empty(), "a damaged state file gives defaults");

@@ -302,7 +302,8 @@ ReportServer::ReportServer(std::string report, std::string issue_link)
     if (listener_ < 0) throw std::runtime_error("Cannot create a socket");
     sockaddr_in bind_address{};
     bind_address.sin_family = AF_INET;
-    bind_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    // Only the address in the link, so no other network the Frame is on reaches the server.
+    ::inet_pton(AF_INET, address.c_str(), &bind_address.sin_addr);
     bind_address.sin_port = 0;
     socklen_t size = sizeof bind_address;
     if (::bind(listener_, reinterpret_cast<sockaddr*>(&bind_address), sizeof bind_address) < 0

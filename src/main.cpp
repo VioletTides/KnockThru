@@ -168,8 +168,11 @@ int main(int argc, char** argv) {
                 usage();
                 return 0;
             }
-            if (arg == "--seconds")
-                seconds = std::stod(value());
+            if (arg == "--seconds") try {
+                    seconds = std::stod(value());
+                } catch (const std::logic_error&) {
+                    throw std::runtime_error("--seconds needs a number");
+                }
             else if (arg == "--save")
                 path = value();
             else if (arg == "--purge")
@@ -206,9 +209,9 @@ int main(int argc, char** argv) {
         ::unsetenv("STEAMVR_APPKEY");
         // Restart in Settings runs --install with no terminal, so its errors go to the log.
         if (command == "--install" || command == "--update") open_log();
-        if (command == "--install") return install();
         if (purge && command != "--uninstall")
             throw std::runtime_error("--purge only works with --uninstall");
+        if (command == "--install") return install();
         if (command == "--uninstall") return uninstall(purge);
         if (command == "--detect") return detect(seconds, path);
         if (command == "--calibrate") return calibrate(kind);

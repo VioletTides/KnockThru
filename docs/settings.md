@@ -11,7 +11,7 @@ Put your settings in `~/.config/knockthru/config.json`. This file survives updat
 
 - `knock_types`: which knock kinds count. The default is all three.
 - `blocked_apps`: SteamVR app keys where knocks do nothing. Run `knockthru --current-app` while a game runs to get its key.
-- `debug_port`: the CEF Remote Debugging port. The default is 8080.
+- `debug_port`: the CEF Remote Debugging port, from 1 to 65535. The default is 8080.
 - `classic_bar_icon`: `true` shows the dashboard bar icon in the logo colors. The default `false` shows the logo in grey, and white on hover, like Steam's own icons.
 - `check_updates`: `false` stops the daily update check. By default, KnockThru asks GitHub for the latest release once a day, a minute after it starts. **Check for updates** in Settings works either way.
 - `sounds`: `false` silences the click. By default, KnockThru plays SteamVR's dashboard click when a knock switches the style or the performance graph, and on panel buttons. Steam already clicks when passthrough changes.

@@ -219,6 +219,10 @@ private:
 };
 
 App::App() {
+    // The flag is cleared on the way out of run(), so a crash or a power loss leaves it set.
+    if (app_state_.running) log("The last run ended without a clean stop");
+    app_state_.running = true;
+    save_app_state();
     note_versions();
 #ifdef KNOCKTHRU_TEST_HOOK
     test_commands_ = user_directory() / "test-commands";
@@ -369,6 +373,8 @@ void App::run() {
         if (panel_ && panel_->transitioning()) step = 1;
         clock_.tick(std::chrono::milliseconds(step));
     }
+    app_state_.running = false;
+    save_app_state();
     log("KnockThru stopped");
 }
 

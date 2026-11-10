@@ -43,6 +43,7 @@ struct AppState {
     std::string steamvr_previous;
     long long last_update_check = 0; // Unix time, automatic checks only
     std::string knockthru_version;
+    bool running = false; // true while the resident app runs. Still true at a start means the last run died
 };
 
 struct KindCalibration {

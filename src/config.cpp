@@ -132,7 +132,8 @@ void merge(AppConfig& config, const json& file, const fs::path& path, Source sou
                 }
             }
         } else if (key == "debug_port") {
-            if (!value.is_number_integer()) fail("debug_port must be a whole number");
+            if (!value.is_number_integer() || value < 1 || value > 65535)
+                fail("debug_port must be a whole number from 1 to 65535");
             config.debug_port = value.get<int>();
         } else if (key == "detector") {
             if (!value.is_object()) fail("detector must be an object");
@@ -306,6 +307,7 @@ AppState load_state() {
         state.steamvr_previous = file.value("steamvr_previous", "");
         state.last_update_check = file.value("last_update_check", 0LL);
         state.knockthru_version = file.value("knockthru_version", "");
+        state.running = file.value("running", false);
     } catch (const std::exception&) {
         // A damaged state file only costs the remembered values.
     }
@@ -316,7 +318,7 @@ void save_state(const AppState& state) {
     write_json(user_directory() / "state.json",
         {{"steamvr_version", state.steamvr_version}, {"steamvr_since", state.steamvr_since},
             {"steamvr_previous", state.steamvr_previous}, {"last_update_check", state.last_update_check},
-            {"knockthru_version", state.knockthru_version}});
+            {"knockthru_version", state.knockthru_version}, {"running", state.running}});
 }
 
 std::string note_steamvr_version(AppState& state, const std::string& version, const std::string& today) {

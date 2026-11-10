@@ -1,6 +1,7 @@
 # <img src="images/logo-wordmark.svg" alt="KnockThru" width="400">
 
 [![ci](https://github.com/VioletTides/KnockThru/actions/workflows/ci.yml/badge.svg)](https://github.com/VioletTides/KnockThru/actions/workflows/ci.yml)
+[![downloads](https://img.shields.io/github/downloads/VioletTides/KnockThru/total)](https://github.com/VioletTides/KnockThru/releases)
 
 Knock twice to turn on passthrough and see your room without taking off your Steam Frame. Knock thrice to switch between seeing the room through your game and seeing only the room.
 
@@ -15,6 +16,18 @@ KnockThru runs on the Frame itself. It watches how your controllers and headset 
 - [How the app fits together](docs/how-the-app-works.md): what runs where, with diagrams
 - [How knock detection works](docs/knock-detection.md): how it tells a knock from a swing of your arm
 - [The test recordings](docs/test-recordings.md): the real motion every change gets tested against
+
+## How well it works
+
+The tests replay 10 recordings from a Frame, 512 s of motion in all. With the default thresholds, `ctest` prints these results:
+
+| Recording | Result |
+| --- | --- |
+| `play`, `noise`, and `straps`: 111 s of play, clapping, and strap fitting | 0 actions |
+| `mixed`: 24 sets, twice and thrice with each kind of knock | 23 right, 0 wrong |
+| `together`, `surface`, and `headset`: about 20 doubles each | 20, 18, and 22 doubles of the right kind |
+
+In standby, KnockThru 1.2.0 uses 0.12% of one CPU core and wakes 30 times a second, measured on a Frame with `scripts/measure.sh 60`.
 
 ## Install
 
