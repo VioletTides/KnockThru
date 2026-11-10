@@ -200,13 +200,13 @@ void Panel::update_control(const PanelState& state) {
     const float right = kWidth - kMargin, w = 250, h = 64, y = 36;
     const Rect rect{right - w, y, w, h};
     std::string status = "Version " + state.version, label = "Check for updates";
-    bool primary = false, enabled = true;
+    Look look = Look::Plain;
     std::optional<PanelClick> click = PanelClick{PanelCommand::CheckUpdate};
     switch (update.status) {
     case Status::Idle: break;
     case Status::Checking:
         label = "Checking";
-        enabled = false;
+        look = Look::Off;
         break;
     case Status::Current: status = "Version " + state.version + " is the latest"; break;
     case Status::Available:
@@ -220,13 +220,13 @@ void Panel::update_control(const PanelState& state) {
     case Status::Installed:
         status = "Version " + update.latest + " is installed";
         label = "Restart";
-        primary = true; // the filled bar turns into the blue Restart button
+        look = Look::Primary; // the filled bar turns into the blue Restart button
         click = PanelClick{PanelCommand::RestartForUpdate};
         break;
     case Status::Restarting:
         status = "Version " + update.latest + " is installed";
         label = "Restarting";
-        enabled = false;
+        look = Look::Off;
         break;
     case Status::Updated: status = "Updated to version " + state.version; break;
     case Status::Failed:
@@ -243,7 +243,7 @@ void Panel::update_control(const PanelState& state) {
     if (update.status == Status::Installing)
         progress_button(rect, label, state.update_progress);
     else
-        button(rect, label, click, std::nullopt, primary, enabled);
+        button(rect, label, click, std::nullopt, look);
 }
 
 } // namespace knockthru

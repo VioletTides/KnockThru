@@ -146,7 +146,7 @@ void Panel::pick_screen(const PanelState& state) {
         if (off)
             button({done_button.x - 16 - 170, done_button.y, 170, 60}, "Turn on",
                 PanelClick{PanelCommand::TurnOnKind, static_cast<KnockKind>(saved)}, std::nullopt);
-        button(done_button, "Done", std::nullopt, Screen::Settings, true);
+        button(done_button, "Done", std::nullopt, Screen::Settings, Look::Primary);
     } else if (state.message_is_error) {
         message(state, 730);
     }
@@ -172,7 +172,7 @@ void Panel::learn_screen(const PanelState& state) {
         y += 14;
     }
     button({kWidth - kMargin - 240, 616, 240, 72}, "Start", PanelClick{PanelCommand::Calibrate, learn_kind_},
-        std::nullopt, true);
+        std::nullopt, Look::Primary);
     if (state.message_is_error) message(state, 730);
 }
 
@@ -288,8 +288,8 @@ void Panel::try_screen(const PanelState& state, const CalibrationView& view) {
         std::nullopt);
     const bool passed = view.trial_passed.value_or(false);
     const Rect save{kWidth - kMargin - 260, 656, 260, 72};
-    button(save, "Save calibration", PanelClick{PanelCommand::SaveCalibration, view.kind}, std::nullopt, true,
-        passed);
+    button(save, "Save calibration", PanelClick{PanelCommand::SaveCalibration, view.kind}, std::nullopt,
+        passed ? Look::Primary : Look::Off);
     // Save stays off until a knock twice passes.
     if (!passed)
         canvas_.text(
