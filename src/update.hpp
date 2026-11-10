@@ -39,9 +39,6 @@ std::vector<VersionNotes> notes_between(
 // Throws without a usable ZIP entry. ZIP URLs must be HTTPS, or file:// with `allow_local`.
 Release parse_manifest(const std::string& text, bool allow_local = false);
 
-// Lowercase hex.
-std::string sha256(const std::string& data);
-
 struct Canceled : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
