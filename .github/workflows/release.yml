@@ -42,7 +42,7 @@ jobs:
 
       - name: Package
         run: |
-          node scripts/package.mjs --build-dir build-arm64 --version "${GITHUB_REF_NAME#v}" \
+          python3 scripts/package.py --build-dir build-arm64 --version "${GITHUB_REF_NAME#v}" \
             --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
           cp scripts/install.sh dist/install.sh
 

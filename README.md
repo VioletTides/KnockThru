@@ -215,11 +215,11 @@ cmake --build build
 ctest --test-dir build
 ```
 
-Steam Frame build (needs Zig 0.16.0) and release ZIP (needs Node.js):
+Steam Frame build (needs Zig 0.16.0) and release ZIP (needs Python 3):
 
 ```sh
 scripts/build-arm64.sh
-node scripts/package.mjs --build-dir build-arm64 --version 1.3.0
+python3 scripts/package.py --build-dir build-arm64 --version 1.3.0
 ```
 
 README images (needs Pillow, numpy, ffmpeg, and Chromium, after the host build):
