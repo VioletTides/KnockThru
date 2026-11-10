@@ -102,7 +102,8 @@ int main() {
         save_state(state);
         const auto loaded = load_state();
         check(loaded.steamvr_version == "2.19.0" && loaded.steamvr_previous == "2.18.2"
-                && loaded.last_update_check == 1792000000,
+        state.running = true;
+                && loaded.last_update_check == 1792000000 && loaded.running,
             "state survives a save and load");
         std::ofstream(user / "state.json") << "not json";
         check(load_state().steamvr_version.empty(), "a damaged state file gives defaults");
